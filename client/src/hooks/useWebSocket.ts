@@ -100,5 +100,5 @@ export function useWebSocket() {
     }
   };
 
-  return ws.current;
+  return { socket: ws.current, isConnected, sendTyping };
 }

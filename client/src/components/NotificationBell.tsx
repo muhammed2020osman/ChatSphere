@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export function NotificationBell() {
   const { toast } = useToast();
-  const socket = useWebSocket();
+  const { socket } = useWebSocket();
 
   // Fetch notifications
   const { data: notifications = [] } = useQuery<NotificationWithUsers[]>({
