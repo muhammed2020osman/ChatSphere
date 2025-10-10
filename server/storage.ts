@@ -33,6 +33,8 @@ export interface IStorage {
   upsertUser(user: UpsertUser): Promise<User>;
   getAllUsers(): Promise<User[]>;
   updateUserOnlineStatus(userId: string, isOnline: boolean): Promise<void>;
+  updateUserRole(userId: string, role: string): Promise<User>;
+  deleteUser(userId: string): Promise<void>;
   
   // Channel operations
   getChannels(): Promise<Channel[]>;
@@ -76,14 +78,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
+    // Check if this is the first user (make them admin)
+    const existingUsers = await db.select().from(users);
+    const isFirstUser = existingUsers.length === 0;
+    
     const [user] = await db
       .insert(users)
-      .values(userData)
+      .values({
+        ...userData,
+        role: isFirstUser ? 'admin' : 'member',
+      })
       .onConflictDoUpdate({
         target: users.id,
         set: {
           ...userData,
           updatedAt: new Date(),
+          // Don't overwrite role on update
         },
       })
       .returning();
@@ -99,6 +109,19 @@ export class DatabaseStorage implements IStorage {
       .update(users)
       .set({ isOnline, lastSeen: new Date() })
       .where(eq(users.id, userId));
+  }
+
+  async updateUserRole(userId: string, role: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ role, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, userId));
   }
 
   // Channel operations

@@ -7,7 +7,7 @@ import passport from "passport";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, getSession } from "./replitAuth";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
-import { extractMentions, findUserIdsByUsernames } from "./utils";
+import { extractMentions, findUserIdsByUsernames, requireAdmin } from "./utils";
 import { 
   insertChannelSchema, 
   insertMessageSchema, 
@@ -83,6 +83,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Admin-only user management routes
+  app.patch('/api/users/:id/role', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUserId = req.user.claims.sub;
+      const currentUser = await storage.getUser(currentUserId);
+      
+      requireAdmin(currentUser);
+      
+      const { role } = req.body;
+      if (!role || !['admin', 'member'].includes(role)) {
+        return res.status(400).json({ message: "Invalid role. Must be 'admin' or 'member'" });
+      }
+      
+      const updatedUser = await storage.updateUserRole(req.params.id, role);
+      res.json(updatedUser);
+    } catch (error: any) {
+      console.error("Error updating user role:", error);
+      if (error.message === 'Admin access required') {
+        return res.status(403).json({ message: error.message });
+      }
+      res.status(500).json({ message: "Failed to update user role" });
+    }
+  });
+
+  app.delete('/api/users/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUserId = req.user.claims.sub;
+      const currentUser = await storage.getUser(currentUserId);
+      
+      requireAdmin(currentUser);
+      
+      // Prevent deleting yourself
+      if (req.params.id === currentUserId) {
+        return res.status(400).json({ message: "Cannot delete your own account" });
+      }
+      
+      await storage.deleteUser(req.params.id);
+      res.json({ message: "User deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting user:", error);
+      if (error.message === 'Admin access required') {
+        return res.status(403).json({ message: error.message });
+      }
+      res.status(500).json({ message: "Failed to delete user" });
     }
   });
 

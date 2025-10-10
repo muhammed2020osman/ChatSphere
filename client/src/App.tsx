@@ -8,6 +8,8 @@ import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
+import Settings from "@/pages/settings";
+import Members from "@/pages/members";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -21,6 +23,8 @@ function Router() {
           <Route path="/" component={Home} />
           <Route path="/channel/:id" component={Home} />
           <Route path="/dm/:userId" component={Home} />
+          <Route path="/settings" component={Settings} />
+          <Route path="/members" component={Members} />
         </>
       )}
       <Route component={NotFound} />

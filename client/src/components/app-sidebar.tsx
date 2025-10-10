@@ -1,4 +1,4 @@
-import { Hash, Lock, Plus, ChevronDown, MessageSquare } from "lucide-react";
+import { Hash, Lock, Plus, ChevronDown, MessageSquare, Settings } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -75,6 +75,14 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-64">
+            {user?.role === 'admin' && (
+              <DropdownMenuItem asChild>
+                <Link href="/settings" data-testid="link-settings">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Workspace Settings
+                </Link>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem asChild>
               <a href="/api/logout" data-testid="link-logout">
                 Sign out

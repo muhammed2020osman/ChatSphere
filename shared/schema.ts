@@ -32,6 +32,7 @@ export const users = pgTable("users", {
   status: varchar("status", { length: 100 }),
   isOnline: boolean("is_online").default(false),
   lastSeen: timestamp("last_seen"),
+  role: varchar("role", { length: 20 }).default("member").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

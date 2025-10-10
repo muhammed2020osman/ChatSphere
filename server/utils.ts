@@ -40,3 +40,15 @@ export async function findUserIdsByUsernames(usernames: string[], allUsers: any[
   
   return userIds;
 }
+
+// Check if user is admin
+export function isAdmin(user: { role?: string | null }): boolean {
+  return user?.role === 'admin';
+}
+
+// Middleware to require admin role
+export function requireAdmin(user: any) {
+  if (!user || !isAdmin(user)) {
+    throw new Error('Admin access required');
+  }
+}
