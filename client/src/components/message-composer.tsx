@@ -89,7 +89,7 @@ export function MessageComposer({
   };
 
   const handleGetUploadParameters = async () => {
-    const response = await apiRequest("POST", "/api/objects/upload");
+    const response = await apiRequest("POST", "/api/objects/upload") as unknown as { uploadURL: string };
     return {
       method: "PUT" as const,
       url: response.uploadURL,
@@ -97,7 +97,7 @@ export function MessageComposer({
   };
 
   const handleUploadComplete = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
-    if (result.successful.length > 0) {
+    if (result.successful && result.successful.length > 0) {
       const file = result.successful[0];
       const uploadURL = file.uploadURL;
       const fileName = file.name;
@@ -107,10 +107,10 @@ export function MessageComposer({
       const response = await apiRequest("PUT", "/api/attachments", {
         attachmentURL: uploadURL,
         fileName: fileName,
-      });
+      }) as unknown as { objectPath: string };
 
-      setAttachmentUrl(response.objectPath);
-      setAttachmentName(fileName);
+      setAttachmentUrl(response.objectPath || null);
+      setAttachmentName(fileName || null);
       setAttachmentType(fileType || "application/octet-stream");
 
       toast({
@@ -151,48 +151,47 @@ export function MessageComposer({
           </Button>
         </div>
       )}
-      <div className="relative">
+      <div className="flex flex-col gap-2">
         <Textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="min-h-20 resize-none pr-12 text-base"
+          className="min-h-20 resize-none text-base"
           data-testid="textarea-message-composer"
         />
-        <div className="absolute bottom-2 right-2 flex items-center gap-1">
-          <ObjectUploader
-            maxNumberOfFiles={1}
-            maxFileSize={10485760}
-            onGetUploadParameters={handleGetUploadParameters}
-            onComplete={handleUploadComplete}
-            buttonClassName="w-8 h-8"
-          >
-            <Paperclip className="w-4 h-4" />
-          </ObjectUploader>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="w-8 h-8 hover-elevate"
-            data-testid="button-format-bold"
-          >
-            <Bold className="w-4 h-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="w-8 h-8 hover-elevate"
-            data-testid="button-format-italic"
-          >
-            <Italic className="w-4 h-4" />
-          </Button>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <ObjectUploader
+              maxNumberOfFiles={1}
+              maxFileSize={10485760}
+              onGetUploadParameters={handleGetUploadParameters}
+              onComplete={handleUploadComplete}
+              buttonVariant="ghost"
+            >
+              <Paperclip className="w-4 h-4" />
+            </ObjectUploader>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              data-testid="button-format-bold"
+            >
+              <Bold className="w-4 h-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              data-testid="button-format-italic"
+            >
+              <Italic className="w-4 h-4" />
+            </Button>
+          </div>
           <Button
             type="submit"
             size="icon"
             disabled={(!content.trim() && !attachmentUrl) || sendMessageMutation.isPending}
-            className="w-8 h-8"
             data-testid="button-send-message"
           >
             <Send className="w-4 h-4" />

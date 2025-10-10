@@ -16,7 +16,6 @@ interface ObjectUploaderProps {
   onComplete?: (
     result: UploadResult<Record<string, unknown>, Record<string, unknown>>
   ) => void;
-  buttonClassName?: string;
   buttonVariant?: "default" | "outline" | "ghost" | "secondary";
   children: ReactNode;
 }
@@ -26,7 +25,6 @@ export function ObjectUploader({
   maxFileSize = 10485760, // 10MB default
   onGetUploadParameters,
   onComplete,
-  buttonClassName,
   buttonVariant = "ghost",
   children,
 }: ObjectUploaderProps) {
@@ -53,8 +51,8 @@ export function ObjectUploader({
     <div>
       <Button 
         onClick={() => setShowModal(true)} 
-        className={buttonClassName}
         variant={buttonVariant}
+        size="icon"
         type="button"
         data-testid="button-upload-file"
       >
