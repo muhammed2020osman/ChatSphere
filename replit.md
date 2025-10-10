@@ -4,13 +4,16 @@
 A modern Slack clone built as a Progressive Web App (PWA) with real-time messaging, channels, direct messages, and user presence tracking. Built with React, Express, PostgreSQL, and WebSockets.
 
 ## Recent Changes
-- **October 10, 2025**: Initial MVP implementation and security hardening
-  - Implemented complete database schema with users, channels, messages, direct messages, and channel members
+- **October 10, 2025**: Complete MVP implementation with all core features
+  - Implemented complete database schema with users, channels, messages, direct messages, channel members, and reactions
   - Built comprehensive UI with Slack-inspired design (aubergine primary color, sidebar navigation)
   - Integrated Replit Auth for authentication
   - Added WebSocket server for real-time messaging and presence tracking
   - Implemented PWA features with service worker and install prompt
   - Created all CRUD endpoints for channels, messages, and direct messages
+  - **File & Image Sharing**: Full object storage integration with upload/download
+  - **Message Threading**: Side panel UI for threaded conversations with parent + replies
+  - **Message Reactions**: 6 common emoji reactions (thumbs-up, heart, laugh, party, check, smile) with real-time updates
   - **Security fixes applied**:
     - Channel membership verification for all channel operations
     - Private channel access control (cannot join without invite - returns 403)
@@ -19,6 +22,7 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
     - Search results filtered by accessible channels (using inArray for proper SQL)
     - Private channel metadata protected from unauthorized disclosure
     - Fixed SQL array handling to use Drizzle's inArray() instead of raw ANY()
+    - **Reactions security**: Server-side channel validation, no client-supplied channelId accepted
 
 ## Project Architecture
 
@@ -28,10 +32,11 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
   - Home workspace with sidebar navigation and message views
 - **Components**:
   - AppSidebar: Channels and DM list with online status indicators
-  - ChannelView: Channel message feed with composer
+  - ChannelView: Channel message feed with composer and thread panel
   - DirectMessageView: 1-on-1 messaging interface
-  - MessageItem: Message display with user info and timestamps
-  - MessageComposer: Rich text message input with formatting toolbar
+  - MessageItem: Message display with reactions, threading, and file attachments
+  - MessageComposer: Rich text message input with file upload support
+  - ObjectUploader: File and image upload using Replit Object Storage
   - SearchOverlay: Search for channels and messages (Cmd+K)
   - CreateChannelModal: Create public/private channels
   - ThemeToggle: Dark/light mode switcher
@@ -45,16 +50,19 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
   - sessions: Session storage for Replit Auth
   - users: User profiles with online status
   - channels: Public and private channels
-  - messages: Channel messages with threading support
+  - messages: Channel messages with threading and file attachments
   - direct_messages: 1-on-1 messages
   - channel_members: Channel membership tracking
+  - reactions: Message reactions with unique user-icon constraints
 - **API Endpoints**:
   - `/api/auth/user`: Get current user
   - `/api/users`: List all users
   - `/api/channels`: Channel CRUD operations
-  - `/api/messages`: Message operations
+  - `/api/messages`: Message operations with file attachments
   - `/api/direct-messages`: DM operations
   - `/api/search/:query`: Search messages
+  - `/api/reactions`: Add/remove/get message reactions
+  - `/objects/:objectPath`: Download files from object storage
 - **WebSocket Server** (`/ws`):
   - Real-time message broadcasting
   - User presence tracking
@@ -89,11 +97,13 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
 1. **Channels**: Create public or private channels, organized by topic
 2. **Direct Messages**: 1-on-1 conversations with team members
 3. **Real-time Messaging**: Instant message delivery via WebSockets with session-based auth
-4. **Search**: Find messages and channels quickly (Cmd+K) - filtered by membership
-5. **User Presence**: See who's online/offline
-6. **Threading**: Reply to messages in threads (UI ready, backend complete)
-7. **PWA**: Install as desktop/mobile app
-8. **Security**: Complete access control for private channels and membership verification
+4. **File Sharing**: Upload and share images/files using Replit Object Storage
+5. **Message Threading**: Reply to messages in dedicated thread panel with parent context
+6. **Message Reactions**: React with 6 emoji options (thumbs-up, heart, laugh, party, check, smile)
+7. **Search**: Find messages and channels quickly (Cmd+K) - filtered by membership
+8. **User Presence**: See who's online/offline
+9. **PWA**: Install as desktop/mobile app
+10. **Security**: Complete access control for private channels and membership verification
 
 ## Security Features
 - **Session-Based WebSocket Authentication**: All WebSocket connections authenticate via HTTP session, preventing user impersonation
@@ -102,6 +112,8 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
 - **Search Privacy**: Search results filtered to only show messages from accessible channels
 - **Broadcast Isolation**: Real-time messages only sent to authorized channel subscribers
 - **Metadata Protection**: Private channel existence hidden from non-members
+- **Reactions Access Control**: Server validates channel membership before allowing reactions, preventing cross-channel spoofing
+- **File Access Control**: Object storage files served only to authenticated users with proper ACL policies
 
 ## Tech Stack
 - Frontend: React, TypeScript, Tailwind CSS, Shadcn UI, Wouter (routing)
@@ -110,6 +122,8 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
 - Real-time: WebSockets (ws library)
 - Auth: Replit Auth (OpenID Connect)
 - State Management: TanStack Query (React Query)
+- File Storage: Replit Object Storage (Google Cloud Storage)
+- File Uploads: Uppy (with AWS S3-compatible adapter)
 
 ## Development
 - Start server: `npm run dev` (runs both frontend and backend)
