@@ -17,7 +17,7 @@ import {
   type DirectMessageWithUser,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, desc, sql } from "drizzle-orm";
+import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (Required for Replit Auth)
@@ -105,7 +105,7 @@ export class DatabaseStorage implements IStorage {
       .from(channels)
       .where(
         or(
-          sql`${channels.id} = ANY(${memberChannelIds})`,
+          inArray(channels.id, memberChannelIds),
           eq(channels.isPrivate, false)
         )
       )
@@ -215,7 +215,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           sql`${messages.content} ILIKE ${'%' + query + '%'}`,
-          sql`${messages.channelId} = ANY(${accessibleChannelIds})`
+          inArray(messages.channelId, accessibleChannelIds)
         )
       )
       .orderBy(desc(messages.createdAt))

@@ -4,7 +4,7 @@
 A modern Slack clone built as a Progressive Web App (PWA) with real-time messaging, channels, direct messages, and user presence tracking. Built with React, Express, PostgreSQL, and WebSockets.
 
 ## Recent Changes
-- **October 10, 2025**: Initial MVP implementation
+- **October 10, 2025**: Initial MVP implementation and security hardening
   - Implemented complete database schema with users, channels, messages, direct messages, and channel members
   - Built comprehensive UI with Slack-inspired design (aubergine primary color, sidebar navigation)
   - Integrated Replit Auth for authentication
@@ -13,10 +13,12 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
   - Created all CRUD endpoints for channels, messages, and direct messages
   - **Security fixes applied**:
     - Channel membership verification for all channel operations
-    - Private channel access control (cannot join without invite)
+    - Private channel access control (cannot join without invite - returns 403)
+    - Session-based WebSocket authentication (prevents impersonation)
     - WebSocket channel subscriptions (broadcasts only to authorized members)
-    - Search results filtered by accessible channels
+    - Search results filtered by accessible channels (using inArray for proper SQL)
     - Private channel metadata protected from unauthorized disclosure
+    - Fixed SQL array handling to use Drizzle's inArray() instead of raw ANY()
 
 ## Project Architecture
 
@@ -86,11 +88,20 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
 ## Key Features
 1. **Channels**: Create public or private channels, organized by topic
 2. **Direct Messages**: 1-on-1 conversations with team members
-3. **Real-time Messaging**: Instant message delivery via WebSockets
-4. **Search**: Find messages and channels quickly (Cmd+K)
+3. **Real-time Messaging**: Instant message delivery via WebSockets with session-based auth
+4. **Search**: Find messages and channels quickly (Cmd+K) - filtered by membership
 5. **User Presence**: See who's online/offline
 6. **Threading**: Reply to messages in threads (UI ready, backend complete)
 7. **PWA**: Install as desktop/mobile app
+8. **Security**: Complete access control for private channels and membership verification
+
+## Security Features
+- **Session-Based WebSocket Authentication**: All WebSocket connections authenticate via HTTP session, preventing user impersonation
+- **Channel Membership Enforcement**: Private channel messages only accessible to members
+- **Join Protection**: Users cannot join private channels without invitation (403 Forbidden)
+- **Search Privacy**: Search results filtered to only show messages from accessible channels
+- **Broadcast Isolation**: Real-time messages only sent to authorized channel subscribers
+- **Metadata Protection**: Private channel existence hidden from non-members
 
 ## Tech Stack
 - Frontend: React, TypeScript, Tailwind CSS, Shadcn UI, Wouter (routing)
