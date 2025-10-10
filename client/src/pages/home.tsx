@@ -7,6 +7,7 @@ import { DirectMessageView } from "@/components/direct-message-view";
 import { CreateChannelModal } from "@/components/create-channel-modal";
 import { SearchOverlay } from "@/components/search-overlay";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationBell } from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -67,6 +68,7 @@ export default function Home() {
               >
                 <Search className="w-5 h-5" />
               </Button>
+              <NotificationBell />
               <ThemeToggle />
             </div>
           </header>

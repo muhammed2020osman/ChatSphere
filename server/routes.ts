@@ -7,6 +7,7 @@ import passport from "passport";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, getSession } from "./replitAuth";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { extractMentions, findUserIdsByUsernames } from "./utils";
 import { 
   insertChannelSchema, 
   insertMessageSchema, 
@@ -209,9 +210,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/messages', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      
+      // Extract mentions from content
+      const mentions = req.body.content ? extractMentions(req.body.content) : [];
+      
       const data = insertMessageSchema.parse({
         ...req.body,
         userId,
+        mentions,
       });
       
       // Verify user is a member of the channel
@@ -230,6 +236,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get user info for the message
       const user = await storage.getUser(userId);
       const messageWithUser = { ...message, user };
+      
+      // Create notifications for mentioned users
+      if (mentions.length > 0) {
+        const allUsers = await storage.getAllUsers();
+        const mentionedUserIds = await findUserIdsByUsernames(mentions, allUsers);
+        
+        // Create notifications for each mentioned user (except the sender)
+        for (const mentionedUserId of mentionedUserIds) {
+          if (mentionedUserId !== userId) {
+            try {
+              await storage.createNotification({
+                userId: mentionedUserId,
+                type: 'mention',
+                messageId: message.id,
+                channelId: message.channelId,
+                fromUserId: userId,
+                content: message.content || '',
+                isRead: false,
+              });
+              
+              // Send real-time notification to mentioned user
+              const mentionedClient = clients.get(mentionedUserId);
+              if (mentionedClient?.ws.readyState === WebSocket.OPEN) {
+                mentionedClient.ws.send(JSON.stringify({
+                  type: 'new_notification',
+                  notification: {
+                    type: 'mention',
+                    fromUser: user,
+                    channel,
+                    content: message.content,
+                  },
+                }));
+              }
+            } catch (error) {
+              console.error('Error creating notification:', error);
+            }
+          }
+        }
+      }
       
       // Broadcast new message only to channel members
       broadcastToChannel(message.channelId, {
@@ -448,6 +493,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching reactions:", error);
       res.status(500).json({ message: "Failed to fetch reactions" });
+    }
+  });
+
+  // Notification routes
+  app.get('/api/notifications', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const notifications = await storage.getUserNotifications(userId);
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  app.get('/api/notifications/unread-count', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const count = await storage.getUnreadNotificationCount(userId);
+      res.json({ count });
+    } catch (error) {
+      console.error("Error fetching unread count:", error);
+      res.status(500).json({ message: "Failed to fetch unread count" });
+    }
+  });
+
+  app.patch('/api/notifications/:id/read', isAuthenticated, async (req: any, res) => {
+    try {
+      await storage.markNotificationAsRead(req.params.id);
+      res.json({ message: "Notification marked as read" });
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ message: "Failed to mark notification as read" });
+    }
+  });
+
+  app.patch('/api/notifications/mark-all-read', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      await storage.markAllNotificationsAsRead(userId);
+      res.json({ message: "All notifications marked as read" });
+    } catch (error) {
+      console.error("Error marking all as read:", error);
+      res.status(500).json({ message: "Failed to mark all as read" });
+    }
+  });
+
+  // Message editing/deletion routes
+  app.patch('/api/messages/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+      const { content } = req.body;
+
+      // Get the message to verify ownership
+      const channelMessages = await storage.searchMessages('', userId);
+      const message = channelMessages.find(m => m.id === id);
+      
+      if (!message) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+
+      if (message.userId !== userId) {
+        return res.status(403).json({ message: "You can only edit your own messages" });
+      }
+
+      // Extract mentions from updated content
+      const mentions = content ? extractMentions(content) : [];
+      const updatedMessage = await storage.updateMessage(id, content, mentions);
+
+      // Broadcast message update
+      broadcastToChannel(message.channelId, {
+        type: 'message_updated',
+        message: updatedMessage,
+      });
+
+      res.json(updatedMessage);
+    } catch (error) {
+      console.error("Error updating message:", error);
+      res.status(500).json({ message: "Failed to update message" });
+    }
+  });
+
+  app.delete('/api/messages/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+
+      // Get the message to verify ownership
+      const channelMessages = await storage.searchMessages('', userId);
+      const message = channelMessages.find(m => m.id === id);
+      
+      if (!message) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+
+      if (message.userId !== userId) {
+        return res.status(403).json({ message: "You can only delete your own messages" });
+      }
+
+      await storage.deleteMessage(id);
+
+      // Broadcast message deletion
+      broadcastToChannel(message.channelId, {
+        type: 'message_deleted',
+        messageId: id,
+      });
+
+      res.json({ message: "Message deleted" });
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      res.status(500).json({ message: "Failed to delete message" });
     }
   });
 

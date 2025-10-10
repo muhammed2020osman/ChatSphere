@@ -5,6 +5,7 @@ import {
   directMessages,
   channelMembers,
   reactions,
+  notifications,
   type User,
   type UpsertUser,
   type Channel,
@@ -19,6 +20,9 @@ import {
   type Reaction,
   type InsertReaction,
   type ReactionWithUser,
+  type Notification,
+  type InsertNotification,
+  type NotificationWithUsers,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
@@ -51,6 +55,17 @@ export interface IStorage {
   addReaction(reaction: InsertReaction): Promise<Reaction>;
   removeReaction(messageId: string, userId: string, icon: string): Promise<void>;
   getMessageReactions(messageId: string): Promise<ReactionWithUser[]>;
+  
+  // Notification operations
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  getUserNotifications(userId: string): Promise<NotificationWithUsers[]>;
+  markNotificationAsRead(notificationId: string): Promise<void>;
+  markAllNotificationsAsRead(userId: string): Promise<void>;
+  getUnreadNotificationCount(userId: string): Promise<number>;
+  
+  // Message editing/deletion
+  updateMessage(messageId: string, content: string, mentions?: string[]): Promise<Message>;
+  deleteMessage(messageId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -346,6 +361,96 @@ export class DatabaseStorage implements IStorage {
       createdAt: row.createdAt,
       user: row.user,
     }));
+  }
+
+  // Notification operations
+  async createNotification(notificationData: InsertNotification): Promise<Notification> {
+    const [notification] = await db.insert(notifications).values(notificationData).returning();
+    return notification;
+  }
+
+  async getUserNotifications(userId: string): Promise<NotificationWithUsers[]> {
+    const result = await db
+      .select({
+        id: notifications.id,
+        userId: notifications.userId,
+        type: notifications.type,
+        messageId: notifications.messageId,
+        channelId: notifications.channelId,
+        fromUserId: notifications.fromUserId,
+        content: notifications.content,
+        isRead: notifications.isRead,
+        createdAt: notifications.createdAt,
+        fromUser: users,
+        channel: channels,
+      })
+      .from(notifications)
+      .innerJoin(users, eq(notifications.fromUserId, users.id))
+      .leftJoin(channels, eq(notifications.channelId, channels.id))
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt))
+      .limit(50);
+
+    return result.map((row) => ({
+      id: row.id,
+      userId: row.userId,
+      type: row.type,
+      messageId: row.messageId,
+      channelId: row.channelId,
+      fromUserId: row.fromUserId,
+      content: row.content,
+      isRead: row.isRead,
+      createdAt: row.createdAt,
+      fromUser: row.fromUser,
+      channel: row.channel || undefined,
+    }));
+  }
+
+  async markNotificationAsRead(notificationId: string): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.id, notificationId));
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.userId, userId));
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          eq(notifications.isRead, false)
+        )
+      );
+    
+    return Number(result[0]?.count || 0);
+  }
+
+  // Message editing/deletion
+  async updateMessage(messageId: string, content: string, mentions?: string[]): Promise<Message> {
+    const [message] = await db
+      .update(messages)
+      .set({ 
+        content, 
+        editedAt: new Date(),
+        mentions: mentions || [],
+      })
+      .where(eq(messages.id, messageId))
+      .returning();
+    
+    return message;
+  }
+
+  async deleteMessage(messageId: string): Promise<void> {
+    await db.delete(messages).where(eq(messages.id, messageId));
   }
 }
 

@@ -1,6 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, FileIcon, Download, Smile, ThumbsUp, Heart, Laugh, PartyPopper, CheckCircle } from "lucide-react";
+import { MessageSquare, FileIcon, Download, Smile, ThumbsUp, Heart, Laugh, PartyPopper, CheckCircle, MoreVertical, Edit, Trash } from "lucide-react";
 import type { MessageWithUser, ReactionWithUser } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
@@ -9,6 +9,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +37,8 @@ const REACTION_ICONS = [
 
 export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
   const [showReactions, setShowReactions] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(message.content || "");
   const { toast } = useToast();
 
   const { data: currentUser } = useQuery({
@@ -87,6 +96,71 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
     }
     setShowReactions(false);
   };
+
+  const editMessageMutation = useMutation({
+    mutationFn: async (content: string) => {
+      return await apiRequest("PATCH", `/api/messages/${message.id}`, { content });
+    },
+    onSuccess: () => {
+      setIsEditing(false);
+      toast({
+        title: "Success",
+        description: "Message updated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/channels", channelId, "messages"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update message",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMessageMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("DELETE", `/api/messages/${message.id}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Message deleted successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/channels", channelId, "messages"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete message",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleEdit = () => {
+    setIsEditing(true);
+    setEditContent(message.content || "");
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditContent(message.content || "");
+  };
+
+  const handleSaveEdit = () => {
+    if (editContent.trim()) {
+      editMessageMutation.mutate(editContent);
+    }
+  };
+
+  const handleDelete = () => {
+    if (confirm("Are you sure you want to delete this message?")) {
+      deleteMessageMutation.mutate();
+    }
+  };
+
+  const isOwnMessage = currentUser?.id === message.userId;
   const getUserInitials = () => {
     if (message.user.firstName && message.user.lastName) {
       return `${message.user.firstName[0]}${message.user.lastName[0]}`.toUpperCase();
@@ -168,14 +242,75 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
             </span>
             <span className="text-xs text-muted-foreground" data-testid={`text-message-time-${message.id}`}>
               {formatTime(message.createdAt!)}
+              {message.editedAt && " (edited)"}
             </span>
+            {isOwnMessage && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                    data-testid={`button-message-menu-${message.id}`}
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleEdit} data-testid={`menu-item-edit-${message.id}`}>
+                    <Edit className="w-4 h-4 mr-2" />
+                    Edit message
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={handleDelete} 
+                    className="text-destructive"
+                    data-testid={`menu-item-delete-${message.id}`}
+                  >
+                    <Trash className="w-4 h-4 mr-2" />
+                    Delete message
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
-          {message.content && (
-            <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words" data-testid={`text-message-content-${message.id}`}>
-              {message.content}
+          
+          {isEditing ? (
+            <div className="space-y-2">
+              <Textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                className="min-h-20"
+                data-testid={`textarea-edit-message-${message.id}`}
+              />
+              <div className="flex gap-2">
+                <Button 
+                  size="sm" 
+                  onClick={handleSaveEdit}
+                  disabled={!editContent.trim() || editMessageMutation.isPending}
+                  data-testid={`button-save-edit-${message.id}`}
+                >
+                  Save
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={handleCancelEdit}
+                  data-testid={`button-cancel-edit-${message.id}`}
+                >
+                  Cancel
+                </Button>
+              </div>
             </div>
+          ) : (
+            <>
+              {message.content && (
+                <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words" data-testid={`text-message-content-${message.id}`}>
+                  {message.content}
+                </div>
+              )}
+              {renderAttachment()}
+            </>
           )}
-          {renderAttachment()}
           
           {/* Reactions */}
           {reactions.length > 0 && (

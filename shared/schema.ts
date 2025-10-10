@@ -64,6 +64,8 @@ export const messages = pgTable("messages", {
   attachmentType: varchar("attachment_type", { length: 50 }),
   attachmentName: varchar("attachment_name"),
   threadParentId: varchar("thread_parent_id").references(() => messages.id),
+  mentions: text("mentions").array(),
+  editedAt: timestamp("edited_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -88,6 +90,19 @@ export const reactions = pgTable("reactions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Notifications table - for @mentions and other notifications
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: varchar("type", { length: 50 }).notNull(), // 'mention', 'reply', 'reaction'
+  messageId: varchar("message_id").references(() => messages.id, { onDelete: "cascade" }),
+  channelId: varchar("channel_id").references(() => channels.id, { onDelete: "cascade" }),
+  fromUserId: varchar("from_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  content: text("content"),
+  isRead: boolean("is_read").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   channelsCreated: many(channels),
@@ -96,6 +111,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   directMessagesSent: many(directMessages, { relationName: "sentMessages" }),
   directMessagesReceived: many(directMessages, { relationName: "receivedMessages" }),
   reactions: many(reactions),
+  notifications: many(notifications),
+  notificationsSent: many(notifications, { relationName: "notificationSender" }),
 }));
 
 export const channelsRelations = relations(channels, ({ one, many }) => ({
@@ -160,6 +177,26 @@ export const reactionsRelations = relations(reactions, ({ one }) => ({
   }),
 }));
 
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+  fromUser: one(users, {
+    fields: [notifications.fromUserId],
+    references: [users.id],
+    relationName: "notificationSender",
+  }),
+  message: one(messages, {
+    fields: [notifications.messageId],
+    references: [messages.id],
+  }),
+  channel: one(channels, {
+    fields: [notifications.channelId],
+    references: [channels.id],
+  }),
+}));
+
 // Zod schemas for validation
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -199,6 +236,13 @@ export const insertReactionSchema = createInsertSchema(reactions).omit({
 export type InsertReaction = z.infer<typeof insertReactionSchema>;
 export type Reaction = typeof reactions.$inferSelect;
 
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Notification = typeof notifications.$inferSelect;
+
 // Extended types for frontend use
 export type ReactionWithUser = Reaction & {
   user: User;
@@ -218,4 +262,9 @@ export type ChannelWithMembers = Channel & {
 export type DirectMessageWithUser = DirectMessage & {
   sender: User;
   recipient: User;
+};
+
+export type NotificationWithUsers = Notification & {
+  fromUser: User;
+  channel?: Channel;
 };
