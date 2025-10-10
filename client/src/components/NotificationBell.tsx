@@ -22,11 +22,15 @@ export function NotificationBell() {
   // Fetch notifications
   const { data: notifications = [] } = useQuery<NotificationWithUsers[]>({
     queryKey: ["/api/notifications"],
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 
   // Fetch unread count
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ["/api/notifications/unread-count"],
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 
   const unreadCount = unreadData?.count || 0;
@@ -55,29 +59,31 @@ export function NotificationBell() {
 
   // Listen for new notifications via WebSocket
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
 
-    const handleNewNotification = (data: any) => {
-      if (data.type === 'new_notification') {
-        // Show toast for new notification
-        toast({
-          title: "New Mention",
-          description: `${data.notification.fromUser.firstName} mentioned you in #${data.notification.channel?.name || 'a channel'}`,
-        });
+    const handleNewNotification = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'new_notification') {
+          // Show toast for new notification
+          toast({
+            title: "New Mention",
+            description: `${data.notification.fromUser.firstName} mentioned you in #${data.notification.channel?.name || 'a channel'}`,
+          });
 
-        // Refresh notifications
-        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+          // Refresh notifications
+          queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+        }
+      } catch (error) {
+        console.error('Failed to parse notification:', error);
       }
     };
 
-    socket.addEventListener('message', (event) => {
-      const data = JSON.parse(event.data);
-      handleNewNotification(data);
-    });
+    socket.addEventListener('message', handleNewNotification);
 
     return () => {
-      socket.removeEventListener('message', handleNewNotification as any);
+      socket.removeEventListener('message', handleNewNotification);
     };
   }, [socket, toast]);
 

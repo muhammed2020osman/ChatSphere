@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Shield, ArrowLeft, Trash2, Crown } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import type { User } from "@shared/schema";
 import {
   Select,
   SelectContent,
@@ -30,11 +31,11 @@ export default function Members() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const { data: currentUser } = useQuery({
+  const { data: currentUser } = useQuery<User>({
     queryKey: ["/api/auth/user"],
   });
 
-  const { data: users = [], isLoading } = useQuery({
+  const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
 
@@ -80,14 +81,14 @@ export default function Members() {
     },
   });
 
-  const getUserInitials = (user: any) => {
+  const getUserInitials = (user: User) => {
     if (user.firstName && user.lastName) {
       return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
     }
     return user.email?.[0]?.toUpperCase() || "?";
   };
 
-  const getUserName = (user: any) => {
+  const getUserName = (user: User) => {
     if (user.firstName && user.lastName) {
       return `${user.firstName} ${user.lastName}`;
     }
