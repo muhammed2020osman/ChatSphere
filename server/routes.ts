@@ -10,7 +10,8 @@ import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { 
   insertChannelSchema, 
   insertMessageSchema, 
-  insertDirectMessageSchema 
+  insertDirectMessageSchema,
+  insertReactionSchema 
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -319,6 +320,134 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error searching messages:", error);
       res.status(500).json({ message: "Failed to search messages" });
+    }
+  });
+
+  // Reaction routes
+  app.post('/api/reactions', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const data = insertReactionSchema.parse({
+        ...req.body,
+        userId,
+      });
+
+      // Get the message to verify it exists and get its channel
+      const channelMessages = await storage.searchMessages('', userId);
+      const message = channelMessages.find(m => m.id === data.messageId);
+      
+      if (!message) {
+        return res.status(404).json({ message: "Message not found or access denied" });
+      }
+
+      // Verify user has access to the channel
+      const channel = await storage.getChannel(message.channelId);
+      if (!channel) {
+        return res.status(404).json({ message: "Channel not found" });
+      }
+
+      if (channel.isPrivate) {
+        const isMember = await storage.isChannelMember(message.channelId, userId);
+        if (!isMember) {
+          return res.status(403).json({ message: "Access denied - not a member of this channel" });
+        }
+      }
+
+      const reaction = await storage.addReaction(data);
+      const user = await storage.getUser(userId);
+      const reactionWithUser = { ...reaction, user };
+
+      // Broadcast using server-derived channelId
+      broadcastToChannel(message.channelId, {
+        type: 'new_reaction',
+        messageId: data.messageId,
+        reaction: reactionWithUser,
+      });
+
+      res.json(reaction);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid reaction data", errors: error.errors });
+      }
+      console.error("Error adding reaction:", error);
+      res.status(500).json({ message: "Failed to add reaction" });
+    }
+  });
+
+  app.delete('/api/reactions/:messageId/:icon', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { messageId, icon } = req.params;
+
+      // Get the message to verify access
+      const channelMessages = await storage.searchMessages('', userId);
+      const message = channelMessages.find(m => m.id === messageId);
+      
+      if (!message) {
+        return res.status(404).json({ message: "Message not found or access denied" });
+      }
+
+      // Verify user has access to the channel
+      const channel = await storage.getChannel(message.channelId);
+      if (!channel) {
+        return res.status(404).json({ message: "Channel not found" });
+      }
+
+      if (channel.isPrivate) {
+        const isMember = await storage.isChannelMember(message.channelId, userId);
+        if (!isMember) {
+          return res.status(403).json({ message: "Access denied - not a member of this channel" });
+        }
+      }
+
+      await storage.removeReaction(messageId, userId, icon);
+
+      // Broadcast using server-derived channelId
+      broadcastToChannel(message.channelId, {
+        type: 'remove_reaction',
+        messageId,
+        userId,
+        icon,
+      });
+
+      res.json({ message: "Reaction removed" });
+    } catch (error) {
+      console.error("Error removing reaction:", error);
+      res.status(500).json({ message: "Failed to remove reaction" });
+    }
+  });
+
+  app.get('/api/messages/:messageId/reactions', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { messageId } = req.params;
+
+      // Get the message to verify access
+      const channelMessages = await storage.searchMessages('', userId);
+      const message = channelMessages.find(m => m.id === messageId);
+      
+      if (!message) {
+        return res.status(404).json({ message: "Message not found or access denied" });
+      }
+
+      // Verify user has access to the channel
+      const channel = await storage.getChannel(message.channelId);
+      if (!channel) {
+        return res.status(404).json({ message: "Channel not found" });
+      }
+
+      if (channel.isPrivate) {
+        const isMember = await storage.isChannelMember(message.channelId, userId);
+        if (!isMember) {
+          return res.status(403).json({ message: "Access denied - not a member of this channel" });
+        }
+      }
+
+      const reactions = await storage.getMessageReactions(messageId);
+      res.json(reactions);
+    } catch (error) {
+      console.error("Error fetching reactions:", error);
+      res.status(500).json({ message: "Failed to fetch reactions" });
     }
   });
 

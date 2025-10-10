@@ -4,6 +4,7 @@ import {
   messages,
   directMessages,
   channelMembers,
+  reactions,
   type User,
   type UpsertUser,
   type Channel,
@@ -15,6 +16,9 @@ import {
   type InsertChannelMember,
   type MessageWithUser,
   type DirectMessageWithUser,
+  type Reaction,
+  type InsertReaction,
+  type ReactionWithUser,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
@@ -42,6 +46,11 @@ export interface IStorage {
   // Direct message operations
   getDirectMessages(userId1: string, userId2: string): Promise<DirectMessageWithUser[]>;
   createDirectMessage(dm: InsertDirectMessage): Promise<DirectMessage>;
+  
+  // Reaction operations
+  addReaction(reaction: InsertReaction): Promise<Reaction>;
+  removeReaction(messageId: string, userId: string, icon: string): Promise<void>;
+  getMessageReactions(messageId: string): Promise<ReactionWithUser[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -278,6 +287,65 @@ export class DatabaseStorage implements IStorage {
   async createDirectMessage(dmData: InsertDirectMessage): Promise<DirectMessage> {
     const [dm] = await db.insert(directMessages).values(dmData).returning();
     return dm;
+  }
+
+  // Reaction operations
+  async addReaction(reactionData: InsertReaction): Promise<Reaction> {
+    // Check if user already reacted with this icon
+    const existing = await db
+      .select()
+      .from(reactions)
+      .where(
+        and(
+          eq(reactions.messageId, reactionData.messageId),
+          eq(reactions.userId, reactionData.userId),
+          eq(reactions.icon, reactionData.icon)
+        )
+      );
+    
+    if (existing.length > 0) {
+      return existing[0];
+    }
+
+    const [reaction] = await db.insert(reactions).values(reactionData).returning();
+    return reaction;
+  }
+
+  async removeReaction(messageId: string, userId: string, icon: string): Promise<void> {
+    await db
+      .delete(reactions)
+      .where(
+        and(
+          eq(reactions.messageId, messageId),
+          eq(reactions.userId, userId),
+          eq(reactions.icon, icon)
+        )
+      );
+  }
+
+  async getMessageReactions(messageId: string): Promise<ReactionWithUser[]> {
+    const result = await db
+      .select({
+        id: reactions.id,
+        messageId: reactions.messageId,
+        userId: reactions.userId,
+        icon: reactions.icon,
+        createdAt: reactions.createdAt,
+        user: users,
+      })
+      .from(reactions)
+      .innerJoin(users, eq(reactions.userId, users.id))
+      .where(eq(reactions.messageId, messageId))
+      .orderBy(reactions.createdAt);
+
+    return result.map((row) => ({
+      id: row.id,
+      messageId: row.messageId,
+      userId: row.userId,
+      icon: row.icon,
+      createdAt: row.createdAt,
+      user: row.user,
+    }));
   }
 }
 

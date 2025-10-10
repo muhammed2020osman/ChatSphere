@@ -98,6 +98,7 @@ export function ChannelView() {
                       key={message.id} 
                       message={{ ...message, threadReplies: replies }} 
                       onReply={(id) => setActiveThreadId(id)}
+                      channelId={id}
                     />
                   );
                 })
@@ -136,14 +137,14 @@ export function ChannelView() {
 
           <ScrollArea className="flex-1">
             <div className="py-4">
-              <MessageItem message={activeThread} />
+              <MessageItem message={activeThread} channelId={id} />
               <div className="px-4 py-2">
                 <div className="border-l-2 border-border pl-4">
                   <p className="text-sm font-semibold mb-2" data-testid="text-thread-replies-count">
                     {threadReplies.length} {threadReplies.length === 1 ? 'reply' : 'replies'}
                   </p>
                   {threadReplies.map((reply) => (
-                    <MessageItem key={reply.id} message={reply} />
+                    <MessageItem key={reply.id} message={reply} channelId={id} />
                   ))}
                 </div>
               </div>

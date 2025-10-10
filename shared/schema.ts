@@ -79,6 +79,15 @@ export const directMessages = pgTable("direct_messages", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Reactions table
+export const reactions = pgTable("reactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  messageId: varchar("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  icon: varchar("icon", { length: 50 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   channelsCreated: many(channels),
@@ -86,6 +95,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   messages: many(messages),
   directMessagesSent: many(directMessages, { relationName: "sentMessages" }),
   directMessagesReceived: many(directMessages, { relationName: "receivedMessages" }),
+  reactions: many(reactions),
 }));
 
 export const channelsRelations = relations(channels, ({ one, many }) => ({
@@ -123,6 +133,7 @@ export const messagesRelations = relations(messages, ({ one, many }) => ({
     relationName: "threadReplies",
   }),
   threadReplies: many(messages, { relationName: "threadReplies" }),
+  reactions: many(reactions),
 }));
 
 export const directMessagesRelations = relations(directMessages, ({ one }) => ({
@@ -135,6 +146,17 @@ export const directMessagesRelations = relations(directMessages, ({ one }) => ({
     fields: [directMessages.toUserId],
     references: [users.id],
     relationName: "receivedMessages",
+  }),
+}));
+
+export const reactionsRelations = relations(reactions, ({ one }) => ({
+  message: one(messages, {
+    fields: [reactions.messageId],
+    references: [messages.id],
+  }),
+  user: one(users, {
+    fields: [reactions.userId],
+    references: [users.id],
   }),
 }));
 
@@ -170,10 +192,22 @@ export const insertChannelMemberSchema = createInsertSchema(channelMembers).omit
 export type InsertChannelMember = z.infer<typeof insertChannelMemberSchema>;
 export type ChannelMember = typeof channelMembers.$inferSelect;
 
+export const insertReactionSchema = createInsertSchema(reactions).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertReaction = z.infer<typeof insertReactionSchema>;
+export type Reaction = typeof reactions.$inferSelect;
+
 // Extended types for frontend use
+export type ReactionWithUser = Reaction & {
+  user: User;
+};
+
 export type MessageWithUser = Message & {
   user: User;
   threadReplies?: MessageWithUser[];
+  reactions?: ReactionWithUser[];
 };
 
 export type ChannelWithMembers = Channel & {
