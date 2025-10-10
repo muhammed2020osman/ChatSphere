@@ -134,16 +134,16 @@ export function MessageComposer({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-border p-4">
+    <div className="p-4 border-t">
       {attachmentUrl && (
-        <div className="mb-2 flex items-center gap-2 p-2 bg-accent/50 rounded-md">
-          <Paperclip className="w-4 h-4" />
+        <div className="mb-3 flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-md">
+          <Paperclip className="w-4 h-4 text-muted-foreground" />
           <span className="text-sm flex-1 truncate">{attachmentName}</span>
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="w-6 h-6"
+            className="h-6 w-6"
             onClick={removeAttachment}
             data-testid="button-remove-attachment"
           >
@@ -151,17 +151,19 @@ export function MessageComposer({
           </Button>
         </div>
       )}
-      <div className="flex flex-col gap-2">
+      
+      <div className="border rounded-lg bg-background overflow-hidden">
         <Textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="min-h-20 resize-none text-base"
+          className="min-h-[80px] border-0 resize-none text-base focus-visible:ring-0 focus-visible:ring-offset-0"
           data-testid="textarea-message-composer"
         />
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1">
+        
+        <div className="flex items-center justify-between px-3 pb-2 pt-1 border-t bg-muted/30">
+          <div className="flex items-center gap-0.5">
             <ObjectUploader
               maxNumberOfFiles={1}
               maxFileSize={10485760}
@@ -188,16 +190,20 @@ export function MessageComposer({
               <Italic className="w-4 h-4" />
             </Button>
           </div>
+          
           <Button
-            type="submit"
+            type="button"
+            onClick={handleSubmit}
             size="icon"
+            variant="default"
             disabled={(!content.trim() && !attachmentUrl) || sendMessageMutation.isPending}
+            className="h-8 w-8"
             data-testid="button-send-message"
           >
             <Send className="w-4 h-4" />
           </Button>
         </div>
       </div>
-    </form>
+    </div>
   );
 }
