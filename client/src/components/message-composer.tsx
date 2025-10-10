@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Bold, Italic, Send } from "lucide-react";
+import { Bold, Italic, Send, Paperclip, X } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { ObjectUploader } from "./ObjectUploader";
+import type { UploadResult } from "@uppy/core";
 
 interface MessageComposerProps {
   channelId?: string;
@@ -21,21 +23,32 @@ export function MessageComposer({
   threadParentId 
 }: MessageComposerProps) {
   const [content, setContent] = useState("");
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
+  const [attachmentName, setAttachmentName] = useState<string | null>(null);
+  const [attachmentType, setAttachmentType] = useState<string | null>(null);
   const { toast } = useToast();
 
   const sendMessageMutation = useMutation({
-    mutationFn: async (messageContent: string) => {
+    mutationFn: async () => {
+      const payload: any = {};
+      
+      if (content.trim()) {
+        payload.content = content.trim();
+      }
+      
+      if (attachmentUrl) {
+        payload.attachmentUrl = attachmentUrl;
+        payload.attachmentName = attachmentName;
+        payload.attachmentType = attachmentType;
+      }
+
       if (channelId) {
-        return await apiRequest("POST", "/api/messages", {
-          channelId,
-          content: messageContent,
-          threadParentId,
-        });
+        payload.channelId = channelId;
+        payload.threadParentId = threadParentId;
+        return await apiRequest("POST", "/api/messages", payload);
       } else if (recipientId) {
-        return await apiRequest("POST", "/api/direct-messages", {
-          toUserId: recipientId,
-          content: messageContent,
-        });
+        payload.toUserId = recipientId;
+        return await apiRequest("POST", "/api/direct-messages", payload);
       }
     },
     onSuccess: () => {
@@ -45,6 +58,9 @@ export function MessageComposer({
         queryClient.invalidateQueries({ queryKey: ["/api/direct-messages", recipientId] });
       }
       setContent("");
+      setAttachmentUrl(null);
+      setAttachmentName(null);
+      setAttachmentType(null);
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -68,8 +84,46 @@ export function MessageComposer({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim()) return;
-    sendMessageMutation.mutate(content.trim());
+    if (!content.trim() && !attachmentUrl) return;
+    sendMessageMutation.mutate();
+  };
+
+  const handleGetUploadParameters = async () => {
+    const response = await apiRequest("POST", "/api/objects/upload");
+    return {
+      method: "PUT" as const,
+      url: response.uploadURL,
+    };
+  };
+
+  const handleUploadComplete = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful.length > 0) {
+      const file = result.successful[0];
+      const uploadURL = file.uploadURL;
+      const fileName = file.name;
+      const fileType = file.type;
+
+      // Set ACL policy for the uploaded file
+      const response = await apiRequest("PUT", "/api/attachments", {
+        attachmentURL: uploadURL,
+        fileName: fileName,
+      });
+
+      setAttachmentUrl(response.objectPath);
+      setAttachmentName(fileName);
+      setAttachmentType(fileType || "application/octet-stream");
+
+      toast({
+        title: "File attached",
+        description: `${fileName} is ready to send`,
+      });
+    }
+  };
+
+  const removeAttachment = () => {
+    setAttachmentUrl(null);
+    setAttachmentName(null);
+    setAttachmentType(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -81,6 +135,22 @@ export function MessageComposer({
 
   return (
     <form onSubmit={handleSubmit} className="border-t border-border p-4">
+      {attachmentUrl && (
+        <div className="mb-2 flex items-center gap-2 p-2 bg-accent/50 rounded-md">
+          <Paperclip className="w-4 h-4" />
+          <span className="text-sm flex-1 truncate">{attachmentName}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="w-6 h-6"
+            onClick={removeAttachment}
+            data-testid="button-remove-attachment"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
       <div className="relative">
         <Textarea
           value={content}
@@ -88,9 +158,18 @@ export function MessageComposer({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className="min-h-20 resize-none pr-12 text-base"
-          data-testid="input-message"
+          data-testid="textarea-message-composer"
         />
         <div className="absolute bottom-2 right-2 flex items-center gap-1">
+          <ObjectUploader
+            maxNumberOfFiles={1}
+            maxFileSize={10485760}
+            onGetUploadParameters={handleGetUploadParameters}
+            onComplete={handleUploadComplete}
+            buttonClassName="w-8 h-8"
+          >
+            <Paperclip className="w-4 h-4" />
+          </ObjectUploader>
           <Button
             type="button"
             variant="ghost"
@@ -112,7 +191,7 @@ export function MessageComposer({
           <Button
             type="submit"
             size="icon"
-            disabled={!content.trim() || sendMessageMutation.isPending}
+            disabled={(!content.trim() && !attachmentUrl) || sendMessageMutation.isPending}
             className="w-8 h-8"
             data-testid="button-send-message"
           >

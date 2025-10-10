@@ -1,16 +1,18 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import type { Channel, MessageWithUser } from "@shared/schema";
 import { MessageItem } from "./message-item";
 import { MessageComposer } from "./message-composer";
-import { Hash, Lock, Users } from "lucide-react";
+import { Hash, Lock, Users, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 
 export function ChannelView() {
   const { id } = useParams();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
 
   const { data: channel, isLoading: channelLoading } = useQuery<Channel>({
     queryKey: ["/api/channels", id],
@@ -28,6 +30,9 @@ export function ChannelView() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const activeThread = activeThreadId ? messages?.find(m => m.id === activeThreadId) : null;
+  const threadReplies = messages?.filter(m => m.threadParentId === activeThreadId) || [];
 
   if (channelLoading) {
     return (
@@ -53,55 +58,105 @@ export function ChannelView() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="border-b border-border px-6 py-3">
-        <div className="flex items-center gap-2">
-          {channel.isPrivate ? (
-            <Lock className="w-5 h-5 text-muted-foreground" />
-          ) : (
-            <Hash className="w-5 h-5 text-muted-foreground" />
+    <div className="flex h-full">
+      {/* Main channel view */}
+      <div className="flex flex-col flex-1">
+        <div className="border-b border-border px-6 py-3">
+          <div className="flex items-center gap-2">
+            {channel.isPrivate ? (
+              <Lock className="w-5 h-5 text-muted-foreground" />
+            ) : (
+              <Hash className="w-5 h-5 text-muted-foreground" />
+            )}
+            <h2 className="text-lg font-semibold" data-testid="text-channel-name">
+              {channel.name}
+            </h2>
+            <Users className="w-4 h-4 text-muted-foreground ml-auto" />
+          </div>
+          {channel.description && (
+            <p className="text-sm text-muted-foreground mt-1" data-testid="text-channel-description">
+              {channel.description}
+            </p>
           )}
-          <h2 className="text-lg font-semibold" data-testid="text-channel-name">
-            {channel.name}
-          </h2>
-          <Users className="w-4 h-4 text-muted-foreground ml-auto" />
         </div>
-        {channel.description && (
-          <p className="text-sm text-muted-foreground mt-1" data-testid="text-channel-description">
-            {channel.description}
-          </p>
-        )}
+
+        <ScrollArea className="flex-1" ref={scrollRef}>
+          <div className="py-4">
+            {messagesLoading ? (
+              <div className="space-y-4 px-4">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </div>
+            ) : messages && messages.length > 0 ? (
+              messages
+                .filter((msg) => !msg.threadParentId)
+                .map((message) => {
+                  const replies = messages.filter(m => m.threadParentId === message.id);
+                  return (
+                    <MessageItem 
+                      key={message.id} 
+                      message={{ ...message, threadReplies: replies }} 
+                      onReply={(id) => setActiveThreadId(id)}
+                    />
+                  );
+                })
+            ) : (
+              <div className="flex flex-col items-center justify-center h-64 text-center px-4">
+                <Hash className="w-12 h-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">
+                  This is the beginning of #{channel.name}
+                </h3>
+                <p className="text-sm text-muted-foreground max-w-md">
+                  This channel is for everything about {channel.name}. Send your first message to get the conversation started!
+                </p>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+
+        <MessageComposer channelId={id} placeholder={`Message #${channel.name}`} />
       </div>
 
-      <ScrollArea className="flex-1" ref={scrollRef}>
-        <div className="py-4">
-          {messagesLoading ? (
-            <div className="space-y-4 px-4">
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-16 w-full" />
-            </div>
-          ) : messages && messages.length > 0 ? (
-            messages
-              .filter((msg) => !msg.threadParentId)
-              .map((message) => (
-                <MessageItem key={message.id} message={message} />
-              ))
-          ) : (
-            <div className="flex flex-col items-center justify-center h-64 text-center px-4">
-              <Hash className="w-12 h-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">
-                This is the beginning of #{channel.name}
-              </h3>
-              <p className="text-sm text-muted-foreground max-w-md">
-                This channel is for everything about {channel.name}. Send your first message to get the conversation started!
-              </p>
-            </div>
-          )}
-        </div>
-      </ScrollArea>
+      {/* Thread panel */}
+      {activeThreadId && activeThread && (
+        <div className="w-96 border-l border-border flex flex-col">
+          <div className="border-b border-border px-4 py-3 flex items-center justify-between">
+            <h3 className="font-semibold" data-testid="text-thread-title">Thread</h3>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-8 h-8"
+              onClick={() => setActiveThreadId(null)}
+              data-testid="button-close-thread"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
 
-      <MessageComposer channelId={id} placeholder={`Message #${channel.name}`} />
+          <ScrollArea className="flex-1">
+            <div className="py-4">
+              <MessageItem message={activeThread} />
+              <div className="px-4 py-2">
+                <div className="border-l-2 border-border pl-4">
+                  <p className="text-sm font-semibold mb-2" data-testid="text-thread-replies-count">
+                    {threadReplies.length} {threadReplies.length === 1 ? 'reply' : 'replies'}
+                  </p>
+                  {threadReplies.map((reply) => (
+                    <MessageItem key={reply.id} message={reply} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </ScrollArea>
+
+          <MessageComposer 
+            channelId={id} 
+            threadParentId={activeThreadId}
+            placeholder="Reply to thread..." 
+          />
+        </div>
+      )}
     </div>
   );
 }

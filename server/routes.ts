@@ -6,6 +6,7 @@ import { parse as parseCookie } from "cookie";
 import passport from "passport";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, getSession } from "./replitAuth";
+import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { 
   insertChannelSchema, 
   insertMessageSchema, 
@@ -318,6 +319,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error searching messages:", error);
       res.status(500).json({ message: "Failed to search messages" });
+    }
+  });
+
+  // Object storage routes - for file uploads in messages
+  app.get("/objects/:objectPath(*)", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const objectFile = await objectStorageService.getObjectEntityFile(
+        req.path,
+      );
+      const canAccess = await objectStorageService.canAccessObjectEntity({
+        objectFile,
+        userId: userId,
+      });
+      if (!canAccess) {
+        return res.sendStatus(401);
+      }
+      objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error checking object access:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.sendStatus(404);
+      }
+      return res.sendStatus(500);
+    }
+  });
+
+  app.post("/api/objects/upload", isAuthenticated, async (req, res) => {
+    const objectStorageService = new ObjectStorageService();
+    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+    res.json({ uploadURL });
+  });
+
+  app.put("/api/attachments", isAuthenticated, async (req: any, res) => {
+    if (!req.body.attachmentURL || !req.body.fileName) {
+      return res.status(400).json({ error: "attachmentURL and fileName are required" });
+    }
+
+    const userId = req.user.claims.sub;
+
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
+        req.body.attachmentURL,
+        {
+          owner: userId,
+          visibility: "public", // Message attachments are accessible to channel members
+        },
+      );
+
+      res.status(200).json({
+        objectPath: objectPath,
+        fileName: req.body.fileName,
+      });
+    } catch (error) {
+      console.error("Error setting attachment:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 

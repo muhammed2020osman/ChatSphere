@@ -59,7 +59,10 @@ export const messages = pgTable("messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   channelId: varchar("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  content: text("content").notNull(),
+  content: text("content"),
+  attachmentUrl: varchar("attachment_url"),
+  attachmentType: varchar("attachment_type", { length: 50 }),
+  attachmentName: varchar("attachment_name"),
   threadParentId: varchar("thread_parent_id").references(() => messages.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -69,7 +72,10 @@ export const directMessages = pgTable("direct_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   fromUserId: varchar("from_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   toUserId: varchar("to_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  content: text("content").notNull(),
+  content: text("content"),
+  attachmentUrl: varchar("attachment_url"),
+  attachmentType: varchar("attachment_type", { length: 50 }),
+  attachmentName: varchar("attachment_name"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
