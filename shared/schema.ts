@@ -116,6 +116,56 @@ export const starredMessages = pgTable("starred_messages", {
   uniqueUserMessage: uniqueIndex("unique_user_message").on(table.messageId, table.userId),
 }));
 
+// Disciplines table - Engineering disciplines (ARCH, STR, MEP, GEN)
+export const disciplines = pgTable("disciplines", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 10 }).unique().notNull(), // e.g., "ARCH", "STR", "MEP", "GEN"
+  name: varchar("name", { length: 100 }).notNull(), // e.g., "Architectural", "Structural"
+  icon: varchar("icon", { length: 50 }), // Icon name for UI
+  color: varchar("color", { length: 20 }), // Color code for UI
+});
+
+// Floors table - Building floors/levels
+export const floors = pgTable("floors", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 20 }).unique().notNull(), // e.g., "G", "01", "02", "B1"
+  name: varchar("name", { length: 100 }).notNull(), // e.g., "Ground Floor", "Level 01"
+  sortOrder: varchar("sort_order", { length: 10 }), // For proper sorting (e.g., "01", "02")
+});
+
+// Drawings table - Main drawing documents
+export const drawings = pgTable("drawings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sheetNo: varchar("sheet_no", { length: 50 }).unique().notNull(), // e.g., "A-101", "S-201"
+  title: varchar("title", { length: 255 }).notNull(),
+  disciplineId: varchar("discipline_id").notNull().references(() => disciplines.id),
+  floorId: varchar("floor_id").references(() => floors.id),
+  packageName: varchar("package_name", { length: 100 }), // e.g., "Core and Shell", "MEP"
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Drawing Revisions table - Version history for each drawing
+export const drawingRevisions = pgTable("drawing_revisions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  drawingId: varchar("drawing_id").notNull().references(() => drawings.id, { onDelete: "cascade" }),
+  revisionNo: varchar("revision_no", { length: 10 }).notNull(), // e.g., "A", "B", "C", "0", "1"
+  status: varchar("status", { length: 20 }).notNull().default("draft"), // draft, under_review, approved, rejected, superseded
+  fileUrl: varchar("file_url").notNull(), // Object storage URL
+  fileName: varchar("file_name").notNull(),
+  fileType: varchar("file_type", { length: 50 }), // e.g., "application/pdf"
+  fileSize: varchar("file_size"), // In bytes
+  uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewNotes: text("review_notes"),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+  reviewedAt: timestamp("reviewed_at"),
+}, (table) => ({
+  // Ensure unique revision number per drawing
+  uniqueDrawingRevision: uniqueIndex("unique_drawing_revision").on(table.drawingId, table.revisionNo),
+}));
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   channelsCreated: many(channels),
@@ -210,6 +260,39 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   }),
 }));
 
+export const drawingsRelations = relations(drawings, ({ one, many }) => ({
+  discipline: one(disciplines, {
+    fields: [drawings.disciplineId],
+    references: [disciplines.id],
+  }),
+  floor: one(floors, {
+    fields: [drawings.floorId],
+    references: [floors.id],
+  }),
+  creator: one(users, {
+    fields: [drawings.createdBy],
+    references: [users.id],
+  }),
+  revisions: many(drawingRevisions),
+}));
+
+export const drawingRevisionsRelations = relations(drawingRevisions, ({ one }) => ({
+  drawing: one(drawings, {
+    fields: [drawingRevisions.drawingId],
+    references: [drawings.id],
+  }),
+  uploader: one(users, {
+    fields: [drawingRevisions.uploadedBy],
+    references: [users.id],
+    relationName: "revisionUploader",
+  }),
+  reviewer: one(users, {
+    fields: [drawingRevisions.reviewedBy],
+    references: [users.id],
+    relationName: "revisionReviewer",
+  }),
+}));
+
 // Zod schemas for validation
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -287,4 +370,47 @@ export type DirectMessageWithUser = DirectMessage & {
 export type NotificationWithUsers = Notification & {
   fromUser: User;
   channel?: Channel;
+};
+
+// Drawings schemas
+export const insertDisciplineSchema = createInsertSchema(disciplines).omit({
+  id: true,
+});
+export type InsertDiscipline = z.infer<typeof insertDisciplineSchema>;
+export type Discipline = typeof disciplines.$inferSelect;
+
+export const insertFloorSchema = createInsertSchema(floors).omit({
+  id: true,
+});
+export type InsertFloor = z.infer<typeof insertFloorSchema>;
+export type Floor = typeof floors.$inferSelect;
+
+export const insertDrawingSchema = createInsertSchema(drawings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertDrawing = z.infer<typeof insertDrawingSchema>;
+export type Drawing = typeof drawings.$inferSelect;
+
+export const insertDrawingRevisionSchema = createInsertSchema(drawingRevisions).omit({
+  id: true,
+  uploadedAt: true,
+  reviewedAt: true,
+});
+export type InsertDrawingRevision = z.infer<typeof insertDrawingRevisionSchema>;
+export type DrawingRevision = typeof drawingRevisions.$inferSelect;
+
+// Extended types for frontend use
+export type DrawingWithDetails = Drawing & {
+  discipline: Discipline;
+  floor?: Floor;
+  creator: User;
+  latestRevision?: DrawingRevisionWithUser;
+  revisions?: DrawingRevisionWithUser[];
+};
+
+export type DrawingRevisionWithUser = DrawingRevision & {
+  uploader: User;
+  reviewer?: User;
 };

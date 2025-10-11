@@ -7,6 +7,10 @@ import {
   reactions,
   notifications,
   starredMessages,
+  drawings,
+  drawingRevisions,
+  disciplines,
+  floors,
   type User,
   type UpsertUser,
   type Channel,
@@ -26,6 +30,13 @@ import {
   type NotificationWithUsers,
   type StarredMessage,
   type InsertStarredMessage,
+  type Drawing,
+  type InsertDrawing,
+  type DrawingRevision,
+  type InsertDrawingRevision,
+  type DrawingWithDetails,
+  type Discipline,
+  type Floor,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
@@ -79,6 +90,16 @@ export interface IStorage {
   unstarMessage(messageId: string, userId: string): Promise<void>;
   isMessageStarred(messageId: string, userId: string): Promise<boolean>;
   getUserStarredMessages(userId: string): Promise<MessageWithUser[]>;
+  
+  // Drawings operations
+  getDisciplines(): Promise<Discipline[]>;
+  getFloors(): Promise<Floor[]>;
+  getDrawings(): Promise<DrawingWithDetails[]>;
+  getDrawing(id: string): Promise<DrawingWithDetails | undefined>;
+  createDrawing(drawing: InsertDrawing): Promise<Drawing>;
+  createDrawingRevision(revision: InsertDrawingRevision): Promise<DrawingRevision>;
+  getDrawingRevisions(drawingId: string): Promise<DrawingRevision[]>;
+  updateRevisionStatus(revisionId: string, status: string, reviewedBy: string, reviewNotes?: string): Promise<DrawingRevision>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -715,6 +736,182 @@ export class DatabaseStorage implements IStorage {
       createdAt: row.createdAt,
       user: row.user,
     }));
+  }
+
+  // Drawings operations
+  async getDisciplines(): Promise<Discipline[]> {
+    return await db.select().from(disciplines);
+  }
+
+  async getFloors(): Promise<Floor[]> {
+    return await db.select().from(floors).orderBy(floors.sortOrder);
+  }
+
+  async getDrawings(): Promise<DrawingWithDetails[]> {
+    const results = await db
+      .select({
+        drawing: drawings,
+        discipline: disciplines,
+        floor: floors,
+        creator: users,
+      })
+      .from(drawings)
+      .leftJoin(disciplines, eq(drawings.disciplineId, disciplines.id))
+      .leftJoin(floors, eq(drawings.floorId, floors.id))
+      .leftJoin(users, eq(drawings.createdBy, users.id))
+      .orderBy(desc(drawings.updatedAt));
+
+    // Get latest revision for each drawing
+    const drawingsWithRevisions = await Promise.all(
+      results.map(async (row) => {
+        const [latestRevision] = await db
+          .select({
+            revision: drawingRevisions,
+            uploader: users,
+          })
+          .from(drawingRevisions)
+          .leftJoin(users, eq(drawingRevisions.uploadedBy, users.id))
+          .where(eq(drawingRevisions.drawingId, row.drawing.id))
+          .orderBy(desc(drawingRevisions.uploadedAt))
+          .limit(1);
+
+        return {
+          ...row.drawing,
+          discipline: row.discipline!,
+          floor: row.floor || undefined,
+          creator: row.creator!,
+          latestRevision: latestRevision ? {
+            ...latestRevision.revision,
+            uploader: latestRevision.uploader!,
+          } : undefined,
+        };
+      })
+    );
+
+    return drawingsWithRevisions;
+  }
+
+  async getDrawing(id: string): Promise<DrawingWithDetails | undefined> {
+    const [result] = await db
+      .select({
+        drawing: drawings,
+        discipline: disciplines,
+        floor: floors,
+        creator: users,
+      })
+      .from(drawings)
+      .leftJoin(disciplines, eq(drawings.disciplineId, disciplines.id))
+      .leftJoin(floors, eq(drawings.floorId, floors.id))
+      .leftJoin(users, eq(drawings.createdBy, users.id))
+      .where(eq(drawings.id, id));
+
+    if (!result) return undefined;
+
+    // Get all revisions
+    const revisionResults = await db
+      .select({
+        revision: drawingRevisions,
+        uploader: users,
+        reviewer: users,
+      })
+      .from(drawingRevisions)
+      .leftJoin(users, eq(drawingRevisions.uploadedBy, users.id))
+      .leftJoin(users, eq(drawingRevisions.reviewedBy, users.id))
+      .where(eq(drawingRevisions.drawingId, id))
+      .orderBy(desc(drawingRevisions.uploadedAt));
+
+    return {
+      ...result.drawing,
+      discipline: result.discipline!,
+      floor: result.floor || undefined,
+      creator: result.creator!,
+      revisions: revisionResults.map((r) => ({
+        ...r.revision,
+        uploader: r.uploader!,
+        reviewer: r.reviewer || undefined,
+      })),
+      latestRevision: revisionResults.length > 0 ? {
+        ...revisionResults[0].revision,
+        uploader: revisionResults[0].uploader!,
+        reviewer: revisionResults[0].reviewer || undefined,
+      } : undefined,
+    };
+  }
+
+  async createDrawing(drawingData: InsertDrawing): Promise<Drawing> {
+    const [drawing] = await db
+      .insert(drawings)
+      .values(drawingData)
+      .returning();
+    return drawing;
+  }
+
+  async createDrawingRevision(revisionData: InsertDrawingRevision): Promise<DrawingRevision> {
+    // Mark all previous revisions as superseded
+    await db
+      .update(drawingRevisions)
+      .set({ status: 'superseded' })
+      .where(
+        and(
+          eq(drawingRevisions.drawingId, revisionData.drawingId),
+          eq(drawingRevisions.status, 'approved')
+        )
+      );
+
+    const [revision] = await db
+      .insert(drawingRevisions)
+      .values(revisionData)
+      .returning();
+
+    // Update drawing's updatedAt
+    await db
+      .update(drawings)
+      .set({ updatedAt: new Date() })
+      .where(eq(drawings.id, revisionData.drawingId));
+
+    return revision;
+  }
+
+  async getDrawingRevisions(drawingId: string): Promise<DrawingRevision[]> {
+    return await db
+      .select()
+      .from(drawingRevisions)
+      .where(eq(drawingRevisions.drawingId, drawingId))
+      .orderBy(desc(drawingRevisions.uploadedAt));
+  }
+
+  async updateRevisionStatus(
+    revisionId: string,
+    status: string,
+    reviewedBy: string,
+    reviewNotes?: string
+  ): Promise<DrawingRevision> {
+    const [revision] = await db
+      .update(drawingRevisions)
+      .set({
+        status,
+        reviewedBy,
+        reviewNotes,
+        reviewedAt: new Date(),
+      })
+      .where(eq(drawingRevisions.id, revisionId))
+      .returning();
+
+    // If approved, mark other approved revisions as superseded
+    if (status === 'approved') {
+      await db
+        .update(drawingRevisions)
+        .set({ status: 'superseded' })
+        .where(
+          and(
+            eq(drawingRevisions.drawingId, revision.drawingId),
+            eq(drawingRevisions.status, 'approved'),
+            sql`${drawingRevisions.id} != ${revisionId}`
+          )
+        );
+    }
+
+    return revision;
   }
 }
 
