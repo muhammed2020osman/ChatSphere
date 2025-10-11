@@ -211,23 +211,6 @@ export function MessageComposer({
 
   return (
     <div className="p-4 border-t">
-      {attachmentUrl && (
-        <div className="mb-3 flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-md">
-          <Paperclip className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm flex-1 truncate">{attachmentName}</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={removeAttachment}
-            data-testid="button-remove-attachment"
-          >
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
-      )}
-      
       <div className="border rounded-lg bg-background overflow-hidden relative">
         <Textarea
           ref={textareaRef}
@@ -271,6 +254,23 @@ export function MessageComposer({
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {attachmentUrl && (
+          <div className="flex items-center gap-2 px-3 py-2 border-t bg-muted/30">
+            <Paperclip className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm flex-1 truncate">{attachmentName}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={removeAttachment}
+              data-testid="button-remove-attachment"
+            >
+              <X className="w-4 h-4" />
+            </Button>
           </div>
         )}
         
