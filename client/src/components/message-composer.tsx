@@ -116,7 +116,7 @@ export function MessageComposer({
       setIsUploading(true);
 
       // Get upload URL
-      const uploadResponse = await apiRequest("POST", "/api/objects/upload") as unknown as { uploadURL: string };
+      const uploadResponse = await (await apiRequest("POST", "/api/objects/upload")).json() as { uploadURL: string };
 
       // Upload file
       await fetch(uploadResponse.uploadURL, {
@@ -128,10 +128,10 @@ export function MessageComposer({
       });
 
       // Set ACL policy
-      const aclResponse = await apiRequest("PUT", "/api/attachments", {
+      const aclResponse = await (await apiRequest("PUT", "/api/attachments", {
         attachmentURL: uploadResponse.uploadURL,
         fileName: file.name,
-      }) as unknown as { objectPath: string };
+      })).json() as { objectPath: string };
 
       setAttachmentUrl(aclResponse.objectPath);
       setAttachmentName(file.name);

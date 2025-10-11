@@ -80,7 +80,7 @@ export function UploadDrawingDialog({ open, onOpenChange }: UploadDrawingDialogP
 
       try {
         // Get upload URL
-        const uploadResponse = await apiRequest("POST", "/api/objects/upload") as unknown as { uploadURL: string };
+        const uploadResponse = await (await apiRequest("POST", "/api/objects/upload")).json() as { uploadURL: string };
 
         // Upload file to object storage
         await fetch(uploadResponse.uploadURL, {
@@ -92,31 +92,31 @@ export function UploadDrawingDialog({ open, onOpenChange }: UploadDrawingDialogP
         });
 
         // Set ACL policy
-        const aclResponse = await apiRequest("PUT", "/api/attachments", {
+        const aclResponse = await (await apiRequest("PUT", "/api/attachments", {
           attachmentURL: uploadResponse.uploadURL,
           fileName: data.file.name,
-        }) as unknown as { objectPath: string };
+        })).json() as { objectPath: string };
 
         const fileUrl = aclResponse.objectPath;
 
         // Create drawing
-        const drawing = await apiRequest("POST", "/api/drawings", {
+        const drawing = await (await apiRequest("POST", "/api/drawings", {
           sheetNo: data.sheetNo,
           title: data.title,
           disciplineId: data.disciplineId,
           floorId: data.floorId || null,
           packageName: data.packageName || null,
-        }) as unknown as { id: string };
+        })).json() as { id: string };
 
         // Create first revision
-        await apiRequest("POST", `/api/drawings/${drawing.id}/revisions`, {
+        await (await apiRequest("POST", `/api/drawings/${drawing.id}/revisions`, {
           revisionNo: data.revisionNo,
           status: "draft",
           fileUrl,
           fileName: data.file.name,
           fileType: data.file.type,
           fileSize: data.file.size.toString(),
-        });
+        })).json();
 
         return drawing;
       } finally {
