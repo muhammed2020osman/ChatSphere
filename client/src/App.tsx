@@ -19,6 +19,9 @@ function Router() {
       ) : (
         <>
           <Route path="/" component={Home} />
+          <Route path="/mentions" component={Home} />
+          <Route path="/threads" component={Home} />
+          <Route path="/starred" component={Home} />
           <Route path="/channel/:id" component={Home} />
           <Route path="/dm/:userId" component={Home} />
           <Route path="/settings" component={Home} />

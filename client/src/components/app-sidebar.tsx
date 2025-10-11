@@ -1,4 +1,4 @@
-import { Hash, Lock, Plus, ChevronDown, MessageSquare, Settings } from "lucide-react";
+import { Hash, Lock, Plus, ChevronDown, MessageSquare, Settings, AtSign, Star, MessagesSquare } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -93,7 +93,55 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
       </SidebarHeader>
 
       <SidebarContent className="px-2 py-3">
+        {/* Main Features Section */}
         <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === '/mentions'}
+                  data-testid="link-mentions"
+                  tooltip="Mentions & reactions"
+                >
+                  <Link href="/mentions">
+                    <AtSign className="w-4 h-4" />
+                    <span>Mentions & reactions</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === '/threads'}
+                  data-testid="link-threads"
+                  tooltip="Threads"
+                >
+                  <Link href="/threads">
+                    <MessagesSquare className="w-4 h-4" />
+                    <span>Threads</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === '/starred'}
+                  data-testid="link-starred"
+                  tooltip="Starred"
+                >
+                  <Link href="/starred">
+                    <Star className="w-4 h-4" />
+                    <span>Starred</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Channels Section */}
+        <SidebarGroup className="mt-4">
           <SidebarGroupLabel className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Channels
           </SidebarGroupLabel>
@@ -111,6 +159,7 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
                       asChild
                       isActive={location === `/channel/${channel.id}`}
                       data-testid={`link-channel-${channel.id}`}
+                      tooltip={channel.name}
                     >
                       <Link href={`/channel/${channel.id}`}>
                         {channel.isPrivate ? (
@@ -164,6 +213,7 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
                         asChild
                         isActive={location === `/dm/${dmUser.id}`}
                         data-testid={`link-dm-${dmUser.id}`}
+                        tooltip={getUserName(dmUser)}
                       >
                         <Link href={`/dm/${dmUser.id}`}>
                           <div className="relative">

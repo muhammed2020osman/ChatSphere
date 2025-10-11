@@ -655,6 +655,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get user threads
+  app.get('/api/messages/threads', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const threads = await storage.getUserThreads(userId);
+      res.json(threads);
+    } catch (error) {
+      console.error("Error fetching threads:", error);
+      res.status(500).json({ message: "Failed to fetch threads" });
+    }
+  });
+
   // Object storage routes - for file uploads in messages
   app.get("/objects/:objectPath(*)", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;

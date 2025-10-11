@@ -48,6 +48,7 @@ export interface IStorage {
   getChannelMessages(channelId: string): Promise<MessageWithUser[]>;
   createMessage(message: InsertMessage): Promise<Message>;
   searchMessages(query: string, userId: string): Promise<MessageWithUser[]>;
+  getUserThreads(userId: string): Promise<any[]>;
   
   // Direct message operations
   getDirectMessages(userId1: string, userId2: string): Promise<DirectMessageWithUser[]>;
@@ -277,6 +278,93 @@ export class DatabaseStorage implements IStorage {
       createdAt: row.createdAt,
       user: row.user,
     }));
+  }
+
+  async getUserThreads(userId: string): Promise<any[]> {
+    // Get channels user has access to
+    const userChannelIds = await db
+      .select({ channelId: channelMembers.channelId })
+      .from(channelMembers)
+      .where(eq(channelMembers.userId, userId));
+    
+    const publicChannels = await db
+      .select({ id: channels.id })
+      .from(channels)
+      .where(eq(channels.isPrivate, false));
+    
+    const accessibleChannelIds = [
+      ...userChannelIds.map(m => m.channelId),
+      ...publicChannels.map(c => c.id)
+    ];
+    
+    if (accessibleChannelIds.length === 0) {
+      return [];
+    }
+
+    // Get messages that the user participated in (either created or replied to)
+    const userMessages = await db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.userId, userId),
+          inArray(messages.channelId, accessibleChannelIds)
+        )
+      );
+
+    const userMessageIds = userMessages.map(m => m.id);
+
+    if (userMessageIds.length === 0) {
+      return [];
+    }
+
+    // Get threads where user either started the thread or replied
+    const threads = await db
+      .select({
+        id: messages.id,
+        channelId: messages.channelId,
+        userId: messages.userId,
+        content: messages.content,
+        createdAt: messages.createdAt,
+        user: users,
+        channelName: channels.name,
+      })
+      .from(messages)
+      .innerJoin(users, eq(messages.userId, users.id))
+      .leftJoin(channels, eq(messages.channelId, channels.id))
+      .where(
+        and(
+          or(
+            inArray(messages.id, userMessageIds),
+            inArray(messages.threadParentId, userMessageIds)
+          ),
+          eq(messages.threadParentId, sql`NULL`)
+        )
+      )
+      .orderBy(desc(messages.createdAt));
+
+    // Get reply counts for each thread
+    const threadsWithCounts = await Promise.all(
+      threads.map(async (thread) => {
+        const replyCount = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(messages)
+          .where(eq(messages.threadParentId, thread.id));
+
+        return {
+          id: thread.id,
+          channelId: thread.channelId,
+          userId: thread.userId,
+          content: thread.content,
+          createdAt: thread.createdAt,
+          user: thread.user,
+          channel: thread.channelName ? { id: thread.channelId, name: thread.channelName } : undefined,
+          replyCount: Number(replyCount[0]?.count || 0),
+        };
+      })
+    );
+
+    return threadsWithCounts.filter(t => t.replyCount > 0);
   }
 
   // Direct message operations

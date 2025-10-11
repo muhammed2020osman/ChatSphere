@@ -10,6 +10,9 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/components/NotificationBell";
 import Settings from "./settings";
 import Members from "./members";
+import Mentions from "./mentions";
+import Threads from "./threads";
+import Starred from "./starred";
 import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -76,6 +79,15 @@ export default function Home() {
           </header>
           <main className="flex-1 overflow-hidden">
             <Switch>
+              <Route path="/mentions">
+                <Mentions />
+              </Route>
+              <Route path="/threads">
+                <Threads />
+              </Route>
+              <Route path="/starred">
+                <Starred />
+              </Route>
               <Route path="/settings">
                 <Settings />
               </Route>
