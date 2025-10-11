@@ -1,6 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, FileIcon, Download, Smile, ThumbsUp, Heart, Laugh, PartyPopper, CheckCircle, MoreVertical, Edit, Trash } from "lucide-react";
+import { MessageSquare, FileIcon, Download, Smile, ThumbsUp, Heart, Laugh, PartyPopper, CheckCircle, MoreVertical, Edit, Trash, Star } from "lucide-react";
 import type { MessageWithUser, ReactionWithUser } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
@@ -41,13 +41,39 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
   const [editContent, setEditContent] = useState(message.content || "");
   const { toast } = useToast();
 
-  const { data: currentUser } = useQuery({
+  const { data: currentUser } = useQuery<{ id: string }>({
     queryKey: ["/api/auth/user"],
   });
 
   const { data: reactions = [] } = useQuery<ReactionWithUser[]>({
     queryKey: ["/api/messages", message.id, "reactions"],
     enabled: !!message.id,
+  });
+
+  const { data: starredStatus } = useQuery<{ isStarred: boolean }>({
+    queryKey: ["/api/messages", message.id, "starred"],
+    enabled: !!message.id,
+  });
+
+  const toggleStarMutation = useMutation({
+    mutationFn: async () => {
+      if (starredStatus?.isStarred) {
+        return await apiRequest("DELETE", `/api/messages/${message.id}/star`);
+      } else {
+        return await apiRequest("POST", `/api/messages/${message.id}/star`);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/messages", message.id, "starred"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/starred"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to toggle star",
+        variant: "destructive",
+      });
+    },
   });
 
   const addReactionMutation = useMutation({
@@ -369,6 +395,17 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
                 )}
               </>
             )}
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              className="hover-elevate"
+              onClick={() => toggleStarMutation.mutate()}
+              data-testid={`button-star-${message.id}`}
+            >
+              <Star className={`w-4 h-4 mr-1 ${starredStatus?.isStarred ? 'fill-current text-yellow-500' : ''}`} />
+              {starredStatus?.isStarred ? 'Starred' : 'Star'}
+            </Button>
             
             {channelId && (
               <Popover open={showReactions} onOpenChange={setShowReactions}>

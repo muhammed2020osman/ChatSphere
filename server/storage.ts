@@ -6,6 +6,7 @@ import {
   channelMembers,
   reactions,
   notifications,
+  starredMessages,
   type User,
   type UpsertUser,
   type Channel,
@@ -23,6 +24,8 @@ import {
   type Notification,
   type InsertNotification,
   type NotificationWithUsers,
+  type StarredMessage,
+  type InsertStarredMessage,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
@@ -46,6 +49,7 @@ export interface IStorage {
   
   // Message operations
   getChannelMessages(channelId: string): Promise<MessageWithUser[]>;
+  getMessage(messageId: string): Promise<Message | undefined>;
   createMessage(message: InsertMessage): Promise<Message>;
   searchMessages(query: string, userId: string): Promise<MessageWithUser[]>;
   getUserThreads(userId: string): Promise<any[]>;
@@ -69,6 +73,12 @@ export interface IStorage {
   // Message editing/deletion
   updateMessage(messageId: string, content: string, mentions?: string[]): Promise<Message>;
   deleteMessage(messageId: string): Promise<void>;
+  
+  // Starred messages operations
+  starMessage(messageId: string, userId: string): Promise<StarredMessage>;
+  unstarMessage(messageId: string, userId: string): Promise<void>;
+  isMessageStarred(messageId: string, userId: string): Promise<boolean>;
+  getUserStarredMessages(userId: string): Promise<MessageWithUser[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -232,6 +242,14 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  async getMessage(messageId: string): Promise<Message | undefined> {
+    const [message] = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.id, messageId));
+    return message;
+  }
+
   async createMessage(messageData: InsertMessage): Promise<Message> {
     const [message] = await db.insert(messages).values(messageData).returning();
     return message;
@@ -321,24 +339,44 @@ export class DatabaseStorage implements IStorage {
       return [];
     }
 
-    // Get messages that the user participated in (either created or replied to)
-    const userMessages = await db
+    // Get all replies by the user to find thread parent IDs
+    const userReplies = await db
+      .select({ threadParentId: messages.threadParentId })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.userId, userId),
+          sql`${messages.threadParentId} IS NOT NULL`,
+          inArray(messages.channelId, accessibleChannelIds)
+        )
+      );
+
+    const threadParentIds = userReplies
+      .map(r => r.threadParentId)
+      .filter((id): id is string => id !== null);
+
+    // Get threads user created that have replies
+    const userCreatedThreads = await db
       .select({ id: messages.id })
       .from(messages)
       .where(
         and(
           eq(messages.userId, userId),
+          sql`${messages.threadParentId} IS NULL`,
           inArray(messages.channelId, accessibleChannelIds)
         )
       );
 
-    const userMessageIds = userMessages.map(m => m.id);
+    const userCreatedThreadIds = userCreatedThreads.map(t => t.id);
 
-    if (userMessageIds.length === 0) {
+    // Combine both: threads user created + threads user replied to
+    const allThreadIds = [...new Set([...userCreatedThreadIds, ...threadParentIds])];
+
+    if (allThreadIds.length === 0) {
       return [];
     }
 
-    // Get threads where user either started the thread or replied
+    // Get full thread details
     const threads = await db
       .select({
         id: messages.id,
@@ -352,15 +390,7 @@ export class DatabaseStorage implements IStorage {
       .from(messages)
       .innerJoin(users, eq(messages.userId, users.id))
       .leftJoin(channels, eq(messages.channelId, channels.id))
-      .where(
-        and(
-          or(
-            inArray(messages.id, userMessageIds),
-            inArray(messages.threadParentId, userMessageIds)
-          ),
-          eq(messages.threadParentId, sql`NULL`)
-        )
-      )
+      .where(inArray(messages.id, allThreadIds))
       .orderBy(desc(messages.createdAt));
 
     // Get reply counts for each thread
@@ -589,6 +619,102 @@ export class DatabaseStorage implements IStorage {
 
   async deleteMessage(messageId: string): Promise<void> {
     await db.delete(messages).where(eq(messages.id, messageId));
+  }
+
+  // Starred messages operations
+  async starMessage(messageId: string, userId: string): Promise<StarredMessage> {
+    const [starred] = await db
+      .insert(starredMessages)
+      .values({ messageId, userId })
+      .onConflictDoNothing()
+      .returning();
+    
+    return starred;
+  }
+
+  async unstarMessage(messageId: string, userId: string): Promise<void> {
+    await db
+      .delete(starredMessages)
+      .where(
+        and(
+          eq(starredMessages.messageId, messageId),
+          eq(starredMessages.userId, userId)
+        )
+      );
+  }
+
+  async isMessageStarred(messageId: string, userId: string): Promise<boolean> {
+    const [starred] = await db
+      .select()
+      .from(starredMessages)
+      .where(
+        and(
+          eq(starredMessages.messageId, messageId),
+          eq(starredMessages.userId, userId)
+        )
+      );
+    
+    return !!starred;
+  }
+
+  async getUserStarredMessages(userId: string): Promise<MessageWithUser[]> {
+    // Get ALL starred messages for the user first
+    const allStarredResults = await db
+      .select({
+        id: messages.id,
+        channelId: messages.channelId,
+        userId: messages.userId,
+        content: messages.content,
+        attachmentUrl: messages.attachmentUrl,
+        attachmentType: messages.attachmentType,
+        attachmentName: messages.attachmentName,
+        threadParentId: messages.threadParentId,
+        mentions: messages.mentions,
+        editedAt: messages.editedAt,
+        createdAt: messages.createdAt,
+        user: users,
+        channel: channels,
+      })
+      .from(starredMessages)
+      .innerJoin(messages, eq(starredMessages.messageId, messages.id))
+      .innerJoin(users, eq(messages.userId, users.id))
+      .innerJoin(channels, eq(messages.channelId, channels.id))
+      .where(eq(starredMessages.userId, userId))
+      .orderBy(desc(starredMessages.createdAt));
+
+    // Filter to only messages from channels user can access
+    const accessibleResults = [];
+    
+    for (const row of allStarredResults) {
+      const channel = row.channel;
+      
+      // Public channels are always accessible
+      if (!channel.isPrivate) {
+        accessibleResults.push(row);
+        continue;
+      }
+      
+      // For private channels, verify membership
+      const isMember = await this.isChannelMember(channel.id, userId);
+      if (isMember) {
+        accessibleResults.push(row);
+      }
+    }
+
+    return accessibleResults.map((row) => ({
+      id: row.id,
+      channelId: row.channelId,
+      userId: row.userId,
+      content: row.content,
+      attachmentUrl: row.attachmentUrl,
+      attachmentType: row.attachmentType,
+      attachmentName: row.attachmentName,
+      threadParentId: row.threadParentId,
+      mentions: row.mentions,
+      editedAt: row.editedAt,
+      createdAt: row.createdAt,
+      user: row.user,
+    }));
   }
 }
 

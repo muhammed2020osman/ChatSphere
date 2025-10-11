@@ -1,6 +1,7 @@
 import { sql, relations } from "drizzle-orm";
 import {
   index,
+  uniqueIndex,
   jsonb,
   pgTable,
   timestamp,
@@ -103,6 +104,17 @@ export const notifications = pgTable("notifications", {
   isRead: boolean("is_read").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Starred messages table
+export const starredMessages = pgTable("starred_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  messageId: varchar("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  // Ensure user can only star a message once
+  uniqueUserMessage: uniqueIndex("unique_user_message").on(table.messageId, table.userId),
+}));
 
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
@@ -243,6 +255,13 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 });
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
+
+export const insertStarredMessageSchema = createInsertSchema(starredMessages).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertStarredMessage = z.infer<typeof insertStarredMessageSchema>;
+export type StarredMessage = typeof starredMessages.$inferSelect;
 
 // Extended types for frontend use
 export type ReactionWithUser = Reaction & {

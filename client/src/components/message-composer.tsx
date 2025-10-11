@@ -1,13 +1,20 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Bold, Italic, Send, Paperclip, X } from "lucide-react";
-import { useMutation } from "@tanstack/react-query";
+import { Bold, Italic, Send, Paperclip, X, AtSign } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { ObjectUploader } from "./ObjectUploader";
 import type { UploadResult } from "@uppy/core";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { User } from "@shared/schema";
 
 interface MessageComposerProps {
   channelId?: string;
@@ -26,7 +33,15 @@ export function MessageComposer({
   const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
   const [attachmentName, setAttachmentName] = useState<string | null>(null);
   const [attachmentType, setAttachmentType] = useState<string | null>(null);
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState("");
+  const [mentionStartPos, setMentionStartPos] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
+
+  const { data: users = [] } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+  });
 
   const sendMessageMutation = useMutation({
     mutationFn: async () => {
@@ -126,10 +141,71 @@ export function MessageComposer({
     setAttachmentType(null);
   };
 
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newContent = e.target.value;
+    setContent(newContent);
+
+    // Check for @ mentions
+    const cursorPos = e.target.selectionStart;
+    const textBeforeCursor = newContent.slice(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    
+    if (lastAtIndex !== -1) {
+      const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
+      
+      // Only show mentions if @ is at start or preceded by space, and followed by text or nothing
+      const charBeforeAt = lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : ' ';
+      if ((charBeforeAt === ' ' || charBeforeAt === '\n') && !textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+        setMentionSearch(textAfterAt);
+        setMentionStartPos(lastAtIndex);
+        setShowMentions(true);
+      } else {
+        setShowMentions(false);
+      }
+    } else {
+      setShowMentions(false);
+    }
+  };
+
+  const insertMention = (user: User) => {
+    const userName = user.firstName && user.lastName 
+      ? `${user.firstName} ${user.lastName}` 
+      : user.email || "Unknown";
+    
+    const before = content.slice(0, mentionStartPos);
+    const after = content.slice(mentionStartPos + mentionSearch.length + 1);
+    const newContent = `${before}@${userName} ${after}`;
+    
+    setContent(newContent);
+    setShowMentions(false);
+    
+    // Focus back on textarea
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const newCursorPos = mentionStartPos + userName.length + 2;
+        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
+  };
+
+  const filteredUsers = users.filter(user => {
+    if (!mentionSearch) return true;
+    const search = mentionSearch.toLowerCase();
+    const name = user.firstName && user.lastName 
+      ? `${user.firstName} ${user.lastName}`.toLowerCase()
+      : (user.email || "").toLowerCase();
+    return name.includes(search);
+  }).slice(0, 5);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !showMentions) {
       e.preventDefault();
       handleSubmit(e);
+    }
+    
+    if (e.key === "Escape" && showMentions) {
+      setShowMentions(false);
     }
   };
 
@@ -152,15 +228,51 @@ export function MessageComposer({
         </div>
       )}
       
-      <div className="border rounded-lg bg-background overflow-hidden">
+      <div className="border rounded-lg bg-background overflow-hidden relative">
         <Textarea
+          ref={textareaRef}
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={handleContentChange}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className="min-h-[80px] border-0 resize-none text-base focus-visible:ring-0 focus-visible:ring-offset-0"
           data-testid="textarea-message-composer"
         />
+
+        {showMentions && filteredUsers.length > 0 && (
+          <div className="absolute bottom-full left-0 right-0 mb-1 bg-popover border rounded-lg shadow-lg max-h-60 overflow-y-auto z-50" data-testid="mentions-popover">
+            <div className="p-2">
+              <div className="text-xs text-muted-foreground mb-1 px-2">Mention someone</div>
+              {filteredUsers.map((user) => (
+                <button
+                  key={user.id}
+                  className="w-full flex items-center gap-2 p-2 hover-elevate rounded-md text-left"
+                  onClick={() => insertMention(user)}
+                  data-testid={`mention-user-${user.id}`}
+                >
+                  <Avatar className="w-6 h-6">
+                    <AvatarImage src={user.profileImageUrl || undefined} />
+                    <AvatarFallback className="text-xs">
+                      {user.firstName?.[0]}{user.lastName?.[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">
+                      {user.firstName && user.lastName 
+                        ? `${user.firstName} ${user.lastName}` 
+                        : user.email}
+                    </div>
+                    {user.email && user.firstName && (
+                      <div className="text-xs text-muted-foreground truncate">
+                        {user.email}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         
         <div className="flex items-center justify-between px-3 pb-2 pt-1 border-t bg-muted/30">
           <div className="flex items-center gap-0.5">

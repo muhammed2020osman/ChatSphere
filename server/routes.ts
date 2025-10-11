@@ -667,6 +667,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Starred messages routes
+  app.post('/api/messages/:id/star', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+      
+      // Get message and verify access
+      const message = await storage.getMessage(id);
+      if (!message) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+
+      // Verify user has access to the channel
+      const channel = await storage.getChannel(message.channelId);
+      if (!channel) {
+        return res.status(404).json({ message: "Channel not found" });
+      }
+
+      if (channel.isPrivate) {
+        const isMember = await storage.isChannelMember(message.channelId, userId);
+        if (!isMember) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
+      
+      const starred = await storage.starMessage(id, userId);
+      res.json(starred);
+    } catch (error) {
+      console.error("Error starring message:", error);
+      res.status(500).json({ message: "Failed to star message" });
+    }
+  });
+
+  app.delete('/api/messages/:id/star', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+      
+      await storage.unstarMessage(id, userId);
+      res.json({ message: "Message unstarred" });
+    } catch (error) {
+      console.error("Error unstarring message:", error);
+      res.status(500).json({ message: "Failed to unstar message" });
+    }
+  });
+
+  app.get('/api/messages/:id/starred', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+      
+      // Get message and verify access
+      const message = await storage.getMessage(id);
+      if (!message) {
+        return res.json({ isStarred: false });
+      }
+
+      // Verify user has access to the channel
+      const channel = await storage.getChannel(message.channelId);
+      if (!channel) {
+        return res.json({ isStarred: false });
+      }
+
+      if (channel.isPrivate) {
+        const isMember = await storage.isChannelMember(message.channelId, userId);
+        if (!isMember) {
+          return res.json({ isStarred: false });
+        }
+      }
+      
+      const isStarred = await storage.isMessageStarred(id, userId);
+      res.json({ isStarred });
+    } catch (error) {
+      console.error("Error checking starred status:", error);
+      res.status(500).json({ message: "Failed to check starred status" });
+    }
+  });
+
+  app.get('/api/starred', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const starred = await storage.getUserStarredMessages(userId);
+      res.json(starred);
+    } catch (error) {
+      console.error("Error fetching starred messages:", error);
+      res.status(500).json({ message: "Failed to fetch starred messages" });
+    }
+  });
+
   // Object storage routes - for file uploads in messages
   app.get("/objects/:objectPath(*)", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
