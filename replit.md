@@ -4,7 +4,12 @@
 A modern Slack clone built as a Progressive Web App (PWA) with real-time messaging, channels, direct messages, and user presence tracking. Built with React, Express, PostgreSQL, and WebSockets.
 
 ## Recent Changes
-- **October 11, 2025**: New features - Starred Messages, @Mentions Autocomplete, Threads Page
+- **October 11, 2025**: UI/UX improvements + New features
+  - **MessageComposer Redesign**: Replaced ObjectUploader with simple hidden file input for cleaner layout
+    - No more "Drop your files here" overlay
+    - Buttons organized in single toolbar row: [📎] [B] [I] _____ [Send]
+    - Direct file upload via fetch to object storage
+    - Clean, Slack-like design inside message composer box
   - **Starred Messages System**: Database table, API endpoints with authorization, UI star button, /starred page
   - **@Mentions Autocomplete**: Real-time user filtering dropdown when typing @ in message composer
   - **Threads Page Functionality**: Fixed getUserThreads() to show threads user created OR replied to
@@ -54,8 +59,7 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
   - ChannelView: Channel message feed with composer and thread panel
   - DirectMessageView: 1-on-1 messaging interface
   - MessageItem: Message display with reactions, threading, and file attachments
-  - MessageComposer: Rich text message input with file upload support
-  - ObjectUploader: File and image upload using Replit Object Storage
+  - MessageComposer: Clean message input with simple file upload (no overlay/modal)
   - SearchOverlay: Search for channels and messages (Cmd+K)
   - CreateChannelModal: Create public/private channels
   - ThemeToggle: Dark/light mode switcher
