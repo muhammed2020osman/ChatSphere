@@ -13,6 +13,7 @@ import Members from "./members";
 import Mentions from "./mentions";
 import Threads from "./threads";
 import Starred from "./starred";
+import Drawings from "./drawings";
 import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -87,6 +88,9 @@ export default function Home() {
               </Route>
               <Route path="/starred">
                 <Starred />
+              </Route>
+              <Route path="/drawings">
+                <Drawings />
               </Route>
               <Route path="/settings">
                 <Settings />

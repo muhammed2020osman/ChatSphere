@@ -4,7 +4,33 @@
 A modern Slack clone built as a Progressive Web App (PWA) with real-time messaging, channels, direct messages, and user presence tracking. Built with React, Express, PostgreSQL, and WebSockets.
 
 ## Recent Changes
-- **October 11, 2025**: UI/UX improvements + New features
+- **October 11, 2025**: Engineering Drawings Management System
+  - **Database Schema**: 
+    - `disciplines` table: Engineering disciplines (ARCH, STR, MEP, GEN)
+    - `floors` table: Building floor levels with sort order
+    - `drawings` table: Technical drawings with sheet numbers and metadata
+    - `drawing_revisions` table: Version control with approval workflow
+  - **API Endpoints**:
+    - GET/POST `/api/drawings` - Drawing management
+    - GET `/api/drawings/:id` - Get drawing with all revisions
+    - POST `/api/drawings/:id/revisions` - Upload new revision
+    - PATCH `/api/revisions/:id/status` - Approve/reject revisions
+    - GET `/api/disciplines`, `/api/floors` - Metadata endpoints
+  - **UI Components**:
+    - Drawings Index Page: Table with filters (Status, Discipline, Floor, Search)
+    - Upload Drawing Dialog: Multi-field form with file upload to object storage
+    - Drawing Viewer Dialog: Full drawing details with revision history
+    - Upload Revision Dialog: Quick revision upload with automatic versioning
+    - Review System: Inline approve/reject with review notes
+  - **Workflow**:
+    - Upload drawing with first revision (status: Draft)
+    - View drawing details and revision history
+    - Upload new revisions (auto-supersedes previous approved revisions)
+    - Review revisions: Approve/Reject with optional notes
+    - Download PDF files from object storage
+    - Filter drawings by status, discipline, floor, or search
+
+- **October 11, 2025**: UI/UX improvements + Messaging features
   - **MessageComposer Redesign**: Replaced ObjectUploader with simple hidden file input for cleaner layout
     - No more "Drop your files here" overlay
     - Buttons organized in single toolbar row: [📎] [B] [I] _____ [Send]
@@ -53,6 +79,7 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
   - Home workspace with sidebar navigation and message views
   - /starred - Starred messages page
   - /threads - Threads user participated in
+  - /drawings - Engineering drawings management (table view with filters)
   - /settings - Workspace settings (admin only)
 - **Components**:
   - AppSidebar: Channels and DM list with online status indicators
@@ -79,6 +106,10 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
   - reactions: Message reactions with unique user-icon constraints
   - notifications: @mention notifications with read status
   - starred_messages: Starred messages with unique user-message constraint
+  - disciplines: Engineering disciplines (ARCH, STR, MEP, GEN)
+  - floors: Building floor levels with sort order
+  - drawings: Technical drawings with sheet numbers, discipline, floor, package
+  - drawing_revisions: Version control with status tracking and approval workflow
 - **API Endpoints**:
   - `/api/auth/user`: Get current user
   - `/api/users`: List all users
@@ -96,6 +127,12 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
   - `/api/reactions`: Add/remove/get message reactions
   - `/api/notifications`: Get notifications, mark as read
   - `/objects/:objectPath`: Download files from object storage
+  - `/api/disciplines`: Get all engineering disciplines
+  - `/api/floors`: Get all building floors
+  - `/api/drawings`: Get all drawings, create new drawing
+  - `/api/drawings/:id`: Get drawing with all revisions
+  - `/api/drawings/:id/revisions`: Create new revision for drawing
+  - `/api/revisions/:id/status`: Update revision status (approve/reject)
 - **WebSocket Server** (`/ws`):
   - Real-time message broadcasting
   - User presence tracking
@@ -142,6 +179,13 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
 13. **User Presence**: See who's online/offline
 14. **PWA**: Install as desktop/mobile app
 15. **Security**: Complete access control for private channels, membership verification, and admin-only operations
+16. **Engineering Drawings Management**: Technical document control for construction/engineering companies
+    - Upload drawings with metadata (sheet number, title, discipline, floor, package)
+    - Version control with revision tracking (Draft → Under Review → Approved/Rejected/Superseded)
+    - Approval workflow with review notes
+    - Filter and search drawings by status, discipline, floor
+    - Download PDF files from secure object storage
+    - Full revision history with uploader and reviewer information
 
 ## Security Features
 - **Session-Based WebSocket Authentication**: All WebSocket connections authenticate via HTTP session, preventing user impersonation

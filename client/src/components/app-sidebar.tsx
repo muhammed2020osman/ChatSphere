@@ -1,4 +1,4 @@
-import { Hash, Lock, Plus, ChevronDown, MessageSquare, Settings, AtSign, Star, MessagesSquare } from "lucide-react";
+import { Hash, Lock, Plus, ChevronDown, MessageSquare, Settings, AtSign, Star, MessagesSquare, FileText } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -133,6 +133,19 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
                   <Link href="/starred">
                     <Star className="w-4 h-4" />
                     <span>Starred</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === '/drawings'}
+                  data-testid="link-drawings"
+                  tooltip="Engineering Drawings"
+                >
+                  <Link href="/drawings">
+                    <FileText className="w-4 h-4" />
+                    <span>Engineering Drawings</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
