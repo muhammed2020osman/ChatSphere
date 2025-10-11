@@ -4,6 +4,20 @@
 A modern Slack clone built as a Progressive Web App (PWA) with real-time messaging, channels, direct messages, and user presence tracking. Built with React, Express, PostgreSQL, and WebSockets.
 
 ## Recent Changes
+- **October 11, 2025**: Access Code Gate for Controlled Access
+  - **Purpose**: Simple invitation system - share a single secret code with team members
+  - **Implementation**:
+    - AccessCodeGate component wraps entire app
+    - POST `/api/verify-access-code` endpoint (no auth required)
+    - localStorage persistence prevents re-prompting
+    - Arabic UI with error/success toasts
+  - **Workflow**:
+    - User visits app → prompted for access code
+    - Wrong code → 401 error, stays on gate page
+    - Correct code → localStorage saved, app unlocked
+    - Page refresh → localStorage checked, gate skipped if verified
+  - **Configuration**: ACCESS_CODE environment variable (change anytime in Secrets)
+
 - **October 11, 2025**: Engineering Drawings Management System
   - **Database Schema**: 
     - `disciplines` table: Engineering disciplines (ARCH, STR, MEP, GEN)
@@ -111,6 +125,7 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
   - drawings: Technical drawings with sheet numbers, discipline, floor, package
   - drawing_revisions: Version control with status tracking and approval workflow
 - **API Endpoints**:
+  - `/api/verify-access-code`: Verify access code (no auth required)
   - `/api/auth/user`: Get current user
   - `/api/users`: List all users
   - `/api/users/:id/role`: Update user role (admin only)
@@ -186,6 +201,11 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
     - Filter and search drawings by status, discipline, floor
     - Download PDF files from secure object storage
     - Full revision history with uploader and reviewer information
+17. **Access Code Gate**: Simple invitation system for controlled access
+    - Single secret code shared with team members
+    - localStorage-based persistence (no re-prompting)
+    - Clean Arabic UI with error handling
+    - Easy code rotation via environment variables
 
 ## Security Features
 - **Session-Based WebSocket Authentication**: All WebSocket connections authenticate via HTTP session, preventing user impersonation
