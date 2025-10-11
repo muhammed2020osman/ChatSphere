@@ -4,6 +4,16 @@
 A modern Slack clone built as a Progressive Web App (PWA) with real-time messaging, channels, direct messages, and user presence tracking. Built with React, Express, PostgreSQL, and WebSockets.
 
 ## Recent Changes
+- **October 11, 2025**: New features - Starred Messages, @Mentions Autocomplete, Threads Page
+  - **Starred Messages System**: Database table, API endpoints with authorization, UI star button, /starred page
+  - **@Mentions Autocomplete**: Real-time user filtering dropdown when typing @ in message composer
+  - **Threads Page Functionality**: Fixed getUserThreads() to show threads user created OR replied to
+  - **Security Enhancements**:
+    - Starred messages authorization: verify channel access before star/unstar/check
+    - getUserStarredMessages() explicitly checks membership for each private channel
+    - Comprehensive security test: users can't see starred messages from private channels after removal
+    - Added getMessage() method for authorization validation
+
 - **October 10, 2025**: Complete MVP implementation with all core features
   - Implemented complete database schema with users, channels, messages, direct messages, channel members, and reactions
   - Built comprehensive UI with Slack-inspired design (aubergine primary color, sidebar navigation)
@@ -36,6 +46,9 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
 - **Pages**:
   - Landing page for unauthenticated users
   - Home workspace with sidebar navigation and message views
+  - /starred - Starred messages page
+  - /threads - Threads user participated in
+  - /settings - Workspace settings (admin only)
 - **Components**:
   - AppSidebar: Channels and DM list with online status indicators
   - ChannelView: Channel message feed with composer and thread panel
@@ -61,6 +74,7 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
   - channel_members: Channel membership tracking
   - reactions: Message reactions with unique user-icon constraints
   - notifications: @mention notifications with read status
+  - starred_messages: Starred messages with unique user-message constraint
 - **API Endpoints**:
   - `/api/auth/user`: Get current user
   - `/api/users`: List all users
@@ -69,6 +83,10 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
   - `/api/channels`: Channel CRUD operations
   - `/api/messages`: Message operations with file attachments
   - `/api/messages/:id`: Update/delete message (owner only)
+  - `/api/messages/:id/star`: Star/unstar message (requires channel access)
+  - `/api/messages/:id/starred`: Check if message is starred
+  - `/api/messages/threads`: Get user's threads (created or replied to)
+  - `/api/starred`: Get user's starred messages (filtered by accessible channels)
   - `/api/direct-messages`: DM operations
   - `/api/search/:query`: Search messages
   - `/api/reactions`: Add/remove/get message reactions
@@ -111,13 +129,15 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
 4. **File Sharing**: Upload and share images/files using Replit Object Storage
 5. **Message Threading**: Reply to messages in dedicated thread panel with parent context
 6. **Message Reactions**: React with 6 emoji options (thumbs-up, heart, laugh, party, check, smile)
-7. **@Mentions & Notifications**: Mention users in messages, receive real-time notifications
+7. **@Mentions & Notifications**: Mention users in messages, receive real-time notifications with autocomplete
 8. **Message Edit/Delete**: Edit or delete your own messages with visual indicators
-9. **Admin Workspace Controls**: First user becomes admin, manage member roles and permissions
-10. **Search**: Find messages and channels quickly (Cmd+K) - filtered by membership
-11. **User Presence**: See who's online/offline
-12. **PWA**: Install as desktop/mobile app
-13. **Security**: Complete access control for private channels, membership verification, and admin-only operations
+9. **Starred Messages**: Star important messages for quick access, with secure channel-based filtering
+10. **Threads View**: See all threads you've participated in (created or replied to) in one place
+11. **Admin Workspace Controls**: First user becomes admin, manage member roles and permissions
+12. **Search**: Find messages and channels quickly (Cmd+K) - filtered by membership
+13. **User Presence**: See who's online/offline
+14. **PWA**: Install as desktop/mobile app
+15. **Security**: Complete access control for private channels, membership verification, and admin-only operations
 
 ## Security Features
 - **Session-Based WebSocket Authentication**: All WebSocket connections authenticate via HTTP session, preventing user impersonation
@@ -131,6 +151,7 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
 - **Message Ownership**: Only message owners can edit or delete their messages
 - **Admin Role Protection**: Role-based access control for user management, prevent self-deletion and self-demotion
 - **First User Admin**: First user to sign in automatically becomes workspace administrator
+- **Starred Messages Security**: Channel access verification before star/unstar/check, explicit membership validation for starred message retrieval
 
 ## Tech Stack
 - Frontend: React, TypeScript, Tailwind CSS, Shadcn UI, Wouter (routing)
