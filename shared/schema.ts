@@ -64,7 +64,7 @@ export const messages = pgTable("messages", {
   attachmentUrl: varchar("attachment_url"),
   attachmentType: varchar("attachment_type", { length: 50 }),
   attachmentName: varchar("attachment_name"),
-  threadParentId: varchar("thread_parent_id").references(() => messages.id),
+  threadParentId: varchar("thread_parent_id"),
   mentions: text("mentions").array(),
   editedAt: timestamp("edited_at"),
   createdAt: timestamp("created_at").defaultNow(),
