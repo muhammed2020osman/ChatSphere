@@ -1,18 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Bold, Italic, Send, Paperclip, X, AtSign } from "lucide-react";
+import { Bold, Italic, Send, Paperclip, X } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { ObjectUploader } from "./ObjectUploader";
-import type { UploadResult } from "@uppy/core";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { User } from "@shared/schema";
 
@@ -36,7 +29,9 @@ export function MessageComposer({
   const [showMentions, setShowMentions] = useState(false);
   const [mentionSearch, setMentionSearch] = useState("");
   const [mentionStartPos, setMentionStartPos] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const { data: users = [] } = useQuery<User[]>({
@@ -103,35 +98,61 @@ export function MessageComposer({
     sendMessageMutation.mutate();
   };
 
-  const handleGetUploadParameters = async () => {
-    const response = await apiRequest("POST", "/api/objects/upload") as unknown as { uploadURL: string };
-    return {
-      method: "PUT" as const,
-      url: response.uploadURL,
-    };
-  };
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const handleUploadComplete = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
-    if (result.successful && result.successful.length > 0) {
-      const file = result.successful[0];
-      const uploadURL = file.uploadURL;
-      const fileName = file.name;
-      const fileType = file.type;
+    // Check file size (10MB max)
+    if (file.size > 10485760) {
+      toast({
+        title: "File too large",
+        description: "Maximum file size is 10MB",
+        variant: "destructive",
+      });
+      return;
+    }
 
-      // Set ACL policy for the uploaded file
-      const response = await apiRequest("PUT", "/api/attachments", {
-        attachmentURL: uploadURL,
-        fileName: fileName,
+    try {
+      setIsUploading(true);
+
+      // Get upload URL
+      const uploadResponse = await apiRequest("POST", "/api/objects/upload") as unknown as { uploadURL: string };
+
+      // Upload file
+      await fetch(uploadResponse.uploadURL, {
+        method: "PUT",
+        body: file,
+        headers: {
+          "Content-Type": file.type || "application/octet-stream",
+        },
+      });
+
+      // Set ACL policy
+      const aclResponse = await apiRequest("PUT", "/api/attachments", {
+        attachmentURL: uploadResponse.uploadURL,
+        fileName: file.name,
       }) as unknown as { objectPath: string };
 
-      setAttachmentUrl(response.objectPath || null);
-      setAttachmentName(fileName || null);
-      setAttachmentType(fileType || "application/octet-stream");
+      setAttachmentUrl(aclResponse.objectPath);
+      setAttachmentName(file.name);
+      setAttachmentType(file.type || "application/octet-stream");
 
       toast({
         title: "File attached",
-        description: `${fileName} is ready to send`,
+        description: `${file.name} is ready to send`,
       });
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload file. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+      // Reset input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -276,15 +297,24 @@ export function MessageComposer({
         
         <div className="flex items-center justify-between px-3 pb-2 pt-1 border-t bg-muted/30">
           <div className="flex items-center gap-0.5">
-            <ObjectUploader
-              maxNumberOfFiles={1}
-              maxFileSize={10485760}
-              onGetUploadParameters={handleGetUploadParameters}
-              onComplete={handleUploadComplete}
-              buttonVariant="ghost"
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileSelect}
+              style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: '1px', height: '1px' }}
+              accept="*/*"
+              data-testid="input-file-upload"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              data-testid="button-attach-file"
             >
               <Paperclip className="w-4 h-4" />
-            </ObjectUploader>
+            </Button>
             <Button
               type="button"
               variant="ghost"
@@ -308,7 +338,7 @@ export function MessageComposer({
             onClick={handleSubmit}
             size="icon"
             variant="default"
-            disabled={(!content.trim() && !attachmentUrl) || sendMessageMutation.isPending}
+            disabled={(!content.trim() && !attachmentUrl) || sendMessageMutation.isPending || isUploading}
             className="h-8 w-8"
             data-testid="button-send-message"
           >
