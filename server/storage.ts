@@ -40,6 +40,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 export interface IStorage {
   // User operations (Required for Replit Auth)
@@ -807,16 +808,19 @@ export class DatabaseStorage implements IStorage {
 
     if (!result) return undefined;
 
-    // Get all revisions
+    // Get all revisions with uploader and reviewer using aliases
+    const uploaderUser = alias(users, 'uploader_user');
+    const reviewerUser = alias(users, 'reviewer_user');
+    
     const revisionResults = await db
       .select({
         revision: drawingRevisions,
-        uploader: users,
-        reviewer: users,
+        uploader: uploaderUser,
+        reviewer: reviewerUser,
       })
       .from(drawingRevisions)
-      .leftJoin(users, eq(drawingRevisions.uploadedBy, users.id))
-      .leftJoin(users, eq(drawingRevisions.reviewedBy, users.id))
+      .leftJoin(uploaderUser, eq(drawingRevisions.uploadedBy, uploaderUser.id))
+      .leftJoin(reviewerUser, eq(drawingRevisions.reviewedBy, reviewerUser.id))
       .where(eq(drawingRevisions.drawingId, id))
       .orderBy(desc(drawingRevisions.uploadedAt));
 
