@@ -937,5 +937,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }
 
+  // Drawings routes
+  app.get('/api/disciplines', isAuthenticated, async (req, res) => {
+    try {
+      const disciplines = await storage.getDisciplines();
+      res.json(disciplines);
+    } catch (error) {
+      console.error("Error fetching disciplines:", error);
+      res.status(500).json({ message: "Failed to fetch disciplines" });
+    }
+  });
+
+  app.get('/api/floors', isAuthenticated, async (req, res) => {
+    try {
+      const floors = await storage.getFloors();
+      res.json(floors);
+    } catch (error) {
+      console.error("Error fetching floors:", error);
+      res.status(500).json({ message: "Failed to fetch floors" });
+    }
+  });
+
+  app.get('/api/drawings', isAuthenticated, async (req, res) => {
+    try {
+      const drawings = await storage.getDrawings();
+      res.json(drawings);
+    } catch (error) {
+      console.error("Error fetching drawings:", error);
+      res.status(500).json({ message: "Failed to fetch drawings" });
+    }
+  });
+
+  app.get('/api/drawings/:id', isAuthenticated, async (req, res) => {
+    try {
+      const drawing = await storage.getDrawing(req.params.id);
+      if (!drawing) {
+        return res.status(404).json({ message: "Drawing not found" });
+      }
+      res.json(drawing);
+    } catch (error) {
+      console.error("Error fetching drawing:", error);
+      res.status(500).json({ message: "Failed to fetch drawing" });
+    }
+  });
+
+  app.post('/api/drawings', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const drawingData = {
+        ...req.body,
+        createdBy: userId,
+      };
+      const drawing = await storage.createDrawing(drawingData);
+      res.json(drawing);
+    } catch (error) {
+      console.error("Error creating drawing:", error);
+      res.status(500).json({ message: "Failed to create drawing" });
+    }
+  });
+
+  app.get('/api/drawings/:id/revisions', isAuthenticated, async (req, res) => {
+    try {
+      const revisions = await storage.getDrawingRevisions(req.params.id);
+      res.json(revisions);
+    } catch (error) {
+      console.error("Error fetching revisions:", error);
+      res.status(500).json({ message: "Failed to fetch revisions" });
+    }
+  });
+
+  app.post('/api/drawings/:id/revisions', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const revisionData = {
+        ...req.body,
+        drawingId: req.params.id,
+        uploadedBy: userId,
+      };
+      const revision = await storage.createDrawingRevision(revisionData);
+      res.json(revision);
+    } catch (error) {
+      console.error("Error creating revision:", error);
+      res.status(500).json({ message: "Failed to create revision" });
+    }
+  });
+
+  app.patch('/api/revisions/:id/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { status, reviewNotes } = req.body;
+      
+      if (!status || !['approved', 'rejected'].includes(status)) {
+        return res.status(400).json({ message: "Invalid status. Must be 'approved' or 'rejected'" });
+      }
+      
+      const revision = await storage.updateRevisionStatus(
+        req.params.id,
+        status,
+        userId,
+        reviewNotes
+      );
+      res.json(revision);
+    } catch (error) {
+      console.error("Error updating revision status:", error);
+      res.status(500).json({ message: "Failed to update revision status" });
+    }
+  });
+
   return httpServer;
 }
