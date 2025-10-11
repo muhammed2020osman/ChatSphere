@@ -50,6 +50,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
+  // Access code verification (no auth required)
+  app.post('/api/verify-access-code', async (req, res) => {
+    try {
+      const { code } = req.body;
+      const correctCode = process.env.ACCESS_CODE;
+
+      if (!correctCode) {
+        return res.status(500).json({ message: "Access code not configured" });
+      }
+
+      if (code === correctCode) {
+        res.json({ success: true });
+      } else {
+        res.status(401).json({ message: "Invalid access code" });
+      }
+    } catch (error) {
+      console.error("Error verifying access code:", error);
+      res.status(500).json({ message: "Failed to verify access code" });
+    }
+  });
+
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
