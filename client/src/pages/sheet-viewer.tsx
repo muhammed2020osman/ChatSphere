@@ -11,6 +11,8 @@ import {
   Download,
   Maximize2,
   Plus,
+  Check,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +37,11 @@ interface Pin {
   status: string;
 }
 
+interface TempPin {
+  x: number;
+  y: number;
+}
+
 export default function SheetViewer() {
   const { id } = useParams();
   const [activeTool, setActiveTool] = useState<Tool>("pan");
@@ -44,6 +51,9 @@ export default function SheetViewer() {
   const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [tempPin, setTempPin] = useState<TempPin | null>(null);
+  const [crosshairPosition, setCrosshairPosition] = useState({ x: 0, y: 0 });
+  const [showCrosshair, setShowCrosshair] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
 
@@ -89,21 +99,31 @@ export default function SheetViewer() {
         y: e.clientY - panStart.y,
       });
     }
+    
+    // Update crosshair position when pin tool is active
+    if (activeTool === "pin" && canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      setCrosshairPosition({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      });
+      setShowCrosshair(true);
+    }
   }, [isPanning, activeTool, panStart]);
 
   const handleMouseUp = useCallback(() => {
     setIsPanning(false);
   }, []);
+  
+  const handleMouseLeave = useCallback(() => {
+    setShowCrosshair(false);
+  }, []);
 
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (activeTool === "pin" && imageRef.current) {
+    if (activeTool === "pin" && imageRef.current && !tempPin) {
       const rect = imageRef.current.getBoundingClientRect();
       const img = imageRef.current.querySelector('img');
       if (!img) return;
-      
-      // Get the natural (untransformed) image dimensions
-      const naturalWidth = img.naturalWidth;
-      const naturalHeight = img.naturalHeight;
       
       // Get click position relative to transformed image
       const clickX = e.clientX - rect.left;
@@ -138,17 +158,30 @@ export default function SheetViewer() {
       const clampedX = Math.max(0, Math.min(100, x));
       const clampedY = Math.max(0, Math.min(100, y));
       
+      // Create temporary pin instead of adding directly
+      setTempPin({ x: clampedX, y: clampedY });
+    }
+  }, [activeTool, tempPin, zoom]);
+  
+  const handleConfirmPin = useCallback(() => {
+    if (tempPin) {
       const newPin: Pin = {
         id: `pin-${Date.now()}`,
-        x: clampedX,
-        y: clampedY,
+        x: tempPin.x,
+        y: tempPin.y,
         type: "generic",
         title: `Pin ${pins.length + 1}`,
         status: "open",
       };
       setPins([...pins, newPin]);
+      setTempPin(null);
+      // TODO: Open ticket creation modal
     }
-  }, [activeTool, pins, zoom]);
+  }, [tempPin, pins]);
+  
+  const handleCancelPin = useCallback(() => {
+    setTempPin(null);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -224,23 +257,29 @@ export default function SheetViewer() {
         {/* Toolbar */}
         <div className="w-16 border-r border-border bg-card flex flex-col items-center py-4 gap-2">
           <TooltipProvider>
-            {tools.map((tool) => (
-              <Tooltip key={tool.id}>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={activeTool === tool.id && tool.id !== "zoom-in" && tool.id !== "zoom-out" ? "default" : "ghost"}
-                    size="icon"
-                    onClick={() => handleToolClick(tool.id)}
-                    data-testid={`button-tool-${tool.id}`}
-                  >
-                    <tool.icon className="h-5 w-5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  <p>{tool.label} ({tool.shortcut})</p>
-                </TooltipContent>
-              </Tooltip>
-            ))}
+            {tools.map((tool) => {
+              const isActive = activeTool === tool.id && tool.id !== "zoom-in" && tool.id !== "zoom-out";
+              const isPinTool = tool.id === "pin";
+              
+              return (
+                <Tooltip key={tool.id}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={isActive ? "default" : "ghost"}
+                      size="icon"
+                      onClick={() => handleToolClick(tool.id)}
+                      data-testid={`button-tool-${tool.id}`}
+                      className={isPinTool && isActive ? "bg-accent hover:bg-accent/90" : ""}
+                    >
+                      <tool.icon className={isPinTool && isActive ? "h-6 w-6" : "h-5 w-5"} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>{tool.label} ({tool.shortcut})</p>
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })}
           </TooltipProvider>
           
           <Separator className="my-2 w-10" />
@@ -258,13 +297,41 @@ export default function SheetViewer() {
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
+            onMouseLeave={(e) => {
+              handleMouseUp();
+              handleMouseLeave();
+            }}
             style={{ 
-              cursor: activeTool === "pan" ? (isPanning ? "grabbing" : "grab") : activeTool === "pin" ? "crosshair" : "default",
+              cursor: activeTool === "pan" ? (isPanning ? "grabbing" : "grab") : activeTool === "pin" ? "none" : "default",
               userSelect: "none",
             }}
             data-testid="canvas-viewer"
           >
+            {/* Crosshair cursor for pin tool */}
+            {activeTool === "pin" && showCrosshair && !tempPin && (
+              <>
+                {/* Vertical line */}
+                <div
+                  className="absolute w-px bg-accent pointer-events-none z-50"
+                  style={{
+                    left: crosshairPosition.x,
+                    top: 0,
+                    bottom: 0,
+                    opacity: 0.6,
+                  }}
+                />
+                {/* Horizontal line */}
+                <div
+                  className="absolute h-px bg-accent pointer-events-none z-50"
+                  style={{
+                    top: crosshairPosition.y,
+                    left: 0,
+                    right: 0,
+                    opacity: 0.6,
+                  }}
+                />
+              </>
+            )}
             <div
               ref={imageRef}
               className="relative bg-white shadow-2xl"
@@ -283,7 +350,51 @@ export default function SheetViewer() {
                 draggable={false}
               />
               
-              {/* Render pins */}
+              {/* Render temporary pin with confirm/cancel buttons */}
+              {tempPin && (
+                <div
+                  className="absolute pointer-events-auto"
+                  style={{
+                    left: `${tempPin.x}%`,
+                    top: `${tempPin.y}%`,
+                  }}
+                  data-testid="temp-pin"
+                >
+                  <div className="relative -ml-3 -mt-6">
+                    <MapPin className="h-6 w-6 text-accent fill-accent/30" />
+                    <div className="absolute top-0 left-8 flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-6 px-2 gap-1 bg-accent hover:bg-accent/90 text-accent-foreground"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleConfirmPin();
+                        }}
+                        data-testid="button-confirm-pin"
+                      >
+                        <Check className="h-3 w-3" />
+                        <span className="text-xs">تأكيد</span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 px-2 gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCancelPin();
+                        }}
+                        data-testid="button-cancel-pin"
+                      >
+                        <X className="h-3 w-3" />
+                        <span className="text-xs">إلغاء</span>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Render confirmed pins */}
               {pins.map((pin) => (
                 <div
                   key={pin.id}
