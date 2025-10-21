@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { Upload, AlertCircle, CheckCircle2, FileText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,7 @@ interface ExtractedData {
 }
 
 export function IngestPlansModal() {
+  const [, setLocation] = useLocation();
   const [currentStep, setCurrentStep] = useState<Step>("upload");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [extractedData, setExtractedData] = useState<ExtractedData>({
@@ -62,6 +64,27 @@ export function IngestPlansModal() {
     setTimeout(() => {
       setCurrentStep("success");
     }, 3000);
+  };
+
+  // حفظ والعودة لصفحة المخططات
+  const handleSaveAndClose = () => {
+    // TODO: إضافة API call لحفظ المخطط
+    console.log("Saving plan and closing...", extractedData);
+    setLocation("/plans");
+  };
+
+  // حفظ وإضافة مخطط جديد
+  const handleSaveAndAddMore = () => {
+    // TODO: إضافة API call لحفظ المخطط
+    console.log("Saving plan and adding more...", extractedData);
+    setCurrentStep("upload");
+    setSelectedFile(null);
+    setHasConflict(false);
+  };
+
+  // إلغاء والعودة لصفحة المخططات
+  const handleCancelAndClose = () => {
+    setLocation("/plans");
   };
 
   const handleReset = () => {
@@ -399,13 +422,16 @@ export function IngestPlansModal() {
 
         {/* Footer */}
         <div className="flex justify-end gap-4 p-6 border-t">
+          {/* زر إلغاء موجود دائماً */}
           <Button
             variant="outline"
-            onClick={handleReset}
+            onClick={handleCancelAndClose}
             data-testid="button-cancel"
           >
             إلغاء
           </Button>
+          
+          {/* أزرار خاصة بخطوة المراجعة */}
           {currentStep === "review" && (
             <Button
               onClick={handleProcess}
@@ -414,13 +440,24 @@ export function IngestPlansModal() {
               تأكيد ومعالجة
             </Button>
           )}
+          
+          {/* أزرار خاصة بخطوة النجاح */}
           {currentStep === "success" && (
-            <Button
-              onClick={handleReset}
-              data-testid="button-add-more"
-            >
-              إضافة المزيد
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={handleSaveAndAddMore}
+                data-testid="button-save-add-more"
+              >
+                حفظ وإضافة جديد
+              </Button>
+              <Button
+                onClick={handleSaveAndClose}
+                data-testid="button-save-close"
+              >
+                حفظ
+              </Button>
+            </>
           )}
         </div>
       </div>
