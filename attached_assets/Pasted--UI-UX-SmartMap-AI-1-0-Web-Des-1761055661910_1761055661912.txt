@@ -1,0 +1,304 @@
+# مستند UI/UX تنفيذي – تطبيق الويب (SmartMap AI)
+
+> إصدار: 1.0 — اللغة: العربية — المنصة: Web (Desktop-First, Responsive)
+
+---
+
+## 1) المبادئ التصميمية العامة (Design Principles)
+
+* **Pin-Centric Collaboration**: كل تواصل مرتبط بمخطط ودبوس محدد.
+* **AI-Assisted-by-Default**: اقتراحات ذكية دون فرضها؛ الإنسان صاحب القرار.
+* **Search-First**: شريط بحث موحد + فلاتر مرئية + عمليات محفوظة.
+* **Clarity & Speed**: تقليل الخطوات إلى الحد الأدنى، استجابة واجهة < 200ms للتفاعلات، تحميل أولي < 2s.
+* **Consistency**: نظام مكونات موحد، أنماط تفاعل قابلة للتوقع، مصطلحات ثابتة.
+* **Bilingual-Ready**: عربية افتراضيًا مع إنجليزي (LTR/RTL) Toggle.
+* **A11y**: تباين ≥ 4.5:1، تنقّل بلوحة المفاتيح، ARIA، قابلية تكبير حتى 200%.
+
+---
+
+## 2) نظام التصميم (Design System)
+
+### 2.1 الألوان (قابلة للتخصيص)
+
+* Primary: #0E7490 (Teal) — Hover: #0C677F — Focus Ring: #5BD0E6
+* Accent: #8B5CF6 (Violet)
+* Success: #059669 — Warning: #D97706 — Danger: #DC2626 — Info: #2563EB
+* Neutrals: 900 #0F172A / 700 #334155 / 500 #64748B / 300 #CBD5E1 / 100 #F1F5F9
+* خلفية: #0B1220 (Dark surface) أو #FFFFFF (Light)
+
+### 2.2 الطباعة (Typography)
+
+* العناوين: Cairo/IBM Plex Arabic — الوزن 600–700
+* النص الأساسي: Inter/Cairo — 400–500
+* أحجام: H1 28–32، H2 22–24، H3 18–20، Body 14–16، Caption 12–13
+
+### 2.3 المسافات والزوايا
+
+* Grid 8px، Z-Radius: 12–16px للبطاقات، 8px للحقول والأزرار
+* ظلال ناعمة (Elevation 1–3) للمحتوى الطافي
+
+### 2.4 المكوّنات المشتركة
+
+* Button (Primary/Secondary/Tertiary, Destructive, IconButton)
+* Input/TextArea/Select/MultiSelect/Combobox
+* SearchBar مع Chips قابلة للإزالة
+* Tabs/Pills، Breadcrumbs، Tooltip، Popover، Modal، Drawer
+* DataTable (Server-side), Pagination, EmptyState, Skeletons
+* Toast/Inline Alert، Badge/Status Dot
+* Avatar/Assignee Picker، DateTime Picker، Uploader (Drag-n-Drop)
+* Map/Canvas Viewer: Zoom, Pan, Layer Toggle, Ruler, Snap Helpers
+
+---
+
+## 3) خريطة المعلومات (IA) والتنقل
+
+* **الشريط العلوي (Topbar)**: شريط البحث العام، تبديل اللغة، التنبيهات، قائمة المستخدم.
+* **الشريط الجانبي (Sidebar)**: المشاريع، القنوات، التذاكر، الإصدارات، التقارير، الإعدادات.
+* **Breadcrumbs**: Workspace > Project > Sheet > Pin
+* **حالة الدور**: Admin, PM, Engineer, Viewer — تظهر قدرات مختلفة.
+
+---
+
+## 4) الشاشات الرئيسية
+
+### 4.1 شاشة الدخول/التسجيل وإنشاء المؤسسة
+
+**الهدف**: دخول آمن وإنشاء Workspace.
+**العناصر**: حقول البريد/كلمة السر/SSO، تفعيل 2FA، إنشاء مؤسسة (اسم، شعار)، اختيار اللغة، المنطقة الزمنية.
+**التفاعلات**:
+
+* "/login", "/signup"، زر “إنشاء مؤسسة”.
+* خطأ فوري للحقول (Inline Validation).
+  **الحالات**: Empty, Error, Forgot Password، SSO ممنوح.
+  **معايير القبول**: نجاح إنشاء مؤسسة والانتقال إلى لوحة المشاريع خلال ≤ 3 نقرات.
+
+### 4.2 لوحة المشاريع (Projects Home)
+
+**الهدف**: إدارة المشاريع والوصول السريع.
+**العناصر**: قائمة وبطاقات مشاريع، زر “مشروع جديد”، فلاتر حسب الحالة/الدور، بحث.
+**التفاعلات**: إنشاء/أرشفة، فرز بالتاريخ/الاسم/النشاط.
+**الحالات**: Empty State مع CTA وملف عينة.
+**قبول**: فتح مشروع خلال ≤ 2 نقرة.
+
+### 4.3 إنشاء مشروع جديد (Wizard)
+
+**الهدف**: إنشاء مشروع بهيكل ملفات.
+**الخطوات**: معلومات أساسية → نطاق التخصصات → هيكل مجلدات ذكي → تأكيد.
+**العناصر**: اسم، عميل، موقع، عدد الطوابق، التخصصات (ARCH/STR/MEP/FIRE/SITE)، قالب تسمية الأوراق.
+**قبول**: الإنشاء ≤ 60 ثانية.
+
+### 4.4 استيراد المخططات (Upload/Ingestion)
+
+**الهدف**: رفع ملفات وربط مصادر خارجية.
+**العناصر**: Dropzone، موصلات (Autodesk Docs/Drive/SharePoint)، قائمة الملفات، تعيين التخصص/الطابق/الإصدار.
+**التفاعلات**: سحب-إفلات، تحرير ميتاداتا جماعي، معالجة مسبقة للصور (Deskew/Denoise/Scale Calibration).
+**الحالات**: Skeleton أثناء التحميل، فشل/نجاح لكل ملف.
+**قبول**: رفع 100 ملف دون تجميد UI، تقدم دقيق.
+
+### 4.5 شاشة المعالجة بالذكاء الاصطناعي (AI Processing)
+
+**الهدف**: تتبع التقدّم وفضّ النزاعات.
+**العناصر**: بطاقات مهام: OCR، Layout، Objects، Indexing، Mapping؛ نسبة دقة مبدئية؛ أزرار إصلاح (Fix).
+**التفاعلات**: إعادة محاولة، اختيار مقياس يدوي، تعريف Grid بنقطتين.
+**قبول**: تقارير ورقة-بورقة، Log قابل للتنزيل.
+
+### 4.6 الصفحة الرئيسية للمشروع + البحث الذكي
+
+**الهدف**: اكتشاف سريع للمحتوى.
+**العناصر**: شريط بحث (NLP)، Chips ديناميكية (Discipline/Level/Type/Rev/Status)، شبكة أوراق مع شارات (Rev، عدد دبابيس/تذاكر)، Saved Views.
+**التفاعلات**: اقتراحات تلقائية، حفظ بحث، مشاركة رابط قابل للتكرار.
+**قبول**: ظهور نتائج < 500ms بعد إدخال/تعديل فلتر (Client Debounce + Server Indexes).
+
+### 4.7 عارض اللوحة (Sheet Viewer)
+
+**الهدف**: عرض مخطط غني ووضع دبابيس.
+**التخطيط**: Canvas كبير (وسط)، شريط أدوات يسار (Zoom/Hand/Pin/Area/Snap/Ruler/Compare)، لوحة يمين (Layers، Elements، Properties، Pins/Tickets).
+**العناصر**:
+
+* طبقات: ARCH/STR/MEP/Annotations/Legend/TitleBlock
+* عناصر مكتشفة (قابلة للإظهار/الإخفاء)
+* قائمة الدبابيس على هذه الورقة، حالات (Open/Resolved/Closed)
+* زر "وضع دبوس" + رسم مضلع
+  **التفاعلات**:
+* Snap لأقرب Grid/عنصر؛ Tooltip يبيّن الإحداثيات/الغرفة/المستوى.
+* تحديد دبوس يفتح **لوحة التفاصيل** (Pin Details): معلومات، روابط تذاكر، زر “تذكرة جديدة”.
+  **الحالات**: لا دبابيس (Empty)، تحذير مقياس مفقود، تحذير Rev قديم.
+  **قبول**: وضع دبوس وحفظه ≤ 10 ثوانٍ.
+
+### 4.8 إنشاء/تحرير دبوس (Pin Create/Edit)
+
+**الهدف**: إنشاء دبوس دقيق.
+**العناصر**: اسم تلقائي، نوع (Generic/Custom)، هندسة (Point/Polygon)، خصائص سياقية (Room/Level/Grid)، مرفقات اختيارية (صور/ملاحظات صوتية).
+**التفاعلات**: حفظ، إلغاء، تحويل هندسة، Snap Toggle.
+**قبول**: حفظ مع التحقق من المقياس والورقة.
+
+### 4.9 إنشاء تذكرة من دبوس (Ticket Quick Create – Modal)
+
+**الهدف**: تحويل الدبوس إلى تذكرة قابلة للتنفيذ.
+**العناصر**: نوع (NCR/RFI/Clash/Completion/Change/Safety…)، عنوان تلقائي، وصف (مع قوالب AI)، أولوية، Assignee، SLA Due، قناة مُقترَحة، مرفقات.
+**التفاعلات**: توصية AI للنوع والنص، اختيار قناة/حفظ.
+**قبول**: إنشاء تذكرة وربطها بالدبوس والخريطة والقناة.
+
+### 4.10 **مركز التذاكر** (Tickets Hub) — *الشاشة التي طُلِبت بشكل خاص*
+
+**الهدف**: فلترة ومتابعة كل أنواع التذاكر عبر المشاريع/القنوات بطريقة سريعة.
+**التخطيط**: Header (Search + Filters + Saved Views + Bulk Actions) / Main (Tabs: Table, Kanban, Calendar, Map) / Side Panel (Ticket Preview).
+
+**الفلاتر (Facets)**:
+
+* المشروع، التخصص، الطابق/الزون، نوع التذكرة، الحالة (Open/In Review/Awaiting Info/In Progress/Resolved/Closed)، الأولوية، المكلَّف/الفريق، SLA (Remaining/Overdue)، الإصدار (Rev/Issue)، وسم/Tag، تاريخ الإنشاء/التحديث.
+* **مرشّح مكاني**: تحديد ورقة/منطقة/مدى على الخريطة.
+
+**طرق العرض**:
+
+* **Table**: أعمدة قابلة للتخصيص (ID، عنوان، نوع، حالة، أولوية، Assignee، مشروع/لوحة، Rev، SLA Due، آخر تحديث، عدد الرسائل، Pin Icon). دعم الترتيب/التجميع (Group by Type/Assignee/Status).
+* **Kanban**: أعمدة حسب الحالة مع بطاقات تظهر (نوع، أولوية، SLA، Assignee، Badge للمرفقات، Dot تشير لوجود دبوس). سحب وإفلات لتغيير حالة/Assignee.
+* **Calendar**: عرض شهري/أسبوعي حسب Due/SLA، ألوان حسب النوع.
+* **Map**: Heatmap للدبابيس المرتبطة بالتذاكر على اللوحة المحددة، مع Cluster.
+
+**اللوحة الجانبية (Preview)**:
+
+* ملخص التذكرة: عنوان، مشروع/لوحة/Rev، دبوس/مضلّع مصغّر، الحالة، SLA، Assignee، آخر 3 رسائل.
+* أزرار: Open Full, Change Status, Reassign, Add Note, /summarize
+
+**الإجراءات**:
+
+* **Bulk**: تغيير الحالة/المُكلّف/الأولوية، إضافة وسم، تصدير CSV/PDF.
+* **Saved Views**: رؤية محفوظة (مثلاً “NCR Overdue – L3 – MEP”) قابلة للمشاركة والرابط.
+* **AI Quick Filters**: “أرني التذاكر المعرضة لتجاوز SLA هذا الأسبوع”.
+
+**الحالات**: Empty (لا تذاكر/لا نتائج)، Overdue Highlights، Conflict Badges (إصدار تغيّر)، Indicators لرسائل غير مقروءة.
+**قبول**: تطبيق فلتر مركب وعرض نتائج < 700ms؛ تحريك بطاقة في كانبان ينفّذ API ويعكس في الزمن الحقيقي.
+
+### 4.11 صفحة التذكرة (Ticket Detail)
+
+**الهدف**: إدارة التذكرة والنقاش والارتباط بالدبوس.
+**التخطيط**: Header (عنوان + حالة + أولوية + Assignee + SLA) / Tabs (Overview, Thread, Files, Timeline, Related) / Right Panel (Pin Mini-Map + Properties + Code Reference).
+**العناصر**:
+
+* **Overview**: ملخص، خصائص حسب النوع، روابط المرجع (SBC/NFPA إن وُجِدت)، قائمة مهام فرعية.
+* **Thread**: رسائل مترابطة مع ردود، Mentions، أوامر سريعة، مرفقات (صور/PDF/فيديو)، زر **/summarize**.
+* **Files**: إدارة مرفقات.
+* **Timeline**: كل الأحداث (إنشاء، تغيير حالة، تعيين، انتقال بين Rev، تعليقات AI).
+* **Related**: تذاكر/دبابيس متقاربة أو مكررة (اقتراحات AI) + زر Merge.
+  **قبول**: تغيير الحالة/المكلّف يعكس فورًا على الخريطة والقنوات.
+
+### 4.12 القنوات والخيوط (Channels & Threads)
+
+**الهدف**: محادثات منظّمة حسب مشروع/تخصص/طابق/نوع.
+**التخطيط**: قائمة قنوات يسار، قائمة Threads في الوسط، لوحة يمين للمعاينة السريعة (Pin/Ticket).
+**العناصر**: إنشاء Thread جديد، ربط دبوس/تذكرة بالرسالة (باستخدام #ID)، تلخيص.
+**قبول**: إنشاء Thread مرتبط بدبوس واحد على الأقل.
+
+### 4.13 الإصدارات (Revisions)
+
+**الهدف**: إدارة مرور الإصدارات وإعادة تموضع الدبابيس.
+**العناصر**: جدول زمني بال Issues/Revs، مقارنة Overlay/Split، تأثير الإصدار على الدبابيس (قائمة)، زر Remap + تقرير Diff.
+**قبول**: Re-map تلقائي لـ ≥ 90% من الدبابيس واستعراض الباقي يدويًا.
+
+### 4.14 التقارير ولوحة المؤشرات (Reports/Dashboard)
+
+**العناصر**: Cards: Open Tickets، SLA Compliance، MTTR، Hot Pins، أكثر الأنواع تكرارًا؛ فلاتر زمنية.
+**قبول**: تحميل < 1s مع caching.
+
+### 4.15 الإعدادات والصلاحيات (Settings)
+
+**العناصر**: أدوار (RBAC)، فرق، سياسات بيانات، تكاملات (Autodesk/Drive/Email)، إشعارات.
+**قبول**: إدارة دور مستخدم خلال ≤ 3 نقرات.
+
+### 4.16 مركز التنبيهات (Notifications Inbox)
+
+**العناصر**: All/Mentions/SLA/Rev، إجراءات سريعة، رابط سياقي يفتح الورقة على الدبوس/التذكرة.
+**قبول**: Mark-as-read، Batch actions.
+
+### 4.17 سجل التدقيق (Audit Log)
+
+**العناصر**: جدول أحداث قابل للتصفية حسب المستخدم/نوع الإجراء/الكيان (Pin/Ticket/Sheet/Rev)، تصدير.
+
+### 4.18 التكاملات (Integrations)
+
+**العناصر**: الربط مع Autodesk Docs/SharePoint/Drive، بريد ثنائي الاتجاه (Email-to-Thread)، Webhooks.
+
+---
+
+## 5) حالات التحميل/الفراغ/الأخطاء (States)
+
+* **Skeletons** أثناء التحميل، **Empty States** مع CTA، **Inline Errors** مع اقتراح إصلاح.
+* رسائل واضحة مع أرقام تتبع للأخطاء (Ref IDs).
+
+---
+
+## 6) مسارات المستخدم (User Flows)
+
+1. **من رفع الملفات إلى أول دبوس**: Upload → AI Process → Search → Open Sheet → Place Pin (Snap) → Save.
+2. **من دبوس إلى تذكرة ومتابعة**: Pin → New Ticket (Modal) → Assign + SLA → Thread → Resolve/Close.
+3. **مراقبة التذاكر**: Tickets Hub → Filter (Overdue NCR) → Kanban drag → Assign → Calendar view للموعد.
+4. **الإصدارات**: Rev Upload → Auto Remap Pins → View Diff حول الدبابيس المتأثرة → تحديث التذاكر.
+
+---
+
+## 7) المعايير القابلة للقياس (Acceptance & SLAs)
+
+* استجابة تفاعل UI: < 200ms — بحث وفلاتر: < 500–700ms (Server-side indexed).
+* وضع وحفظ دبوس: ≤ 10s من فتح الورقة.
+* إنشاء تذكرة من دبوس: ≤ 20s شاملاً التعيين والـSLA.
+* Remap Pins بعد Rev: معالجة 100 ورقة ≤ 5m (خلفية) + إشعار.
+
+---
+
+## 8) سهولة الوصول (Accessibility)
+
+* دعم RTL/LTR، تباين 4.5:1، Tab Order منطقي، Shortcuts (\ to focus search, P لوضع دبوس، T لإنشاء تذكرة، G لفتح القنوات، K للبحث داخل القنوات)، وصف بديل للصور.
+
+---
+
+## 9) المقاييس التحليلية (Product Analytics)
+
+* Time-to-First-Pin، Ticket Creation Rate، Search Success@1، SLA Breach Rate، Duplicate Pins Merge، Rev Impact Count.
+* تتبّع أحداث: add_pin, create_ticket, change_status, assign, filter_apply, kanban_drag, rev_remap.
+
+---
+
+## 10) نماذج البيانات (مختصر واجهات)
+
+```
+GET /tickets?project=PRJ-1&status=open&discipline=MEP&sla=overdue
+PATCH /tickets/{id} { status, assignee, priority }
+POST /pins { sheet_id, geometry, context }
+POST /tickets { pin_id, type, title, description, priority, assignee, sla_due, channel_id }
+GET /sheets/{id}/pins
+POST /revisions/ingest { sheet_id, rev_id, file }
+POST /search { q, filters, mode }
+```
+
+---
+
+## 11) أمن وخصوصية
+
+* RBAC دقيق، تشفير أثناء النقل والتخزين، سجلات تدقيق، سياسات احتفاظ، خيار تشغيل محلي.
+
+---
+
+## 12) ملاحظات تخص الشاشة المطلوبة (Tickets Hub)
+
+* **قيمة أساسية**: شاشة قيادة التشغيل اليومي.
+* **Must-Haves**: فلاتر قوية، طرق عرض متعددة (Table/Kanban/Calendar/Map)، Saved Views، لوحة معاينة سريعة، إجراءات Bulk، مؤشرات SLA ومهام اليوم.
+* **Nice-to-Haves**: توصيات AI للتصعيد، توقع تجاوزات SLA، لوح جانبي للـMetrics اللحظية.
+
+---
+
+## 13) خارطة الواجهات للإصدار الأول (Web MVP)
+
+* Auth/Workspace → Projects Home → Project Create Wizard → Upload/Ingestion → AI Processing → Project Home (Search) → Sheet Viewer → Pin Create → Ticket Quick Create → Tickets Hub → Ticket Detail → Channels → Revisions → Dashboard → Settings.
+
+---
+
+## 14) ملاحق (قوالب نصوص)
+
+* **NCR Template**: سبب عدم المطابقة، مرجع كودي، الإجراء التصحيحي، مسؤول التنفيذ، تاريخ مستهدف.
+* **RFI Template**: سؤال محدد، تأثير محتمل، موعد استجابة، مرفقات داعمة.
+* **Completion Note**: بند منجز، صور دليل، توقيع رقمي، تاريخ.
+
+---
+
+**انتهى المستند – جاهز للتحويل إلى Wireframes/Hi-Fi UI**

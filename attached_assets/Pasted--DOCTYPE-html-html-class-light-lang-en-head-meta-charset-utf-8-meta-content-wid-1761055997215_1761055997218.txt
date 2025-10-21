@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ConstructFlow - Plans</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<script>tailwind.config = {darkMode: "class", theme: {extend: {colors: {primary: "#054f3b", accent: "#66CCFF", "neutral-background": "#E0E0E0", "text-dark": "#1F2937", "text-light": "#FFFFFF", "background-light": "#f6f8f7", "background-dark": "#10221d"}, fontFamily: {display: "Work Sans"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}}}};</script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-text-dark dark:text-text-light">
+<div class="relative flex h-screen w-full flex-col overflow-hidden">
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-neutral-background dark:border-gray-800 bg-white dark:bg-background-dark px-6 py-3 shrink-0">
+<div class="flex items-center gap-8">
+<div class="flex items-center gap-3 text-text-dark dark:text-white">
+<div class="size-8 text-primary">
+<svg fill="none" viewbox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+<path d="M44 11.2727C44 14.0109 39.8386 16.3957 33.69 17.6364C39.8386 18.877 44 21.2618 44 24C44 26.7382 39.8386 29.123 33.69 30.3636C39.8386 31.6043 44 33.9891 44 36.7273C44 40.7439 35.0457 44 24 44C12.9543 44 4 40.7439 4 36.7273C4 33.9891 8.16144 31.6043 14.31 30.3636C8.16144 29.123 4 26.7382 4 24C4 21.2618 8.16144 18.877 14.31 17.6364C8.16144 16.3957 4 14.0109 4 11.2727C4 7.25611 12.9543 4 24 4C35.0457 4 44 7.25611 44 11.2727Z" fill="currentColor"></path>
+</svg>
+</div>
+<h2 class="text-xl font-bold tracking-[-0.015em]">ConstructFlow KSA</h2>
+</div>
+</div>
+<div class="flex flex-1 justify-center px-8">
+<label class="flex flex-col w-full max-w-lg">
+<div class="flex w-full flex-1 items-stretch rounded-lg h-10">
+<div class="text-gray-500 dark:text-gray-400 flex border-none bg-neutral-background/50 dark:bg-gray-800 items-center justify-center pl-4 rounded-l-lg border-r-0">
+<span class="material-symbols-outlined">search</span>
+</div>
+<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-text-dark dark:text-white focus:outline-0 focus:ring-0 border-none bg-neutral-background/50 dark:bg-gray-800 focus:border-none h-full placeholder:text-gray-500 dark:placeholder:text-gray-400 px-4 rounded-l-none border-l-0 pl-2 text-base font-normal leading-normal" placeholder="Search plans..." value=""/>
+</div>
+</label>
+</div>
+<div class="flex items-center gap-4">
+<button class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white gap-2 text-sm font-bold leading-normal tracking-[0.015em]">
+<span class="material-symbols-outlined">upload_file</span>
+<span class="truncate">Upload Plans</span>
+</button>
+<button class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 bg-neutral-background/50 dark:bg-gray-800 text-text-dark dark:text-white gap-2 text-sm font-bold leading-normal tracking-[0.015em] min-w-0 px-2.5">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 bg-neutral-background/50 dark:bg-gray-800 text-text-dark dark:text-white gap-2 text-sm font-bold leading-normal tracking-[0.015em] min-w-0 px-2.5">
+<span class="material-symbols-outlined">chat_bubble</span>
+</button>
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" data-alt="User avatar with a gradient background" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBFamnhmfGf-p_b7tvhIOcurVmZN6FL-UG8kWqhpo0-9O_6P2-3RNfX2h39_fX8rsoo01lDHwpcrYhyUfqUUP-xnYDRYwdiCgdgdPx0kyLnLpbqYrrPNZHp7uJiLO0THB9NSQWsq_hjaqvjRgOCfKaFXQLqO7QPeSfFmd7jgaA6nzXPtR6DL7wZ2wIpdSjgam8tknE7usiplXZhyXAb_CBdODoFXTNEEKdZuuLORttoKsOaBIGJv9fU_v8hoGmfqiPSzV2500M2LCI");'></div>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden">
+<aside class="w-64 shrink-0 border-r border-neutral-background dark:border-gray-800 bg-white dark:bg-background-dark p-4 flex flex-col justify-between">
+<div class="flex flex-col gap-4">
+<div class="flex items-center gap-3 px-3 py-2">
+<span class="material-symbols-outlined text-text-dark dark:text-white">dashboard</span>
+<p class="text-text-dark dark:text-white text-sm font-medium leading-normal">Dashboard</p>
+</div>
+<div class="flex items-center gap-3 px-3 py-2 rounded-lg bg-accent/20 dark:bg-primary/20">
+<span class="material-symbols-outlined text-primary">description</span>
+<p class="text-primary text-sm font-bold leading-normal">Plans</p>
+</div>
+<div class="flex items-center gap-3 px-3 py-2">
+<span class="material-symbols-outlined text-text-dark dark:text-white">folder</span>
+<p class="text-text-dark dark:text-white text-sm font-medium leading-normal">Projects</p>
+</div>
+<div class="flex items-center gap-3 px-3 py-2">
+<span class="material-symbols-outlined text-text-dark dark:text-white">bar_chart</span>
+<p class="text-text-dark dark:text-white text-sm font-medium leading-normal">Reports</p>
+</div>
+<div class="flex items-center gap-3 px-3 py-2">
+<span class="material-symbols-outlined text-text-dark dark:text-white">settings</span>
+<p class="text-text-dark dark:text-white text-sm font-medium leading-normal">Settings</p>
+</div>
+</div>
+<div class="flex flex-col gap-4">
+<div class="flex items-center gap-3 px-3 py-2">
+<span class="material-symbols-outlined text-text-dark dark:text-white">help</span>
+<p class="text-text-dark dark:text-white text-sm font-medium leading-normal">Help &amp; Support</p>
+</div>
+<div class="flex items-center gap-3 px-3 py-2">
+<span class="material-symbols-outlined text-text-dark dark:text-white">logout</span>
+<p class="text-text-dark dark:text-white text-sm font-medium leading-normal">Logout</p>
+</div>
+</div>
+</aside>
+<main class="flex-1 flex flex-col overflow-hidden">
+<div class="px-6 py-4 border-b border-neutral-background dark:border-gray-800 bg-white dark:bg-background-dark">
+<div class="flex flex-wrap justify-between items-center gap-4">
+<div class="flex flex-col gap-1">
+<p class="text-3xl font-bold leading-tight tracking-tight text-text-dark dark:text-white">Construction Plans</p>
+<p class="text-gray-500 dark:text-gray-400 text-base font-normal leading-normal">Manage, upload, and view different construction plans for KSA projects.</p>
+</div>
+<div class="flex items-center gap-2">
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-neutral-background/50 dark:bg-gray-800 text-text-dark dark:text-white text-sm font-bold leading-normal tracking-[0.015em] gap-2">
+<span class="material-symbols-outlined">view_cozy</span>
+<span class="truncate">Manage Views</span>
+<span class="material-symbols-outlined">arrow_drop_down</span>
+</button>
+</div>
+</div>
+</div>
+<div class="flex items-center p-4 border-b border-neutral-background dark:border-gray-800 bg-white dark:bg-background-dark">
+<div class="flex gap-2 overflow-x-auto">
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-neutral-background/50 dark:bg-gray-800 pl-3 pr-2 text-text-dark dark:text-white">
+<p class="text-sm font-medium leading-normal">Building</p>
+<span class="material-symbols-outlined">arrow_drop_down</span>
+</button>
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-neutral-background/50 dark:bg-gray-800 pl-3 pr-2 text-text-dark dark:text-white">
+<p class="text-sm font-medium leading-normal">Floor</p>
+<span class="material-symbols-outlined">arrow_drop_down</span>
+</button>
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-neutral-background/50 dark:bg-gray-800 pl-3 pr-2 text-text-dark dark:text-white">
+<p class="text-sm font-medium leading-normal">Discipline</p>
+<span class="material-symbols-outlined">arrow_drop_down</span>
+</button>
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-neutral-background/50 dark:bg-gray-800 pl-3 pr-2 text-text-dark dark:text-white">
+<p class="text-sm font-medium leading-normal">Version</p>
+<span class="material-symbols-outlined">arrow_drop_down</span>
+</button>
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-neutral-background/50 dark:bg-gray-800 pl-3 pr-2 text-text-dark dark:text-white">
+<p class="text-sm font-medium leading-normal">Status</p>
+<span class="material-symbols-outlined">arrow_drop_down</span>
+</button>
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-neutral-background/50 dark:bg-gray-800 pl-3 pr-2 text-text-dark dark:text-white">
+<p class="text-sm font-medium leading-normal">Contractor</p>
+<span class="material-symbols-outlined">arrow_drop_down</span>
+</button>
+</div>
+<div class="flex-grow"></div>
+<div class="flex h-10 items-center justify-center rounded-lg bg-neutral-background/50 dark:bg-gray-800 p-1 w-64">
+<label class="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-md px-2 has-[:checked]:bg-white has-[:checked]:dark:bg-gray-700 has-[:checked]:shadow-sm has-[:checked]:text-text-dark dark:has-[:checked]:text-white text-gray-500 dark:text-gray-400 text-sm font-medium leading-normal">
+<span class="material-symbols-outlined mr-2">grid_view</span>
+<span class="truncate">Grid</span>
+<input checked="" class="invisible w-0" name="view-toggle" type="radio" value="Grid View"/>
+</label>
+<label class="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-md px-2 has-[:checked]:bg-white has-[:checked]:dark:bg-gray-700 has-[:checked]:shadow-sm has-[:checked]:text-text-dark dark:has-[:checked]:text-white text-gray-500 dark:text-gray-400 text-sm font-medium leading-normal">
+<span class="material-symbols-outlined mr-2">list</span>
+<span class="truncate">List</span>
+<input class="invisible w-0" name="view-toggle" type="radio" value="List View"/>
+</label>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto p-6 bg-neutral-background/30 dark:bg-background-dark">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+<div class="bg-white dark:bg-gray-900/50 rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow duration-300 flex flex-col border border-neutral-background dark:border-gray-800">
+<div class="aspect-[4/3] bg-neutral-background/50 dark:bg-gray-800 flex items-center justify-center">
+<img class="w-full h-full object-cover" data-alt="Architectural drawing of a modern building" src="https://lh3.googleusercontent.com/aida-public/AB6AXuClkpxrlywCUB6FBFEpz1MqmUVNsaboO4lQx_daxG5RrVolhPaqKLc_1J3XzZcB9iSKMFSSOldOPQxZvgPKdFjc0-nJQBUa3aeoCD12S1uRft2fh59pBU-YiPmMdPdJdiMdRJjQzebBz4CsQDDxBNLK2i2iaSUbhoAjtgDTjg73Uvbut66h6QqemaISlluWiRUy2DTes7feeGkY0VE4QHA4TOXmuEHcrZiY8V26ujQANak4A_aOpFmjn_Z7W7r97w8jUOoFwCZmOOI"/>
+</div>
+<div class="p-4 flex flex-col flex-grow">
+<h3 class="font-bold text-text-dark dark:text-white">Architectural - Floor 02 - Tower A</h3>
+<p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Last updated: 2 days ago</p>
+<div class="mt-4 flex items-center justify-between">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">Approved</span>
+<span class="text-sm font-semibold text-gray-700 dark:text-gray-300">Version 3</span>
+</div>
+</div>
+<div class="p-4 border-t border-neutral-background dark:border-gray-800 flex items-center justify-end gap-2">
+<button class="text-gray-500 dark:text-gray-400 hover:text-primary"><span class="material-symbols-outlined">download</span></button>
+<button class="text-gray-500 dark:text-gray-400 hover:text-primary"><span class="material-symbols-outlined">history</span></button>
+<button class="text-gray-500 dark:text-gray-400 hover:text-primary"><span class="material-symbols-outlined">more_vert</span></button>
+</div>
+</div>
+<div class="bg-white dark:bg-gray-900/50 rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow duration-300 flex flex-col border border-neutral-background dark:border-gray-800">
+<div class="aspect-[4/3] bg-neutral-background/50 dark:bg-gray-800 flex items-center justify-center">
+<img class="w-full h-full object-cover" data-alt="MEP plan for a large commercial building" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvH2G7MubrmjerKbSu0VAQJR7tGZkyuEAuw0NBB-E_pllvO4DJZz-yybjcG0BzOGOY61nemexrGTrW4WfKEh0aaNqQibY4q9pczfBvKh2BVXvDt4AAd1rUYknSECCzvfPL41h3Uw3em8GkN9zwQdUJlOJ32EQjnhAsyUL1gyJi7eoDsrjdu_bEXFimm_ap0YoO-9uztWI0y6GBet-laT_zCDXadGYF767PnflL5E2iCljG7puumNMMOZFBdw2dXEgFRlG5MKVrRls"/>
+</div>
+<div class="p-4 flex flex-col flex-grow">
+<h3 class="font-bold text-text-dark dark:text-white">MEP - Ground Floor - Villa B</h3>
+<p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Last updated: 5 hours ago</p>
+<div class="mt-4 flex items-center justify-between">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">Pending Review</span>
+<span class="text-sm font-semibold text-gray-700 dark:text-gray-300">Version 1</span>
+</div>
+</div>
+<div class="p-4 border-t border-neutral-background dark:border-gray-800 flex items-center justify-end gap-2">
+<button class="text-gray-500 dark:text-gray-400 hover:text-primary"><span class="material-symbols-outlined">download</span></button>
+<button class="text-gray-500 dark:text-gray-400 hover:text-primary"><span class="material-symbols-outlined">history</span></button>
+<button class="text-gray-500 dark:text-gray-400 hover:text-primary"><span class="material-symbols-outlined">more_vert</span></button>
+</div>
+</div>
+<div class="bg-white dark:bg-gray-900/50 rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow duration-300 flex flex-col border border-neutral-background dark:border-gray-800">
+<div class="aspect-[4/3] bg-neutral-background/50 dark:bg-gray-800 flex items-center justify-center">
+<img class="w-full h-full object-cover" data-alt="Structural plan with annotations" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC4uThca9YqZ6w1BhwoFHfNOB1yMV45iIe4BpT9S2Ld0e68j2zWlr6MBE5NHOLbpwzX_Q-Gw3GE7LM82F0jER_OKSud6eYy81Mj7242xfZLU4wXtDEI7qY4Jwv1xXJ1DEimmw7032aUr10fdOEy4y1AxfxaegL6TpTZ-ZdE01eGCLm4mZyKnAGtmIiguz0EI1w3wUkWqR90qGtsz0_k1dZD-vmv-Q6Q10nTPBfR2OBBbQ1FRz3AlHFuHV40SQnpxZuNcRoCD3dP0RM"/>
+</div>
+<div class="p-4 flex flex-col flex-grow">
+<h3 class="font-bold text-text-dark dark:text-white">Structural - Basement - Tower A</h3>
+<p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Last updated: 1 week ago</p>
+<div class="mt-4 flex items-center justify-between">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">Rejected</span>
+<span class="text-sm font-semibold text-gray-700 dark:text-gray-300">Version 2</span>
+</div>
+</div>
+<div class="p-4 border-t border-neutral-background dark:border-gray-800 flex items-center justify-end gap-2">
+<button class="text-gray-500 dark:text-gray-400 hover:text-primary"><span class="material-symbols-outlined">download</span></button>
+<button class="text-gray-500 dark:text-gray-400 hover:text-primary"><span class="material-symbols-outlined">history</span></button>
+<button class="text-gray-500 dark:text-gray-400 hover:text-primary"><span class="material-symbols-outlined">more_vert</span></button>
+</div>
+</div>
+<div class="bg-white dark:bg-gray-900/50 rounded-xl border-2 border-dashed border-neutral-background dark:border-gray-700 flex flex-col items-center justify-center p-8 text-center aspect-[4/3]">
+<span class="material-symbols-outlined text-6xl text-gray-400 dark:text-gray-500">add_circle</span>
+<h3 class="mt-4 text-lg font-semibold text-text-dark dark:text-white">Upload Your First Plan</h3>
+<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Drag &amp; drop files here or click the button to get started.</p>
+<button class="mt-6 flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white gap-2 text-sm font-bold leading-normal tracking-[0.015em]">
+<span class="material-symbols-outlined">upload_file</span>
+<span class="truncate">Upload Plans</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+</div>
+</div>
+</body></html>
