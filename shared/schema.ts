@@ -293,6 +293,128 @@ export const drawingRevisionsRelations = relations(drawingRevisions, ({ one }) =
   }),
 }));
 
+// Layers table - Drawing layers (pins, annotations, drawings)
+export const layers = pgTable("layers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  drawingId: varchar("drawing_id").notNull().references(() => drawings.id, { onDelete: "cascade" }),
+  disciplineId: varchar("discipline_id").notNull().references(() => disciplines.id),
+  name: varchar("name", { length: 255 }).notNull(), // e.g., "Architectural Pins", "MEP Annotations"
+  type: varchar("type", { length: 50 }).notNull(), // "pin", "drawing", "annotation"
+  visible: boolean("visible").default(true).notNull(),
+  data: jsonb("data"), // Store drawing data (shapes, lines, etc.) as JSON
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Pins table - Location markers on drawings
+export const pins = pgTable("pins", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  drawingId: varchar("drawing_id").notNull().references(() => drawings.id, { onDelete: "cascade" }),
+  layerId: varchar("layer_id").notNull().references(() => layers.id, { onDelete: "cascade" }),
+  x: varchar("x", { length: 20 }).notNull(), // Percentage position (0-100)
+  y: varchar("y", { length: 20 }).notNull(), // Percentage position (0-100)
+  label: varchar("label", { length: 100 }), // Optional label for the pin
+  description: text("description"),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Tickets table - Issues/tasks linked to pins
+export const tickets = pgTable("tickets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  pinId: varchar("pin_id").references(() => pins.id, { onDelete: "set null" }), // Nullable - ticket can exist without pin
+  drawingId: varchar("drawing_id").notNull().references(() => drawings.id),
+  disciplineId: varchar("discipline_id").notNull().references(() => disciplines.id),
+  priority: varchar("priority", { length: 20 }).notNull().default("medium"), // "low", "medium", "high"
+  status: varchar("status", { length: 50 }).notNull().default("open"), // "open", "in_progress", "resolved", "closed"
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Layer relations
+export const layersRelations = relations(layers, ({ one, many }) => ({
+  drawing: one(drawings, {
+    fields: [layers.drawingId],
+    references: [drawings.id],
+  }),
+  discipline: one(disciplines, {
+    fields: [layers.disciplineId],
+    references: [disciplines.id],
+  }),
+  creator: one(users, {
+    fields: [layers.createdBy],
+    references: [users.id],
+  }),
+  pins: many(pins),
+}));
+
+// Pin relations
+export const pinsRelations = relations(pins, ({ one, many }) => ({
+  drawing: one(drawings, {
+    fields: [pins.drawingId],
+    references: [drawings.id],
+  }),
+  layer: one(layers, {
+    fields: [pins.layerId],
+    references: [layers.id],
+  }),
+  creator: one(users, {
+    fields: [pins.createdBy],
+    references: [users.id],
+  }),
+  tickets: many(tickets),
+}));
+
+// Ticket relations
+export const ticketsRelations = relations(tickets, ({ one }) => ({
+  pin: one(pins, {
+    fields: [tickets.pinId],
+    references: [pins.id],
+  }),
+  drawing: one(drawings, {
+    fields: [tickets.drawingId],
+    references: [drawings.id],
+  }),
+  discipline: one(disciplines, {
+    fields: [tickets.disciplineId],
+    references: [disciplines.id],
+  }),
+  assignee: one(users, {
+    fields: [tickets.assignedTo],
+    references: [users.id],
+    relationName: "ticketAssignee",
+  }),
+  creator: one(users, {
+    fields: [tickets.createdBy],
+    references: [users.id],
+    relationName: "ticketCreator",
+  }),
+}));
+
+// Update drawings relations to include layers, pins, and tickets
+export const drawingsRelationsUpdated = relations(drawings, ({ one, many }) => ({
+  discipline: one(disciplines, {
+    fields: [drawings.disciplineId],
+    references: [disciplines.id],
+  }),
+  floor: one(floors, {
+    fields: [drawings.floorId],
+    references: [floors.id],
+  }),
+  creator: one(users, {
+    fields: [drawings.createdBy],
+    references: [users.id],
+  }),
+  revisions: many(drawingRevisions),
+  layers: many(layers),
+  pins: many(pins),
+  tickets: many(tickets),
+}));
+
 // Zod schemas for validation
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -413,4 +535,50 @@ export type DrawingWithDetails = Drawing & {
 export type DrawingRevisionWithUser = DrawingRevision & {
   uploader: User;
   reviewer?: User;
+};
+
+// Layers schemas
+export const insertLayerSchema = createInsertSchema(layers).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertLayer = z.infer<typeof insertLayerSchema>;
+export type Layer = typeof layers.$inferSelect;
+
+// Pins schemas
+export const insertPinSchema = createInsertSchema(pins).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertPin = z.infer<typeof insertPinSchema>;
+export type Pin = typeof pins.$inferSelect;
+
+// Tickets schemas
+export const insertTicketSchema = createInsertSchema(tickets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertTicket = z.infer<typeof insertTicketSchema>;
+export type Ticket = typeof tickets.$inferSelect;
+
+// Extended types for frontend use
+export type LayerWithDetails = Layer & {
+  discipline: Discipline;
+  creator: User;
+  pins?: PinWithDetails[];
+};
+
+export type PinWithDetails = Pin & {
+  layer: Layer;
+  creator: User;
+  tickets?: TicketWithDetails[];
+};
+
+export type TicketWithDetails = Ticket & {
+  pin?: Pin;
+  drawing: Drawing;
+  discipline: Discipline;
+  assignee?: User;
+  creator: User;
 };
