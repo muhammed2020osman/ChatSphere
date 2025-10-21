@@ -4,10 +4,12 @@ import { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage } from "http";
 import { parse as parseCookie } from "cookie";
 import passport from "passport";
+import multer from "multer";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, getSession } from "./replitAuth";
-import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { extractMentions, findUserIdsByUsernames, requireAdmin } from "./utils";
+import { analyzeEngineeringDrawing } from "./services/gemini";
 import { 
   insertChannelSchema, 
   insertMessageSchema, 
@@ -45,6 +47,23 @@ async function getAuthenticatedUserId(req: IncomingMessage): Promise<string | nu
     });
   });
 }
+
+// Configure multer for file upload (store in memory)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB max file size
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept only PDF, PNG, JPG files
+    const allowedMimes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only PDF, PNG, and JPG files are allowed.'));
+    }
+  },
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -1062,6 +1081,115 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating revision status:", error);
       res.status(500).json({ message: "Failed to update revision status" });
+    }
+  });
+
+  // Upload and analyze drawing file
+  app.post('/api/drawings/:id/upload', isAuthenticated, upload.single('file'), async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const drawingId = req.params.id;
+      const { revisionNo } = req.body;
+      
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      if (!revisionNo) {
+        return res.status(400).json({ message: "Revision number is required" });
+      }
+
+      // Verify drawing exists
+      const drawing = await storage.getDrawing(drawingId);
+      if (!drawing) {
+        return res.status(404).json({ message: "Drawing not found" });
+      }
+
+      const file = req.file;
+      const fileName = file.originalname;
+      const fileType = file.mimetype;
+      const fileSize = file.size.toString();
+      const fileBuffer = file.buffer;
+
+      // PDF files are not supported for AI analysis (Gemini Vision only supports images)
+      if (fileType === 'application/pdf') {
+        return res.status(400).json({ 
+          message: "PDF files are not yet supported. Please upload PNG or JPG images of your drawings." 
+        });
+      }
+
+      // Generate unique file name
+      const timestamp = Date.now();
+      const fileExtension = fileName.split('.').pop();
+      const uniqueFileName = `${drawingId}_${revisionNo}_${timestamp}.${fileExtension}`;
+
+      // Upload to Object Storage using the service
+      const objectStorageService = new ObjectStorageService();
+      const privateObjectDir = objectStorageService.getPrivateObjectDir();
+
+      // Parse the object directory path correctly
+      const objectPath = `${privateObjectDir}/drawings/${uniqueFileName}`;
+      
+      // Remove leading slash and split
+      const pathWithoutLeadingSlash = objectPath.startsWith('/') ? objectPath.slice(1) : objectPath;
+      const parts = pathWithoutLeadingSlash.split('/');
+      
+      if (parts.length < 2) {
+        throw new Error('Invalid object storage path configuration');
+      }
+
+      const bucketName = parts[0];
+      const objectName = parts.slice(1).join('/');
+
+      const bucket = objectStorageClient.bucket(bucketName);
+      const blob = bucket.file(objectName);
+
+      // Upload file to storage
+      await blob.save(fileBuffer, {
+        metadata: {
+          contentType: fileType,
+        },
+      });
+
+      // Make file publicly readable
+      await blob.makePublic();
+
+      // Get public URL
+      const fileUrl = `https://storage.googleapis.com/${bucketName}/${objectName}`;
+
+      // Analyze drawing with Gemini AI (only for image files)
+      console.log('Analyzing drawing with Gemini AI...');
+      let aiExtractedData = null;
+      try {
+        aiExtractedData = await analyzeEngineeringDrawing(fileBuffer, fileType);
+        console.log('AI analysis completed:', aiExtractedData);
+      } catch (aiError) {
+        console.error('AI analysis failed (continuing without it):', aiError);
+        // Continue without AI data if analysis fails
+      }
+
+      // Create drawing revision
+      const revisionData = {
+        drawingId,
+        revisionNo,
+        status: 'draft' as const,
+        fileUrl,
+        fileName,
+        fileType,
+        fileSize,
+        aiExtractedData: aiExtractedData as any,
+        uploadedBy: userId,
+      };
+
+      const revision = await storage.createDrawingRevision(revisionData);
+      
+      res.json({
+        revision,
+        aiExtractedData,
+      });
+    } catch (error) {
+      console.error("Error uploading drawing:", error);
+      res.status(500).json({ message: "Failed to upload drawing" });
     }
   });
 

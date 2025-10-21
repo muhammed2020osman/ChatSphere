@@ -4,18 +4,36 @@
 A modern Slack clone built as a Progressive Web App (PWA) with real-time messaging, channels, direct messages, and user presence tracking. This project also incorporates an Engineering Drawings Management System for technical document control in construction/engineering, including version control, approval workflows, and a Sheet Viewer. The platform aims to provide a comprehensive collaboration and document management solution.
 
 ## Recent Updates
-**October 21, 2025 - Phase 2: Pins/Tickets System & Drawing Tools (Completed)**
-- ✅ **Database Schemas**: Created `pins`, `tickets`, `layers` tables with proper relations
-- ✅ **API Endpoints**: Full CRUD operations for pins, tickets, and layers
-- ✅ **Pin Tool Enhanced**: Crosshair cursor, confirm/cancel buttons for temporary pin placement
-- ✅ **Create Ticket Modal**: Uses real API data from `/api/disciplines` and `/api/users` (no mock data)
-- ✅ **Layers Panel Reorganized**: Grouped by disciplines, displays pin counts per discipline
-- ✅ **Drawing Tools UI**: Toolbar with Pen, Line, Rectangle, Circle, Text, Eraser + color/stroke pickers
-- ✅ **Drawing Canvas Layer**: SVG overlay for rendering drawings
-- ✅ **Pen Tool Working**: Full mouse event handlers for freehand drawing (down/move/up)
-- ✅ **Save Layer Functional**: Mutation saves drawings via POST `/api/layers` with cache invalidation
-- ⚠️ **Other Drawing Tools**: Line, Rectangle, Circle, Text, Eraser have UI but TODO event handlers
-- 📝 **Next**: E2E testing, then optional enhancement of remaining drawing tools
+**October 21, 2025 - Phase 3: AI Integration & Real Backend (Completed)**
+- ✅ **Google Gemini 2.5 Pro Integration**: Complete AI analysis service for engineering drawings
+  - Extracts title block info (sheet no, revision, discipline, etc.)
+  - Identifies layers, dimensions, elements (walls, doors, windows)
+  - Extracts annotations and generates technical summary
+  - Structured JSON schema with confidence scores
+- ✅ **Database Schema Enhanced**: Added `thumbnailUrl` and `aiExtractedData` (JSONB) to drawing_revisions
+- ✅ **File Upload Endpoint**: POST `/api/drawings/:id/upload`
+  - Uploads to Replit Object Storage with proper path parsing
+  - Rejects PDFs (Gemini Vision requires images only)
+  - Performs AI analysis on images (PNG/JPG)
+  - Creates drawing revision with extracted metadata
+  - Graceful fallback if AI analysis fails
+- ✅ **Sheet Viewer Backend Integration**:
+  - Fetches real drawing data from `/api/drawings/:id`
+  - Loads latest revision with file URL
+  - Displays real images from Object Storage
+  - Resolves discipline/floor names from lookup dictionaries
+  - Shows saved pins and layers from database
+- 🔐 **Security**: GEMINI_API_KEY managed via Replit Secrets
+- 📝 **Next**: Test upload flow, implement Ruler tool, update Plans page
+
+**October 21, 2025 - Phase 2: Pins/Tickets System & Drawing Tools**
+- ✅ Database Schemas: `pins`, `tickets`, `layers` tables
+- ✅ API Endpoints: Full CRUD for pins, tickets, layers
+- ✅ Pin Tool: Crosshair cursor, confirm/cancel placement
+- ✅ Create Ticket Modal: 7 construction ticket types (RFI, Issue, Clash, etc.)
+- ✅ Layers Panel: Grouped by disciplines with pin counts
+- ✅ Drawing Tools UI: Pen, Line, Rectangle, Circle, Text, Eraser (Pen tool functional)
+- ✅ Save Layer: POST `/api/layers` with cache invalidation
 
 ## User Preferences
 - Default theme: Dark mode

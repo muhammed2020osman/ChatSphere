@@ -153,9 +153,11 @@ export const drawingRevisions = pgTable("drawing_revisions", {
   revisionNo: varchar("revision_no", { length: 10 }).notNull(), // e.g., "A", "B", "C", "0", "1"
   status: varchar("status", { length: 20 }).notNull().default("draft"), // draft, under_review, approved, rejected, superseded
   fileUrl: varchar("file_url").notNull(), // Object storage URL
+  thumbnailUrl: varchar("thumbnail_url"), // Thumbnail image URL for preview
   fileName: varchar("file_name").notNull(),
   fileType: varchar("file_type", { length: 50 }), // e.g., "application/pdf"
   fileSize: varchar("file_size"), // In bytes
+  aiExtractedData: jsonb("ai_extracted_data"), // AI-extracted metadata from Gemini (layers, dimensions, elements)
   uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
   reviewedBy: varchar("reviewed_by").references(() => users.id),
   reviewNotes: text("review_notes"),

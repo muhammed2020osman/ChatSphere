@@ -37,7 +37,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { CreateTicketModal } from "@/components/create-ticket-modal";
-import type { Layer, Pin, Discipline } from "@shared/schema";
+import type { Layer, Pin, Discipline, DrawingRevision, DrawingWithDetails, Floor } from "@shared/schema";
 
 type Tool = "pan" | "zoom-in" | "zoom-out" | "pin" | "ruler" | "pen" | "line" | "rectangle" | "circle" | "text" | "eraser";
 
@@ -86,6 +86,21 @@ export default function SheetViewer() {
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
 
+  // Fetch drawing data
+  const { data: drawing, isLoading: drawingLoading } = useQuery<DrawingWithDetails>({
+    queryKey: ['/api/drawings', id],
+    enabled: !!id,
+  });
+
+  // Fetch latest revision for this drawing
+  const { data: revisions = [] } = useQuery<DrawingRevision[]>({
+    queryKey: ['/api/drawings', id, 'revisions'],
+    enabled: !!id,
+  });
+
+  // Get latest revision with file
+  const latestRevision: DrawingRevision | null = revisions.length > 0 ? revisions[0] : null;
+
   // Fetch layers for this drawing
   const { data: layers = [], isLoading: layersLoading } = useQuery<Layer[]>({
     queryKey: ['/api/drawings', id, 'layers'],
@@ -103,15 +118,42 @@ export default function SheetViewer() {
     queryKey: ['/api/disciplines'],
   });
 
-  // Mock plan data
-  const plan = {
+  // Fetch floors for display names
+  const { data: floors = [] } = useQuery<Floor[]>({
+    queryKey: ['/api/floors'],
+  });
+
+  // Helper to find discipline/floor names
+  const getDisciplineName = (disciplineId?: string | null) => {
+    if (!disciplineId) return "Unknown";
+    const discipline = disciplines.find(d => d.id === disciplineId);
+    return discipline?.name || "Unknown";
+  };
+
+  const getFloorName = (floorId?: string | null) => {
+    if (!floorId) return "N/A";
+    const floor = floors.find(f => f.id === floorId);
+    return floor?.name || "N/A";
+  };
+
+  // Use real data or fallback to placeholder
+  const plan = drawing ? {
+    id: drawing.id,
+    sheetNo: drawing.sheetNo || "N/A",
+    title: drawing.title || "Drawing",
+    discipline: drawing.discipline?.name || getDisciplineName(drawing.disciplineId),
+    floor: drawing.floor?.name || getFloorName(drawing.floorId),
+    revision: latestRevision?.revisionNo || "0",
+    status: latestRevision?.status || "draft",
+    imageUrl: latestRevision?.fileUrl || "https://lh3.googleusercontent.com/aida-public/AB6AXuClkpxrlywCUB6FBFEpz1MqmUVNsaboO4lQx_daxG5RrVolhPaqKLc_1J3XzZcB9iSKMFSSOldOPQxZvgPKdFjc0-nJQBUa3aeoCD12S1uRft2fh59pBU-YiPmMdPdJdiMdRJjQzebBz4CsQDDxBNLK2i2iaSUbhoAjtgDTjg73Uvbut66h6QqemaISlluWiRUy2DTes7feeGkY0VE4QHA4TOXmuEHcrZiY8V26ujQANak4A_aOpFmjn_Z7W7r97w8jUOoFwCZmOOI",
+  } : {
     id: id || "1",
-    sheetNo: "A-101",
-    title: "Architectural - Floor 02 - Tower A",
-    discipline: "Architectural",
-    floor: "Floor 02",
-    revision: "3",
-    status: "approved",
+    sheetNo: "Loading...",
+    title: "Loading drawing...",
+    discipline: "...",
+    floor: "...",
+    revision: "...",
+    status: "draft",
     imageUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuClkpxrlywCUB6FBFEpz1MqmUVNsaboO4lQx_daxG5RrVolhPaqKLc_1J3XzZcB9iSKMFSSOldOPQxZvgPKdFjc0-nJQBUa3aeoCD12S1uRft2fh59pBU-YiPmMdPdJdiMdRJjQzebBz4CsQDDxBNLK2i2iaSUbhoAjtgDTjg73Uvbut66h6QqemaISlluWiRUy2DTes7feeGkY0VE4QHA4TOXmuEHcrZiY8V26ujQANak4A_aOpFmjn_Z7W7r97w8jUOoFwCZmOOI",
   };
 
