@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import {
   Dialog,
@@ -27,7 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { insertTicketSchema } from "@shared/schema";
+import { insertTicketSchema, type Discipline, type User } from "@shared/schema";
 
 // Extend ticket schema for form validation
 const ticketFormSchema = insertTicketSchema.extend({
@@ -48,20 +49,6 @@ interface CreateTicketModalProps {
   onSubmit: (ticket: TicketFormValues) => void;
 }
 
-// Mock data for disciplines and users
-const disciplines = [
-  { id: "1", name: "Architectural", code: "ARCH", icon: "📐" },
-  { id: "2", name: "Structural", code: "STR", icon: "🏗️" },
-  { id: "3", name: "MEP", code: "MEP", icon: "⚡" },
-  { id: "4", name: "Annotations", code: "ANN", icon: "📝" },
-];
-
-const users = [
-  { id: "1", name: "أحمد محمد", email: "ahmed@example.com" },
-  { id: "2", name: "فاطمة علي", email: "fatima@example.com" },
-  { id: "3", name: "محمد حسن", email: "mohamed@example.com" },
-];
-
 export function CreateTicketModal({
   open,
   onOpenChange,
@@ -70,6 +57,15 @@ export function CreateTicketModal({
   onSubmit,
 }: CreateTicketModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Fetch disciplines and users from API
+  const { data: disciplines = [] } = useQuery<Discipline[]>({
+    queryKey: ['/api/disciplines'],
+  });
+
+  const { data: users = [] } = useQuery<User[]>({
+    queryKey: ['/api/users'],
+  });
 
   const form = useForm<TicketFormValues>({
     resolver: zodResolver(ticketFormSchema),
@@ -173,10 +169,7 @@ export function CreateTicketModal({
                           value={discipline.id}
                           data-testid={`option-discipline-${discipline.code}`}
                         >
-                          <span className="flex items-center gap-2">
-                            <span>{discipline.icon}</span>
-                            <span>{discipline.name}</span>
-                          </span>
+                          {discipline.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -238,18 +231,26 @@ export function CreateTicketModal({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {users.map((user) => (
-                        <SelectItem
-                          key={user.id}
-                          value={user.id}
-                          data-testid={`option-user-${user.id}`}
-                        >
-                          <div className="flex flex-col">
-                            <span>{user.name}</span>
-                            <span className="text-xs text-muted-foreground">{user.email}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
+                      {users.map((user) => {
+                        const displayName = user.firstName && user.lastName 
+                          ? `${user.firstName} ${user.lastName}`
+                          : user.email;
+                        
+                        return (
+                          <SelectItem
+                            key={user.id}
+                            value={user.id}
+                            data-testid={`option-user-${user.id}`}
+                          >
+                            <div className="flex flex-col">
+                              <span>{displayName}</span>
+                              {user.firstName && user.lastName && (
+                                <span className="text-xs text-muted-foreground">{user.email}</span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                   <FormMessage />

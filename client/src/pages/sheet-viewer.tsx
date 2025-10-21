@@ -1,5 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useParams, Link } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import {
   ZoomIn,
   ZoomOut,
@@ -13,6 +16,14 @@ import {
   Plus,
   Check,
   X,
+  Eye,
+  EyeOff,
+  Pen,
+  Minus,
+  Square,
+  Circle,
+  Type,
+  Eraser,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,28 +37,37 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { CreateTicketModal } from "@/components/create-ticket-modal";
+import type { Layer, Pin, Discipline } from "@shared/schema";
 
-type Tool = "pan" | "zoom-in" | "zoom-out" | "pin" | "ruler";
-
-interface Pin {
-  id: string;
-  x: number;
-  y: number;
-  type: string;
-  title: string;
-  status: string;
-}
+type Tool = "pan" | "zoom-in" | "zoom-out" | "pin" | "ruler" | "pen" | "line" | "rectangle" | "circle" | "text" | "eraser";
 
 interface TempPin {
   x: number;
   y: number;
 }
 
+interface DrawingSettings {
+  color: string;
+  strokeWidth: number;
+}
+
+interface DrawingShape {
+  id: string;
+  type: "pen" | "line" | "rectangle" | "circle" | "text";
+  color: string;
+  strokeWidth: number;
+  points?: { x: number; y: number }[]; // For pen (freehand)
+  start?: { x: number; y: number }; // For line, rectangle, circle
+  end?: { x: number; y: number }; // For line, rectangle, circle
+  text?: string; // For text
+  position?: { x: number; y: number }; // For text
+}
+
 export default function SheetViewer() {
   const { id } = useParams();
+  const { toast } = useToast();
   const [activeTool, setActiveTool] = useState<Tool>("pan");
   const [zoom, setZoom] = useState(100);
-  const [pins, setPins] = useState<Pin[]>([]);
   const [showLayers, setShowLayers] = useState(true);
   const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -56,8 +76,32 @@ export default function SheetViewer() {
   const [crosshairPosition, setCrosshairPosition] = useState({ x: 0, y: 0 });
   const [showCrosshair, setShowCrosshair] = useState(false);
   const [showTicketModal, setShowTicketModal] = useState(false);
+  const [drawingSettings, setDrawingSettings] = useState<DrawingSettings>({
+    color: "#D97706", // Default amber color
+    strokeWidth: 2,
+  });
+  const [drawings, setDrawings] = useState<DrawingShape[]>([]);
+  const [currentDrawing, setCurrentDrawing] = useState<DrawingShape | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
+
+  // Fetch layers for this drawing
+  const { data: layers = [], isLoading: layersLoading } = useQuery<Layer[]>({
+    queryKey: ['/api/drawings', id, 'layers'],
+    enabled: !!id,
+  });
+
+  // Fetch pins for this drawing
+  const { data: pins = [], isLoading: pinsLoading } = useQuery<Pin[]>({
+    queryKey: ['/api/drawings', id, 'pins'],
+    enabled: !!id,
+  });
+
+  // Fetch disciplines for display names
+  const { data: disciplines = [] } = useQuery<Discipline[]>({
+    queryKey: ['/api/disciplines'],
+  });
 
   // Mock plan data
   const plan = {
@@ -71,12 +115,31 @@ export default function SheetViewer() {
     imageUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuClkpxrlywCUB6FBFEpz1MqmUVNsaboO4lQx_daxG5RrVolhPaqKLc_1J3XzZcB9iSKMFSSOldOPQxZvgPKdFjc0-nJQBUa3aeoCD12S1uRft2fh59pBU-YiPmMdPdJdiMdRJjQzebBz4CsQDDxBNLK2i2iaSUbhoAjtgDTjg73Uvbut66h6QqemaISlluWiRUy2DTes7feeGkY0VE4QHA4TOXmuEHcrZiY8V26ujQANak4A_aOpFmjn_Z7W7r97w8jUOoFwCZmOOI",
   };
 
-  const layers = [
-    { id: "arch", name: "Architectural", visible: true, color: "#0E7490" },
-    { id: "str", name: "Structural", visible: true, color: "#8B5CF6" },
-    { id: "mep", name: "MEP", visible: false, color: "#059669" },
-    { id: "annotations", name: "Annotations", visible: true, color: "#D97706" },
-  ];
+  // Group layers by discipline
+  const layersByDiscipline = layers.reduce((acc, layer) => {
+    if (!acc[layer.disciplineId]) {
+      acc[layer.disciplineId] = [];
+    }
+    acc[layer.disciplineId].push(layer);
+    return acc;
+  }, {} as Record<string, Layer[]>);
+
+  // Count pins by discipline (via layers)
+  const pinsByDiscipline = pins.reduce((acc, pin) => {
+    const layer = layers.find(l => l.id === pin.layerId);
+    if (layer) {
+      acc[layer.disciplineId] = (acc[layer.disciplineId] || 0) + 1;
+    }
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Discipline colors (matching ConstructFlow design)
+  const disciplineColors: Record<string, string> = {
+    architectural: "#0E7490",
+    structural: "#8B5CF6",
+    mep: "#059669",
+    annotations: "#D97706",
+  };
 
   const handleZoomIn = useCallback(() => {
     setZoom((prev) => Math.min(prev + 25, 400));
@@ -91,8 +154,31 @@ export default function SheetViewer() {
       setIsPanning(true);
       setPanStart({ x: e.clientX - panPosition.x, y: e.clientY - panPosition.y });
       e.preventDefault();
+      return;
     }
-  }, [activeTool, panPosition]);
+    
+    // Drawing tools: Pen (freehand drawing)
+    if (activeTool === "pen" && imageRef.current) {
+      const rect = imageRef.current.getBoundingClientRect();
+      const scale = zoom / 100;
+      const x = (e.clientX - rect.left) / scale;
+      const y = (e.clientY - rect.top) / scale;
+      
+      setCurrentDrawing({
+        id: `shape-${Date.now()}`,
+        type: "pen",
+        color: drawingSettings.color,
+        strokeWidth: drawingSettings.strokeWidth,
+        points: [{ x, y }],
+      });
+      setIsDrawing(true);
+      return;
+    }
+    
+    // TODO: Implement other drawing tools (line, rectangle, circle, text)
+    // For line/rectangle/circle: set start point and wait for mouse move/up
+    // For text: show input dialog
+  }, [activeTool, panPosition, zoom, drawingSettings]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (isPanning && activeTool === "pan") {
@@ -100,6 +186,7 @@ export default function SheetViewer() {
         x: e.clientX - panStart.x,
         y: e.clientY - panStart.y,
       });
+      return;
     }
     
     // Update crosshair position when pin tool is active
@@ -110,12 +197,37 @@ export default function SheetViewer() {
         y: e.clientY - rect.top,
       });
       setShowCrosshair(true);
+      return;
     }
-  }, [isPanning, activeTool, panStart]);
+    
+    // Drawing tools: Pen (freehand drawing)
+    if (isDrawing && activeTool === "pen" && imageRef.current && currentDrawing?.type === "pen") {
+      const rect = imageRef.current.getBoundingClientRect();
+      const scale = zoom / 100;
+      const x = (e.clientX - rect.left) / scale;
+      const y = (e.clientY - rect.top) / scale;
+      
+      setCurrentDrawing({
+        ...currentDrawing,
+        points: [...(currentDrawing.points || []), { x, y }],
+      });
+      return;
+    }
+    
+    // TODO: Implement other drawing tools mouse move logic
+  }, [isPanning, activeTool, panStart, isDrawing, currentDrawing, zoom]);
 
   const handleMouseUp = useCallback(() => {
     setIsPanning(false);
-  }, []);
+    
+    // Drawing tools: Finish drawing
+    if (isDrawing && currentDrawing) {
+      // Add the completed drawing to drawings array
+      setDrawings([...drawings, currentDrawing]);
+      setCurrentDrawing(null);
+      setIsDrawing(false);
+    }
+  }, [isDrawing, currentDrawing, drawings]);
   
   const handleMouseLeave = useCallback(() => {
     setShowCrosshair(false);
@@ -178,23 +290,17 @@ export default function SheetViewer() {
   
   const handleTicketSubmit = useCallback((ticketData: any) => {
     if (tempPin) {
-      // Create pin and ticket together
-      const newPin: Pin = {
-        id: `pin-${Date.now()}`,
-        x: tempPin.x,
-        y: tempPin.y,
-        type: "generic",
-        title: ticketData.title,
-        status: "open",
-      };
-      setPins([...pins, newPin]);
+      // TODO: Create pin and ticket via API mutations
+      // For now, just close modal and reset tempPin
       setTempPin(null);
       setShowTicketModal(false);
       
-      // TODO: Save to API
-      console.log("Creating pin and ticket:", { pin: newPin, ticket: ticketData });
+      console.log("Creating pin and ticket:", { 
+        pin: { x: tempPin.x, y: tempPin.y }, 
+        ticket: ticketData 
+      });
     }
-  }, [tempPin, pins]);
+  }, [tempPin]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -230,6 +336,83 @@ export default function SheetViewer() {
     { id: "pin" as Tool, icon: MapPin, label: "Place Pin", shortcut: "P" },
     { id: "ruler" as Tool, icon: Ruler, label: "Measure", shortcut: "M" },
   ];
+  
+  const drawingTools = [
+    { id: "pen" as Tool, icon: Pen, label: "Pen (Freehand)", shortcut: "" },
+    { id: "line" as Tool, icon: Minus, label: "Line", shortcut: "" },
+    { id: "rectangle" as Tool, icon: Square, label: "Rectangle", shortcut: "" },
+    { id: "circle" as Tool, icon: Circle, label: "Circle", shortcut: "" },
+    { id: "text" as Tool, icon: Type, label: "Text", shortcut: "" },
+    { id: "eraser" as Tool, icon: Eraser, label: "Eraser", shortcut: "" },
+  ];
+
+  const drawingToolIds = drawingTools.map(t => t.id);
+  const isDrawingTool = drawingToolIds.includes(activeTool);
+
+  const predefinedColors = [
+    "#D97706", // Amber - Annotations
+    "#EF4444", // Red - Issues
+    "#0E7490", // Teal - Architectural
+    "#8B5CF6", // Purple - Structural
+    "#059669", // Green - MEP
+    "#3B82F6", // Blue - General
+    "#000000", // Black
+  ];
+
+  // Save layer mutation
+  const saveLayerMutation = useMutation({
+    mutationFn: async (layerData: {
+      drawingId: string;
+      disciplineId: string;
+      name: string;
+      type: string;
+      data: DrawingShape[];
+    }) => {
+      return await apiRequest('POST', '/api/layers', layerData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/drawings', id, 'layers'] });
+      toast({
+        title: "Layer saved successfully",
+        description: `Saved ${drawings.length} drawing${drawings.length === 1 ? '' : 's'}`,
+      });
+      // Clear drawings after successful save
+      setDrawings([]);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to save layer",
+        description: error.message || "An error occurred",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSaveLayer = useCallback(() => {
+    if (drawings.length === 0 ||!disciplines.length) {
+      return;
+    }
+    
+    // Use first discipline as default (TODO: let user select discipline for layer)
+    const disciplineId = disciplines[0]?.id;
+    
+    if (!disciplineId) {
+      toast({
+        title: "Cannot save layer",
+        description: "No disciplines available",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    saveLayerMutation.mutate({
+      drawingId: plan.id,
+      disciplineId,
+      name: `Drawing Layer ${new Date().toLocaleString()}`,
+      type: "drawing",
+      data: drawings,
+    });
+  }, [drawings, plan.id, disciplines, saveLayerMutation, toast]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background">
@@ -255,6 +438,18 @@ export default function SheetViewer() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {drawings.length > 0 && (
+            <Button 
+              variant="default" 
+              size="sm" 
+              className="gap-2 bg-primary" 
+              onClick={handleSaveLayer}
+              data-testid="button-save-layer"
+            >
+              <Layers className="h-4 w-4" />
+              <span>Save Layer ({drawings.length})</span>
+            </Button>
+          )}
           <Button variant="outline" size="sm" className="gap-2" data-testid="button-download-plan">
             <Download className="h-4 w-4" />
             <span>Download</span>
@@ -288,12 +483,107 @@ export default function SheetViewer() {
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="right">
-                    <p>{tool.label} ({tool.shortcut})</p>
+                    <p>{tool.label} {tool.shortcut && `(${tool.shortcut})`}</p>
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })}
+            
+            <Separator className="my-2 w-10" />
+            
+            {/* Drawing Tools */}
+            {drawingTools.map((tool) => {
+              const isActive = activeTool === tool.id;
+              
+              return (
+                <Tooltip key={tool.id}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={isActive ? "default" : "ghost"}
+                      size="icon"
+                      onClick={() => handleToolClick(tool.id)}
+                      data-testid={`button-tool-${tool.id}`}
+                    >
+                      <tool.icon className="h-5 w-5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>{tool.label}</p>
                   </TooltipContent>
                 </Tooltip>
               );
             })}
           </TooltipProvider>
+          
+          <Separator className="my-2 w-10" />
+          
+          {/* Color Picker - Only show when drawing tool is active */}
+          {isDrawingTool && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex flex-col gap-1 items-center w-full px-2">
+                    <div className="text-[10px] text-muted-foreground">Color</div>
+                    <div className="grid grid-cols-2 gap-1">
+                      {predefinedColors.map((color) => (
+                        <button
+                          key={color}
+                          className={`w-5 h-5 rounded border-2 ${
+                            drawingSettings.color === color 
+                              ? "border-primary" 
+                              : "border-border"
+                          }`}
+                          style={{ backgroundColor: color }}
+                          onClick={() => setDrawingSettings({ ...drawingSettings, color })}
+                          data-testid={`color-${color}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>Select Color</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          
+          {/* Stroke Width Picker - Only show when drawing tool is active (except text/eraser) */}
+          {isDrawingTool && activeTool !== "text" && activeTool !== "eraser" && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex flex-col gap-1 items-center w-full px-2 mt-2">
+                    <div className="text-[10px] text-muted-foreground">Stroke</div>
+                    <div className="flex flex-col gap-1">
+                      {[1, 2, 3, 4].map((width) => (
+                        <button
+                          key={width}
+                          className={`w-10 h-4 rounded flex items-center justify-center ${
+                            drawingSettings.strokeWidth === width 
+                              ? "bg-primary/20" 
+                              : "hover-elevate"
+                          }`}
+                          onClick={() => setDrawingSettings({ ...drawingSettings, strokeWidth: width })}
+                          data-testid={`stroke-${width}`}
+                        >
+                          <div 
+                            className="bg-foreground rounded-full"
+                            style={{ width: '80%', height: `${width}px` }}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>Stroke Width</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          
+          <div className="flex-1" />
           
           <Separator className="my-2 w-10" />
           
@@ -362,6 +652,147 @@ export default function SheetViewer() {
                 data-testid="img-plan-canvas"
                 draggable={false}
               />
+              
+              {/* SVG Drawing Layer */}
+              <svg
+                className="absolute top-0 left-0 w-full h-full pointer-events-none"
+                style={{ zIndex: 10 }}
+              >
+                {/* Render saved drawings */}
+                {drawings.map((shape) => {
+                  if (shape.type === "pen" && shape.points && shape.points.length > 1) {
+                    const pathData = shape.points
+                      .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
+                      .join(' ');
+                    return (
+                      <path
+                        key={shape.id}
+                        d={pathData}
+                        stroke={shape.color}
+                        strokeWidth={shape.strokeWidth}
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    );
+                  }
+                  if (shape.type === "line" && shape.start && shape.end) {
+                    return (
+                      <line
+                        key={shape.id}
+                        x1={shape.start.x}
+                        y1={shape.start.y}
+                        x2={shape.end.x}
+                        y2={shape.end.y}
+                        stroke={shape.color}
+                        strokeWidth={shape.strokeWidth}
+                        strokeLinecap="round"
+                      />
+                    );
+                  }
+                  if (shape.type === "rectangle" && shape.start && shape.end) {
+                    const width = shape.end.x - shape.start.x;
+                    const height = shape.end.y - shape.start.y;
+                    return (
+                      <rect
+                        key={shape.id}
+                        x={shape.start.x}
+                        y={shape.start.y}
+                        width={width}
+                        height={height}
+                        stroke={shape.color}
+                        strokeWidth={shape.strokeWidth}
+                        fill="none"
+                      />
+                    );
+                  }
+                  if (shape.type === "circle" && shape.start && shape.end) {
+                    const radius = Math.sqrt(
+                      Math.pow(shape.end.x - shape.start.x, 2) +
+                      Math.pow(shape.end.y - shape.start.y, 2)
+                    );
+                    return (
+                      <circle
+                        key={shape.id}
+                        cx={shape.start.x}
+                        cy={shape.start.y}
+                        r={radius}
+                        stroke={shape.color}
+                        strokeWidth={shape.strokeWidth}
+                        fill="none"
+                      />
+                    );
+                  }
+                  if (shape.type === "text" && shape.position && shape.text) {
+                    return (
+                      <text
+                        key={shape.id}
+                        x={shape.position.x}
+                        y={shape.position.y}
+                        fill={shape.color}
+                        fontSize={shape.strokeWidth * 6}
+                        fontFamily="Arial, sans-serif"
+                      >
+                        {shape.text}
+                      </text>
+                    );
+                  }
+                  return null;
+                })}
+                
+                {/* Render current drawing in progress */}
+                {currentDrawing && (
+                  <>
+                    {currentDrawing.type === "pen" && currentDrawing.points && currentDrawing.points.length > 1 && (
+                      <path
+                        d={currentDrawing.points
+                          .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
+                          .join(' ')}
+                        stroke={currentDrawing.color}
+                        strokeWidth={currentDrawing.strokeWidth}
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    )}
+                    {currentDrawing.type === "line" && currentDrawing.start && currentDrawing.end && (
+                      <line
+                        x1={currentDrawing.start.x}
+                        y1={currentDrawing.start.y}
+                        x2={currentDrawing.end.x}
+                        y2={currentDrawing.end.y}
+                        stroke={currentDrawing.color}
+                        strokeWidth={currentDrawing.strokeWidth}
+                        strokeLinecap="round"
+                      />
+                    )}
+                    {currentDrawing.type === "rectangle" && currentDrawing.start && currentDrawing.end && (
+                      <rect
+                        x={currentDrawing.start.x}
+                        y={currentDrawing.start.y}
+                        width={currentDrawing.end.x - currentDrawing.start.x}
+                        height={currentDrawing.end.y - currentDrawing.start.y}
+                        stroke={currentDrawing.color}
+                        strokeWidth={currentDrawing.strokeWidth}
+                        fill="none"
+                      />
+                    )}
+                    {currentDrawing.type === "circle" && currentDrawing.start && currentDrawing.end && (
+                      <circle
+                        cx={currentDrawing.start.x}
+                        cy={currentDrawing.start.y}
+                        r={Math.sqrt(
+                          Math.pow(currentDrawing.end.x - currentDrawing.start.x, 2) +
+                          Math.pow(currentDrawing.end.y - currentDrawing.start.y, 2)
+                        )}
+                        stroke={currentDrawing.color}
+                        strokeWidth={currentDrawing.strokeWidth}
+                        fill="none"
+                      />
+                    )}
+                  </>
+                )}
+              </svg>
               
               {/* Render temporary pin with confirm/cancel buttons */}
               {tempPin && (
@@ -454,30 +885,78 @@ export default function SheetViewer() {
 
           <ScrollArea className="flex-1">
             {showLayers ? (
-              <div className="p-4 space-y-2">
+              <div className="p-4 space-y-3">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-foreground">Visible Layers</h3>
-                  <Button variant="ghost" size="sm" className="h-auto p-0 text-xs text-primary">
-                    Toggle All
-                  </Button>
+                  <h3 className="text-sm font-semibold text-foreground">Layers by Discipline</h3>
                 </div>
-                {layers.map((layer) => (
-                  <Card key={layer.id} className="p-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-4 h-4 rounded"
-                        style={{ backgroundColor: layer.color }}
-                      />
-                      <span className="text-sm text-foreground">{layer.name}</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={layer.visible}
-                      onChange={() => {}}
-                      className="rounded border-border"
-                    />
-                  </Card>
-                ))}
+                
+                {layersLoading ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-muted-foreground">Loading layers...</p>
+                  </div>
+                ) : disciplines.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Layers className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">No layers available</p>
+                  </div>
+                ) : (
+                  disciplines.map((discipline) => {
+                    const disciplineLayers = layersByDiscipline[discipline.id] || [];
+                    const pinCount = pinsByDiscipline[discipline.id] || 0;
+                    const color = disciplineColors[discipline.name.toLowerCase()] || "#6B7280";
+                    
+                    return (
+                      <div key={discipline.id} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded"
+                              style={{ backgroundColor: color }}
+                            />
+                            <span className="text-sm font-medium text-foreground">
+                              {discipline.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {pinCount} {pinCount === 1 ? 'pin' : 'pins'}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              {disciplineLayers.length} {disciplineLayers.length === 1 ? 'layer' : 'layers'}
+                            </Badge>
+                          </div>
+                        </div>
+                        
+                        {disciplineLayers.map((layer) => (
+                          <Card key={layer.id} className="p-2 ml-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">{layer.name}</span>
+                              </div>
+                              <button
+                                className="p-1 hover-elevate rounded"
+                                onClick={() => {
+                                  // TODO: Toggle layer visibility
+                                }}
+                                data-testid={`toggle-layer-${layer.id}`}
+                              >
+                                {layer.visible ? (
+                                  <Eye className="h-3 w-3 text-primary" />
+                                ) : (
+                                  <EyeOff className="h-3 w-3 text-muted-foreground" />
+                                )}
+                              </button>
+                            </div>
+                          </Card>
+                        ))}
+                        
+                        {disciplineLayers.length === 0 && (
+                          <p className="text-xs text-muted-foreground ml-4">No layers in this discipline</p>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
               </div>
             ) : (
               <div className="p-4 space-y-3">
@@ -494,7 +973,11 @@ export default function SheetViewer() {
                   </Button>
                 </div>
                 
-                {pins.length === 0 ? (
+                {pinsLoading ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-muted-foreground">Loading pins...</p>
+                  </div>
+                ) : pins.length === 0 ? (
                   <div className="text-center py-8">
                     <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
                     <p className="text-sm text-muted-foreground">No pins yet</p>
@@ -512,13 +995,13 @@ export default function SheetViewer() {
                       <div className="flex items-start gap-3">
                         <MapPin className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground">{pin.title}</p>
+                          <p className="text-sm font-medium text-foreground">{pin.label || "Untitled Pin"}</p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            Position: ({Math.round(pin.x)}, {Math.round(pin.y)})
+                            Position: ({Math.round(parseFloat(pin.x))}, {Math.round(parseFloat(pin.y))})
                           </p>
-                          <Badge variant="secondary" className="mt-2 text-xs">
-                            {pin.status}
-                          </Badge>
+                          {pin.description && (
+                            <p className="text-xs text-muted-foreground mt-1">{pin.description}</p>
+                          )}
                         </div>
                       </div>
                     </Card>

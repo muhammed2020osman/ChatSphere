@@ -4,13 +4,17 @@
 A modern Slack clone built as a Progressive Web App (PWA) with real-time messaging, channels, direct messages, and user presence tracking. This project also incorporates an Engineering Drawings Management System for technical document control in construction/engineering, including version control, approval workflows, and a Sheet Viewer. The platform aims to provide a comprehensive collaboration and document management solution.
 
 ## Recent Updates
-**October 21, 2025 - Phase 1: Plans Management & Sheet Viewer Complete**
-- ✅ **ConstructFlow Design System** implemented with Primary (#054f3b dark teal), Accent (#66CCFF light blue)
-- ✅ **Plans Management Page** (`/plans`): Grid/List views, filters (Building, Floor, Discipline, Status), plan cards
-- ✅ **Sheet Viewer** (`/sheets/:id`): Full-featured canvas with Zoom (25%-400%), Pan (drag), Pin placement, Layers/Pins panels
-- ✅ **Keyboard Shortcuts**: +/- (zoom), H (pan), P (pin)
-- ✅ **Technical**: Fixed CSS transform order, inverse transform for pin coordinates, useCallback/useEffect optimization
-- 📝 **Next**: Phase 2 - Pin Modal + Ticket from Pin Modal
+**October 21, 2025 - Phase 2: Pins/Tickets System & Drawing Tools (In Progress)**
+- ✅ **Database Schemas**: Created `pins`, `tickets`, `layers` tables with proper relations
+- ✅ **API Endpoints**: Full CRUD operations for pins, tickets, and layers
+- ✅ **Pin Tool Enhanced**: Crosshair cursor, confirm/cancel buttons for temporary pin placement
+- ✅ **Create Ticket Modal**: Complete form with discipline selector, priority, assigned to fields
+- ✅ **Layers Panel Reorganized**: Grouped by disciplines, displays pin counts per discipline
+- ✅ **Drawing Tools Added**: Toolbar with Pen, Line, Rectangle, Circle, Text, Eraser + color/stroke pickers
+- ✅ **Drawing Canvas Layer**: SVG overlay for rendering drawings (shapes support implemented)
+- ✅ **Save Layer Button**: Appears in header when drawings exist, saves layer data
+- ⚠️ **Drawing Logic Incomplete**: Mouse event handlers for actual drawing need implementation (TODO in code)
+- 📝 **Next**: Complete drawing mouse handlers, architect review, E2E testing
 
 ## User Preferences
 - Default theme: Dark mode
