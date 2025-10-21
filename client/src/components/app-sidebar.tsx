@@ -1,4 +1,4 @@
-import { Hash, Lock, Plus, ChevronDown, MessageSquare, Settings, AtSign, Star, MessagesSquare, FileText, Upload } from "lucide-react";
+import { Hash, Lock, Plus, ChevronDown, MessageSquare, Settings, AtSign, Star, MessagesSquare, FileText, Upload, Layers } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -139,6 +139,19 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
+                  isActive={location === '/plans'}
+                  data-testid="link-plans"
+                  tooltip="Construction Plans"
+                >
+                  <Link href="/plans">
+                    <Layers className="w-4 h-4" />
+                    <span>Plans</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
                   isActive={location === '/drawings'}
                   data-testid="link-drawings"
                   tooltip="Engineering Drawings"
@@ -146,19 +159,6 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
                   <Link href="/drawings">
                     <FileText className="w-4 h-4" />
                     <span>Engineering Drawings</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location === '/ingest-plans'}
-                  data-testid="link-ingest-plans"
-                  tooltip="استيراد مخططات جديدة"
-                >
-                  <Link href="/ingest-plans">
-                    <Upload className="w-4 h-4" />
-                    <span>استيراد مخططات</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
