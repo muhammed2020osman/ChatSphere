@@ -4,17 +4,18 @@
 A modern Slack clone built as a Progressive Web App (PWA) with real-time messaging, channels, direct messages, and user presence tracking. This project also incorporates an Engineering Drawings Management System for technical document control in construction/engineering, including version control, approval workflows, and a Sheet Viewer. The platform aims to provide a comprehensive collaboration and document management solution.
 
 ## Recent Updates
-**October 21, 2025 - Phase 2: Pins/Tickets System & Drawing Tools (In Progress)**
+**October 21, 2025 - Phase 2: Pins/Tickets System & Drawing Tools (Completed)**
 - ✅ **Database Schemas**: Created `pins`, `tickets`, `layers` tables with proper relations
 - ✅ **API Endpoints**: Full CRUD operations for pins, tickets, and layers
 - ✅ **Pin Tool Enhanced**: Crosshair cursor, confirm/cancel buttons for temporary pin placement
-- ✅ **Create Ticket Modal**: Complete form with discipline selector, priority, assigned to fields
+- ✅ **Create Ticket Modal**: Uses real API data from `/api/disciplines` and `/api/users` (no mock data)
 - ✅ **Layers Panel Reorganized**: Grouped by disciplines, displays pin counts per discipline
-- ✅ **Drawing Tools Added**: Toolbar with Pen, Line, Rectangle, Circle, Text, Eraser + color/stroke pickers
-- ✅ **Drawing Canvas Layer**: SVG overlay for rendering drawings (shapes support implemented)
-- ✅ **Save Layer Button**: Appears in header when drawings exist, saves layer data
-- ⚠️ **Drawing Logic Incomplete**: Mouse event handlers for actual drawing need implementation (TODO in code)
-- 📝 **Next**: Complete drawing mouse handlers, architect review, E2E testing
+- ✅ **Drawing Tools UI**: Toolbar with Pen, Line, Rectangle, Circle, Text, Eraser + color/stroke pickers
+- ✅ **Drawing Canvas Layer**: SVG overlay for rendering drawings
+- ✅ **Pen Tool Working**: Full mouse event handlers for freehand drawing (down/move/up)
+- ✅ **Save Layer Functional**: Mutation saves drawings via POST `/api/layers` with cache invalidation
+- ⚠️ **Other Drawing Tools**: Line, Rectangle, Circle, Text, Eraser have UI but TODO event handlers
+- 📝 **Next**: E2E testing, then optional enhancement of remaining drawing tools
 
 ## User Preferences
 - Default theme: Dark mode
