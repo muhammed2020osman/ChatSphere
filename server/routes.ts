@@ -1065,5 +1065,168 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Layers routes
+  app.get('/api/drawings/:id/layers', isAuthenticated, async (req, res) => {
+    try {
+      const layers = await storage.getDrawingLayers(req.params.id);
+      res.json(layers);
+    } catch (error) {
+      console.error("Error fetching layers:", error);
+      res.status(500).json({ message: "Failed to fetch layers" });
+    }
+  });
+
+  app.post('/api/layers', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const layerData = {
+        ...req.body,
+        createdBy: userId,
+      };
+      const layer = await storage.createLayer(layerData);
+      res.json(layer);
+    } catch (error) {
+      console.error("Error creating layer:", error);
+      res.status(500).json({ message: "Failed to create layer" });
+    }
+  });
+
+  app.patch('/api/layers/:id/visibility', isAuthenticated, async (req, res) => {
+    try {
+      const { visible } = req.body;
+      const layer = await storage.updateLayerVisibility(req.params.id, visible);
+      res.json(layer);
+    } catch (error) {
+      console.error("Error updating layer visibility:", error);
+      res.status(500).json({ message: "Failed to update layer visibility" });
+    }
+  });
+
+  app.delete('/api/layers/:id', isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteLayer(req.params.id);
+      res.sendStatus(204);
+    } catch (error) {
+      console.error("Error deleting layer:", error);
+      res.status(500).json({ message: "Failed to delete layer" });
+    }
+  });
+
+  // Pins routes
+  app.get('/api/drawings/:id/pins', isAuthenticated, async (req, res) => {
+    try {
+      const pins = await storage.getDrawingPins(req.params.id);
+      res.json(pins);
+    } catch (error) {
+      console.error("Error fetching pins:", error);
+      res.status(500).json({ message: "Failed to fetch pins" });
+    }
+  });
+
+  app.post('/api/pins', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const pinData = {
+        ...req.body,
+        createdBy: userId,
+      };
+      const pin = await storage.createPin(pinData);
+      res.json(pin);
+    } catch (error) {
+      console.error("Error creating pin:", error);
+      res.status(500).json({ message: "Failed to create pin" });
+    }
+  });
+
+  app.delete('/api/pins/:id', isAuthenticated, async (req, res) => {
+    try {
+      await storage.deletePin(req.params.id);
+      res.sendStatus(204);
+    } catch (error) {
+      console.error("Error deleting pin:", error);
+      res.status(500).json({ message: "Failed to delete pin" });
+    }
+  });
+
+  // Tickets routes
+  app.get('/api/tickets', isAuthenticated, async (req, res) => {
+    try {
+      const tickets = await storage.getTickets();
+      res.json(tickets);
+    } catch (error) {
+      console.error("Error fetching tickets:", error);
+      res.status(500).json({ message: "Failed to fetch tickets" });
+    }
+  });
+
+  app.get('/api/drawings/:id/tickets', isAuthenticated, async (req, res) => {
+    try {
+      const tickets = await storage.getDrawingTickets(req.params.id);
+      res.json(tickets);
+    } catch (error) {
+      console.error("Error fetching drawing tickets:", error);
+      res.status(500).json({ message: "Failed to fetch drawing tickets" });
+    }
+  });
+
+  app.get('/api/tickets/:id', isAuthenticated, async (req, res) => {
+    try {
+      const ticket = await storage.getTicket(req.params.id);
+      if (!ticket) {
+        return res.status(404).json({ message: "Ticket not found" });
+      }
+      res.json(ticket);
+    } catch (error) {
+      console.error("Error fetching ticket:", error);
+      res.status(500).json({ message: "Failed to fetch ticket" });
+    }
+  });
+
+  app.post('/api/tickets', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const ticketData = {
+        ...req.body,
+        createdBy: userId,
+      };
+      const ticket = await storage.createTicket(ticketData);
+      res.json(ticket);
+    } catch (error) {
+      console.error("Error creating ticket:", error);
+      res.status(500).json({ message: "Failed to create ticket" });
+    }
+  });
+
+  app.patch('/api/tickets/:id/status', isAuthenticated, async (req, res) => {
+    try {
+      const { status } = req.body;
+      const ticket = await storage.updateTicketStatus(req.params.id, status);
+      res.json(ticket);
+    } catch (error) {
+      console.error("Error updating ticket status:", error);
+      res.status(500).json({ message: "Failed to update ticket status" });
+    }
+  });
+
+  app.patch('/api/tickets/:id', isAuthenticated, async (req, res) => {
+    try {
+      const ticket = await storage.updateTicket(req.params.id, req.body);
+      res.json(ticket);
+    } catch (error) {
+      console.error("Error updating ticket:", error);
+      res.status(500).json({ message: "Failed to update ticket" });
+    }
+  });
+
+  app.delete('/api/tickets/:id', isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteTicket(req.params.id);
+      res.sendStatus(204);
+    } catch (error) {
+      console.error("Error deleting ticket:", error);
+      res.status(500).json({ message: "Failed to delete ticket" });
+    }
+  });
+
   return httpServer;
 }

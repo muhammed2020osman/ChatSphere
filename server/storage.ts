@@ -11,6 +11,9 @@ import {
   drawingRevisions,
   disciplines,
   floors,
+  layers,
+  pins,
+  tickets,
   type User,
   type UpsertUser,
   type Channel,
@@ -37,6 +40,12 @@ import {
   type DrawingWithDetails,
   type Discipline,
   type Floor,
+  type Layer,
+  type InsertLayer,
+  type Pin,
+  type InsertPin,
+  type Ticket,
+  type InsertTicket,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
@@ -101,6 +110,26 @@ export interface IStorage {
   createDrawingRevision(revision: InsertDrawingRevision): Promise<DrawingRevision>;
   getDrawingRevisions(drawingId: string): Promise<DrawingRevision[]>;
   updateRevisionStatus(revisionId: string, status: string, reviewedBy: string, reviewNotes?: string): Promise<DrawingRevision>;
+  
+  // Layers operations
+  getDrawingLayers(drawingId: string): Promise<Layer[]>;
+  createLayer(layer: InsertLayer): Promise<Layer>;
+  updateLayerVisibility(layerId: string, visible: boolean): Promise<Layer>;
+  deleteLayer(layerId: string): Promise<void>;
+  
+  // Pins operations
+  getDrawingPins(drawingId: string): Promise<Pin[]>;
+  createPin(pin: InsertPin): Promise<Pin>;
+  deletePin(pinId: string): Promise<void>;
+  
+  // Tickets operations
+  getTickets(): Promise<Ticket[]>;
+  getDrawingTickets(drawingId: string): Promise<Ticket[]>;
+  getTicket(id: string): Promise<Ticket | undefined>;
+  createTicket(ticket: InsertTicket): Promise<Ticket>;
+  updateTicketStatus(ticketId: string, status: string): Promise<Ticket>;
+  updateTicket(ticketId: string, updates: Partial<InsertTicket>): Promise<Ticket>;
+  deleteTicket(ticketId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -916,6 +945,111 @@ export class DatabaseStorage implements IStorage {
     }
 
     return revision;
+  }
+
+  // Layers operations
+  async getDrawingLayers(drawingId: string): Promise<Layer[]> {
+    return await db
+      .select()
+      .from(layers)
+      .where(eq(layers.drawingId, drawingId))
+      .orderBy(layers.createdAt);
+  }
+
+  async createLayer(layerData: InsertLayer): Promise<Layer> {
+    const [layer] = await db
+      .insert(layers)
+      .values(layerData)
+      .returning();
+    return layer;
+  }
+
+  async updateLayerVisibility(layerId: string, visible: boolean): Promise<Layer> {
+    const [layer] = await db
+      .update(layers)
+      .set({ visible })
+      .where(eq(layers.id, layerId))
+      .returning();
+    return layer;
+  }
+
+  async deleteLayer(layerId: string): Promise<void> {
+    await db.delete(layers).where(eq(layers.id, layerId));
+  }
+
+  // Pins operations
+  async getDrawingPins(drawingId: string): Promise<Pin[]> {
+    return await db
+      .select()
+      .from(pins)
+      .where(eq(pins.drawingId, drawingId))
+      .orderBy(pins.createdAt);
+  }
+
+  async createPin(pinData: InsertPin): Promise<Pin> {
+    const [pin] = await db
+      .insert(pins)
+      .values(pinData)
+      .returning();
+    return pin;
+  }
+
+  async deletePin(pinId: string): Promise<void> {
+    await db.delete(pins).where(eq(pins.id, pinId));
+  }
+
+  // Tickets operations
+  async getTickets(): Promise<Ticket[]> {
+    return await db
+      .select()
+      .from(tickets)
+      .orderBy(desc(tickets.createdAt));
+  }
+
+  async getDrawingTickets(drawingId: string): Promise<Ticket[]> {
+    return await db
+      .select()
+      .from(tickets)
+      .where(eq(tickets.drawingId, drawingId))
+      .orderBy(desc(tickets.createdAt));
+  }
+
+  async getTicket(id: string): Promise<Ticket | undefined> {
+    const [ticket] = await db
+      .select()
+      .from(tickets)
+      .where(eq(tickets.id, id));
+    return ticket;
+  }
+
+  async createTicket(ticketData: InsertTicket): Promise<Ticket> {
+    const [ticket] = await db
+      .insert(tickets)
+      .values(ticketData)
+      .returning();
+    return ticket;
+  }
+
+  async updateTicketStatus(ticketId: string, status: string): Promise<Ticket> {
+    const [ticket] = await db
+      .update(tickets)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(tickets.id, ticketId))
+      .returning();
+    return ticket;
+  }
+
+  async updateTicket(ticketId: string, updates: Partial<InsertTicket>): Promise<Ticket> {
+    const [ticket] = await db
+      .update(tickets)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(tickets.id, ticketId))
+      .returning();
+    return ticket;
+  }
+
+  async deleteTicket(ticketId: string): Promise<void> {
+    await db.delete(tickets).where(eq(tickets.id, ticketId));
   }
 }
 
