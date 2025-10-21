@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useParams, Link } from "wouter";
 import {
   ZoomIn,
@@ -41,7 +41,11 @@ export default function SheetViewer() {
   const [zoom, setZoom] = useState(100);
   const [pins, setPins] = useState<Pin[]>([]);
   const [showLayers, setShowLayers] = useState(true);
+  const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLDivElement>(null);
 
   // Mock plan data
   const plan = {
@@ -62,29 +66,114 @@ export default function SheetViewer() {
     { id: "annotations", name: "Annotations", visible: true, color: "#D97706" },
   ];
 
-  const handleZoomIn = () => {
+  const handleZoomIn = useCallback(() => {
     setZoom((prev) => Math.min(prev + 25, 400));
-  };
+  }, []);
 
-  const handleZoomOut = () => {
+  const handleZoomOut = useCallback(() => {
     setZoom((prev) => Math.max(prev - 25, 25));
-  };
+  }, []);
 
-  const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (activeTool === "pin" && canvasRef.current) {
-      const rect = canvasRef.current.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (activeTool === "pan") {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - panPosition.x, y: e.clientY - panPosition.y });
+      e.preventDefault();
+    }
+  }, [activeTool, panPosition]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (isPanning && activeTool === "pan") {
+      setPanPosition({
+        x: e.clientX - panStart.x,
+        y: e.clientY - panStart.y,
+      });
+    }
+  }, [isPanning, activeTool, panStart]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
+  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (activeTool === "pin" && imageRef.current) {
+      const rect = imageRef.current.getBoundingClientRect();
+      const img = imageRef.current.querySelector('img');
+      if (!img) return;
+      
+      // Get the natural (untransformed) image dimensions
+      const naturalWidth = img.naturalWidth;
+      const naturalHeight = img.naturalHeight;
+      
+      // Get click position relative to transformed image
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+      
+      // Calculate the center of the transformed image
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      
+      // Inverse transform: undo scale and translate
+      const scale = zoom / 100;
+      
+      // First, undo the translate (offset from center)
+      const offsetX = clickX - centerX;
+      const offsetY = clickY - centerY;
+      
+      // Then, undo the scale
+      const unscaledX = offsetX / scale;
+      const unscaledY = offsetY / scale;
+      
+      // Convert back to position relative to image (from center to top-left)
+      const displayWidth = img.offsetWidth;
+      const displayHeight = img.offsetHeight;
+      const imageX = unscaledX + (displayWidth / 2);
+      const imageY = unscaledY + (displayHeight / 2);
+      
+      // Convert to percentage
+      const x = (imageX / displayWidth) * 100;
+      const y = (imageY / displayHeight) * 100;
+      
+      // Clamp to 0-100% range
+      const clampedX = Math.max(0, Math.min(100, x));
+      const clampedY = Math.max(0, Math.min(100, y));
       
       const newPin: Pin = {
         id: `pin-${Date.now()}`,
-        x,
-        y,
+        x: clampedX,
+        y: clampedY,
         type: "generic",
         title: `Pin ${pins.length + 1}`,
         status: "open",
       };
       setPins([...pins, newPin]);
+    }
+  }, [activeTool, pins, zoom]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "+" || e.key === "=") {
+        handleZoomIn();
+      } else if (e.key === "-") {
+        handleZoomOut();
+      } else if (e.key === "h" || e.key === "H") {
+        setActiveTool("pan");
+      } else if (e.key === "p" || e.key === "P") {
+        setActiveTool("pin");
+      }
+    };
+    
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleZoomIn, handleZoomOut]);
+
+  const handleToolClick = (toolId: Tool) => {
+    if (toolId === "zoom-in") {
+      handleZoomIn();
+    } else if (toolId === "zoom-out") {
+      handleZoomOut();
+    } else {
+      setActiveTool(toolId);
     }
   };
 
@@ -139,9 +228,9 @@ export default function SheetViewer() {
               <Tooltip key={tool.id}>
                 <TooltipTrigger asChild>
                   <Button
-                    variant={activeTool === tool.id ? "default" : "ghost"}
+                    variant={activeTool === tool.id && tool.id !== "zoom-in" && tool.id !== "zoom-out" ? "default" : "ghost"}
                     size="icon"
-                    onClick={() => setActiveTool(tool.id)}
+                    onClick={() => handleToolClick(tool.id)}
                     data-testid={`button-tool-${tool.id}`}
                   >
                     <tool.icon className="h-5 w-5" />
@@ -165,36 +254,48 @@ export default function SheetViewer() {
         <div className="flex-1 overflow-hidden bg-background/30 relative">
           <div
             ref={canvasRef}
-            className="w-full h-full overflow-auto flex items-center justify-center p-8"
-            onClick={handleCanvasClick}
-            style={{ cursor: activeTool === "pan" ? "grab" : activeTool === "pin" ? "crosshair" : "default" }}
+            className="w-full h-full overflow-hidden flex items-center justify-center p-8"
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            style={{ 
+              cursor: activeTool === "pan" ? (isPanning ? "grabbing" : "grab") : activeTool === "pin" ? "crosshair" : "default",
+              userSelect: "none",
+            }}
             data-testid="canvas-viewer"
           >
             <div
+              ref={imageRef}
               className="relative bg-white shadow-2xl"
+              onClick={handleCanvasClick}
               style={{
-                transform: `scale(${zoom / 100})`,
+                transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoom / 100})`,
                 transformOrigin: "center",
-                transition: "transform 0.2s ease-out",
+                transition: isPanning ? "none" : "transform 0.2s ease-out",
               }}
             >
               <img
                 src={plan.imageUrl}
                 alt={plan.title}
-                className="max-w-full h-auto"
+                className="max-w-full h-auto pointer-events-none"
                 data-testid="img-plan-canvas"
+                draggable={false}
               />
               
               {/* Render pins */}
               {pins.map((pin) => (
                 <div
                   key={pin.id}
-                  className="absolute w-6 h-6 -ml-3 -mt-6 cursor-pointer"
+                  className="absolute w-6 h-6 -ml-3 -mt-6 cursor-pointer pointer-events-auto"
                   style={{
                     left: `${pin.x}%`,
                     top: `${pin.y}%`,
                   }}
                   data-testid={`pin-${pin.id}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
                 >
                   <MapPin className="h-6 w-6 text-primary fill-primary/20" />
                 </div>
