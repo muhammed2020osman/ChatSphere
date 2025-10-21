@@ -1,0 +1,360 @@
+# مستند تنفيذي تفصيلي – موديول إدارة التذاكر (Tickets)
+
+**المنتج:** SmartMap AI – Web
+**الوحدة:** إدارة التذاكر (Tickets Hub + Ticket Detail + SLA)
+**الإصدار:** 1.0
+**اللغة:** العربية
+
+---
+
+## 1) الهدف
+
+تجميع وإنفاذ العمل التشغيلي حول **التذاكر المرتبطة بالدبابيس والخرائط** عبر طرق عرض متعددة (جدول/كانبان/تقويم/خريطة)، مع فلاتر قوية، إجراءات جماعية، وارتباط كامل بالقنوات والخيوط والإصدارات، بالإضافة إلى **محرك SLA** للتنبيه والتصعيد.
+
+---
+
+## 2) النطاق (Scope)
+
+* **مركز التذاكر (Tickets Hub):** التحكم اليومي (استعراض، فرز، فلترة، حفظ العروض، Bulk Actions).
+* **تفاصيل التذكرة (Ticket Detail):** إدارة الحالة والمكلّف والخيط والمرفقات والخط الزمني.
+* **SLA Engine:** قواعد زمنية حسب النوع/الأولوية/القناة، إشعارات وتظليلات (Overdue/At-Risk).
+* **تكاملات:** القنوات/الخيوط، العارض (Sheet Viewer)، الإصدارات (Revisions)، Slack.
+
+---
+
+## 3) المصطلحات
+
+* **Ticket/تذكرة:** كيان عمل مرتبط بـ **Pin** (إحداثيات على لوحة) وبقناة/خيط.
+* **Pin/دبوس:** نقطة/مضلع على لوحة محددة (Sheet) بإصدار معيّن (Rev/Issue).
+* **Thread/خيط:** نقاش مترابط داخل قناة حول التذكرة.
+* **SLA:** اتفاقية مستوى الخدمة (موعد الاستحقاق وفق قواعد).
+
+---
+
+## 4) شاشات الوحدة
+
+### 4.1 مركز التذاكر (Tickets Hub)
+
+**المسار:** `/tickets`
+
+**التخطيط العام:** Header (بحث + فلاتر + إجراءات) / Main (Tabs: Table | Kanban | Calendar | Map) / Side Preview (معاينة سريعة).
+
+**الفلاتر (Facets):**
+
+* **Project**، **Discipline**، **Level/Zone**، **Type** (NCR/RFI/Clash/Completion/Change/Safety…)
+* **Status** (Open/In Review/Awaiting Info/In Progress/Resolved/Closed)
+* **Priority** (Low/Medium/High/Blocker)
+* **Assignee/Team**، **Reporter**
+* **SLA** (Overdue/At-Risk/Within)
+* **Revision** (Rev/Issue) + **Affected by new Rev** (Yes/No)
+* **Has Pin** (Yes/No) – (الافتراضي Yes)
+* **Tags** (متعددة)
+* **Date** (Created/Updated/Due) بنطاق زمني
+* **Channel** (قناة محددة)
+* **Attachment** (Yes/No)
+
+**أوضاع العرض:**
+
+* **Table View (افتراضي):**
+
+  * أعمدة قابلة للتخصيص: ID، Title، Type، Status، Priority، Assignee، Project، Sheet/Rev، SLA Due، Last Activity، Messages Count، Pin.
+  * ميزات: فرز، تجميع (Group By)، تثبيت أعمدة، حفظ تخطيط الجدول لكل مستخدم.
+* **Kanban View:**
+
+  * أعمدة = حالات (Status)، بطاقات تعرض العنوان والنوع والأولوية وSLA والمكلّف وشارة دبوس/مرفقات.
+  * سحب-وإفلات لتغيير **Status/Assignee** (مع تأكيد إذا تجاوز سياسة).
+* **Calendar View:**
+
+  * شهري/أسبوعي/يومي حسب **SLA Due** أو **Target Date**.
+  * ألوان حسب النوع/الأولوية؛ Tooltips لآخر نشاط؛ السحب لتغيير التاريخ.
+* **Map View:**
+
+  * Heatmap/Clusters لدبابيس التذاكر على **Sheet** محددة (اختيار اللوحة في Header).
+  * نقرة على دبوس → معاينة التذكرة + فتح في التفاصيل/العارض.
+
+**الجزء الجانبي (Preview Panel):**
+
+* بطاقة ملخص: Title، Project/Sheet/Rev، Status/Assignee/Priority، SLA، آخر 3 رسائل، MiniMap للدبوس.
+* أزرار سريعة: Open, Change Status, Reassign, Add Note, **/summarize** (AI).
+
+**إجراءات:**
+
+* **Bulk Actions:** تغيير الحالة، تعيين/إعادة تعيين، أولوية، إضافة وسوم، تصدير CSV/PDF.
+* **Saved Views:** حفظ مجموعة فلاتر/أعمدة/ترتيب + مشاركة بالرابط.
+* **AI Quick Filters:** أمثلة: "أرني التذاكر المعرضة لتجاوز SLA خلال 3 أيام"، "NCR لطبقة L03 غير المعينة".
+* **Export/Share:** تصدير نتائج البحث، مشاركة رابط دائم (Permalink) يحافظ على الفلاتر.
+
+**الحالات:**
+
+* Empty (لا تذاكر/لا نتائج)، Skeleton Loading، Overdue Highlights (تظليل صفوف/بطاقات)، Conflict Badge (تأثر بإصدار جديد)، Indicator لرسائل غير مقروءة.
+
+**معايير القبول:**
+
+* تطبيق فلتر مركّب وعرض النتائج ≤ **700ms**.
+* كانبان: سحب البطاقة يرسل PATCH ويُحدَّث فوريًا.
+* Calendar: تغيير التاريخ بالسحب يحدّث **SLA Due** مباشرة.
+
+---
+
+### 4.2 تفاصيل التذكرة (Ticket Detail)
+
+**المسار:** `/tickets/:id`
+
+**التخطيط:** Header (Title + Status + Priority + Assignee + SLA + Actions) / Tabs (Overview | Thread | Files | Timeline | Related) / Right Panel (Pin MiniMap + Properties + Code Reference + Channel).
+
+**المحتوى:**
+
+* **Overview:**
+
+  * الملخص (نصي + ملخص AI)، خصائص حسب النوع (NCR: Code Ref، Cause، Corrective Action)، Checklist فرعية، روابط إلى الكيانات (Pin/Sheet/Channel/Thread).
+* **Thread:**
+
+  * رسائل مترابطة؛ Mentions؛ مرفقات؛ أوامر سريعة (`/assign @…`, `/due …`, `/status …`, `/summarize`).
+  * نشر تلقائي إلى Slack إذا القناة مرتبطة.
+* **Files:**
+
+  * إدارة مرفقات (صور/فيديو/PDF)، معاينات، ووسوم (e.g., evidence, design, approval).
+* **Timeline:**
+
+  * كل الأحداث: إنشاء، تغييرات حالة/أولوية/Assignee، تعديلات SLA، انتقال بين Rev، رسائل Slack.
+* **Related:**
+
+  * تذاكر/دبابيس قريبة مكانيًا أو متشابهة نصيًا (اقتراحات AI) + دمج (Merge) مع حفظ الأثر.
+
+**أزرار سريعة (Header Actions):**
+
+* Change Status، Reassign، Add Tag، Generate Report (PDF)، Close Ticket (بصلاحية)، "Open in Channel"، "Open on Sheet".
+
+**معايير القبول:**
+
+* أي تغيير يظهر فورًا في **Hub** والقنوات.
+* /summarize ينتج TL;DR ≤ 1.5s.
+
+---
+
+### 4.3 إنشاء تذكرة (Create)
+
+* **المصادر:** من العارض (Pin → Ticket)، من القناة (Pin-from-Channel Wizard)، من Hub (New Ticket + اختيار Pin/Sheet/Geometry).
+* **الحقول:** نوع، عنوان، وصف، أولوية، Assignee، SLA Due، قناة، مرفقات، مرجع كودي (اختياري).
+* **الاقتراحات (AI):** نوع/عنوان/وصف مبدئي + Assignee/قناة مفضلة بناءً على النطاق.
+
+---
+
+## 5) محرك الـSLA (SLA Engine)
+
+**قواعد:** مصفوفة لكل (Type × Priority × Channel/Discipline) → مدة افتراضية (مثال: RFI/Medium = 3 أيام عمل).
+
+* **Work Calendars:** دعم عطلات/ويكند (KSA: الجمعة/السبت) مع مناطق زمنية.
+* **At-Risk:** إذا تبقّى ≤ 25% من الزمن → شارة تحذير + إشعار.
+* **Overdue:** تجاوز الموعد → شارة حمراء + تصعيد اختياري (Notify PM/Channel Owner).
+* **Overrides:** تعديل يدوي لـ SLA Due مع سبب.
+
+**إشعارات:** داخل التطبيق + بريد + Push. Digest يومي/أسبوعي للمكلّفين.
+
+**واجهات:**
+
+* `POST /sla/rules`، `GET /sla/rules`، `PATCH /sla/rules/{id}`
+* `POST /tickets/{id}/sla/override { due_at, reason }`
+
+---
+
+## 6) نموذج البيانات (تبسيط)
+
+```json
+// Ticket
+{
+  "ticket_id": "TCK-10234",
+  "pin_id": "PIN-8F2A",
+  "project_id": "PRJ-001",
+  "sheet_id": "SHT-MEP-L03-RevC",
+  "type": "NCR",
+  "title": "باب حريق غير مطابق – يتطلب 90 دقيقة",
+  "description": "…",
+  "status": "In Review",
+  "priority": "High",
+  "assignee": "u_sara",
+  "channel_id": "CH-MEP-L03-NCR",
+  "sla_due": "2025-11-02T15:00:00Z",
+  "rev_id": "RevC",
+  "tags": ["fire-door","evidence-pending"],
+  "counters": { "messages": 12, "attachments": 3 },
+  "created_by": "u_ahmad",
+  "created_at": "2025-10-20T08:35:00Z",
+  "updated_at": "2025-10-21T10:10:00Z"
+}
+
+// SLA Rule (example)
+{
+  "rule_id": "SLA-001",
+  "scope": { "type": "RFI", "priority": "Medium", "discipline": "MEP" },
+  "duration_workdays": 3,
+  "work_calendar": "KSA_Default"
+}
+```
+
+---
+
+## 7) واجهات API (نماذج)
+
+```
+GET  /tickets?filters&view=table|kanban|calendar|map
+POST /tickets { pin_id|sheet_id+geometry, type, title, description, priority, assignee, sla_due, channel_id, tags[] }
+GET  /tickets/{id}
+PATCH /tickets/{id} { status, assignee, priority, title?, description?, tags?, sla_due? }
+DELETE /tickets/{id}
+
+POST /tickets/bulk { ids[], action: { set_status?|set_assignee?|set_priority?|add_tag?|remove_tag? } }
+
+GET  /tickets/{id}/messages
+POST /tickets/{id}/messages { body, attachments[], reply_to? }
+GET  /tickets/{id}/timeline
+GET  /tickets/saved-views
+POST /tickets/saved-views { name, filters, columns, sort }
+```
+
+---
+
+## 8) الأذونات والصلاحيات (RBAC)
+
+* **Admin/PM:** إدارة كل شيء، إغلاق نهائي، تعديل قواعد SLA.
+* **Engineer:** إنشاء/تحديث تذاكر، تغيير حالة حتى Resolved، رفع مرفقات، الردود.
+* **Viewer:** قراءة، تعليقات إن سُمِح.
+* **Channel Owner/Moderator:** إدارة التذاكر ضمن نطاق القناة، تغيير Assignee.
+
+---
+
+## 9) التكاملات
+
+* **القنوات/Slack:** Thread متزامن، أوامر /ticket، نشر ملخصات.
+* **العارض (Sheet Viewer):** روابط عميقة تفتح اللوحة عند الدبوس.
+* **الإصدارات (Revisions):** علامة على التذاكر المتأثرة؛ زر Remap للدبوس.
+* **التقارير:** توليد **Inspection Pack** (لاحقًا) من مجموعة تذاكر محددة.
+
+---
+
+## 10) الأداء
+
+* استعلامات الفلاتر **مفهرسة** (Elastic + Vector Index إذا لزم للبحث الدلالي).
+* Pagination/Virtualization للجداول.
+* WebSockets لتحديثات حيّة (رسائل، حالات، SLA).
+
+---
+
+## 11) الوصول (A11y)
+
+* تنقّل كامل بلوحة المفاتيح، روابط Skip، ARIA لعلامات الحالة (Overdue/At-Risk)، تباين ≥ 4.5:1.
+* Shortcuts: **\** للبحث، **V** لتبديل العرض، **A** لفتح إجراءات جماعية، **S** لحفظ عرض.
+
+---
+
+## 12) التحليلات (Analytics)
+
+* Ticket Creation Rate، Close Rate، MTTR، SLA Compliance، Overdue Count، Activity per Assignee/Channel.
+* أحداث: tickets_filter_apply, kanban_drag, calendar_change_due, ticket_update_status, message_posted.
+
+---
+
+## 13) حالات الحافة (Edge Cases)
+
+* تذكرة بلا دبوس (وراثية من نظام خارجي) → تحذير + دعوة لربط دبوس.
+* تضارب تحرير متزامن → قفل تفاؤلي + إشعار.
+* حذف دبوس مرتبط → منع/أو تحويل التذكرة إلى حالة "Detached" مع خريطة آخر موضع معروف.
+* تغيير Rev يحرّك الدبوس → تحديث تلقائي مع إدخال Timeline.
+* فقدان صلاحية رؤية ورقة/قناة → إخفاء الروابط الحساسة وعرض سبب.
+
+---
+
+## 14) النسخ (Microcopy)
+
+* فلاتر: "عطِني كل **NCR** في **MEP** لـ **L03** المتأخرة اليوم".
+* توست نجاح: "تم تحديث الحالة"، فشل: "تعذّر حفظ التغييرات. أعد المحاولة".
+* تلميح: "اسحب البطاقة لتغيير الحالة في كانبان".
+
+---
+
+## 15) خارطة الطريق (MVP → +1)
+
+* **MVP:** Hub (Table/Kanban/Calendar/Map)، Preview، Saved Views، Bulk، Ticket Detail (Tabs)، SLA أساسي، تكامل القنوات/العارض/الإصدارات.
+* **+1:** توقع تجاوز SLA (ML)، توصية Assignee، قوالب ردود ذكية، توليد حِزم تقارير.
+
+---
+
+**جاهز للتحويل إلى Wireframes/Hi-Fi وتنفيذ الواجهات البرمجية.**
+
+---
+
+## 🔄 تحديثات مطلوبة (Patch v1.1)
+
+### 1) الفلترة والبحث حسب **المخططات والطبقات (Sheets & Layers)**
+
+* **أماكن الإضافة:** Tickets Hub (كل العروض)، Project Home، Sheet Viewer.
+* **Facets جديدة في Tickets Hub:**
+
+  * **Sheet**: Combobox قابل للبحث (دعم متعدد الاختيار). يظهر (اسم الورقة، التخصص، المستوى، الـRev، وعدّاد الدبابيس).
+  * **Layer**: ARCH / STR / MEP / FIRE / Annotations (متعدد). يعكس طبقات العرض عند الانتقال لـMap/Viewer.
+* **Map View (داخل Hub):**
+
+  * **Sheet Selector (إلزامي)** أعلى الخريطة؛ عند اختيار ورقة يتم تحميل **جميع الدبابيس** الخاصة بها مع الفلاتر.
+  * **Show All Pins**: تبديل لإظهار دبابيس بلا تذاكر.
+  * **Layer Toggles**: تظهر أعلى الخريطة لتفعيل/تعطيل الطبقات أثناء الاستعراض.
+* **Project Home:**
+
+  * عند فتح بطاقة ورقة يتم فتح **Pins Explorer** مع فلاتر: Status/Type/Assignee/Reporter/CreatedBy + Layers.
+* **Sheet Viewer:**
+
+  * تبويب **Pins** يتضمن **Filters Bar** (Sheet=مقفلة على الحالية، Layers، Status، Type، Person).
+
+**واجهات مضافة/محدّثة**
+
+```
+GET /sheets?project_id=PRJ-1&search=L03
+→ [{ sheet_id, name, discipline, level, rev, pins_count }]
+
+GET /sheets/{sheet_id}/pins?status=&type=&assignee=&reporter=&created_by=&layers=ARCH,MEP&bbox=&limit=&cursor=
+→ { items:[{ pin_id, xy_mm, status, type, assignee, ticket_id? }], next_cursor? }
+```
+
+**معايير قبول**
+
+* إسناد/تغيير Sheet أو Layer يحدّث النتائج ≤ **700ms**.
+* تزامن حالة Layer بين Hub/Map وViewer عند الانتقال بالرابط العميق.
+
+---
+
+### 2) **لوح زمني يساري** عند الضغط على دبوس (Pin Activity Timeline – Left Drawer)
+
+* **أماكن الظهور:** Sheet Viewer، Tickets Hub (Map View)، Channel Thread Preview.
+* **فتح اللوح:** نقرة واحدة على دبوس ⇒ يظهر **Left Drawer** بعرض 360–420px.
+* **المحتوى:**
+
+  1. **ملخص الدبوس**: Sheet/Rev/Level/Grid + الحالة الكليّة + عدّاد التذاكر المرتبطة.
+  2. **التذاكر المرتبطة**: قائمة مختصرة (Title/Type/Status/Priority/Assignee/SLA) مع روابط مباشرة.
+  3. **الخط الزمني** (Grouped by Date):
+
+     * Created Ticket, Status Changed, Priority Changed, SLA Updated, Message Posted (Channel/Slack), Pin Moved (Rev Remap), Attachment Added.
+  4. **MiniMap**: موضع الدبوس الحالي + اختيار إظهار مواقع سابقة إن تغيّر عبر الإصدارات.
+  5. **أزرار سريعة**: New Ticket on this Pin، Open in Channel، Open Ticket، Export History (CSV/PDF).
+* **عناصر UI:** شارات نوع/حالة، أيقونات أحداث، Tooltips للوقت المطلق والمحلي.
+* **إتاحة (A11y):** قابل للوصول بالكيبورد، `Esc` لإغلاق اللوح.
+
+**واجهات مضافة**
+
+```
+GET /pins/{pin_id}/history
+→ [
+  { "event_id":"E-1","timestamp":"2025-10-19T09:30:00Z","user":{"id":"u_1","name":"سارة"},"action":"status_changed","context":{"ticket_id":"TCK-0231","from":"Open","to":"In Review"},"sheet_rev":"RevC" },
+  { "event_id":"E-2","timestamp":"2025-10-19T11:10:00Z","user":{"id":"u_1"},"action":"message_posted","context":{"ticket_id":"TCK-0231","message_id":"M-99211","channel_id":"CH-MEP-L03-NCR"} }
+]
+
+GET /tickets/{id}/timeline  // يُستخدم للربط العكسي وإعادة استخدام الأحداث
+```
+
+**معايير قبول**
+
+* فتح اللوح وعرض أول 50 حدث ≤ **400ms** (Cache + Pagination للأقدم).
+* أي تحديث على تذكرة مرتبطة يظهر في اللوح خلال ≤ **1s** (WebSocket push).
+
+**ملاحظات تنفيذية**
+
+* يفضَّل تخزين نسخة ملخّصة من آخر 5 أحداث لكل دبوس في Cache لتأمين فتح فوري.
+* الحفاظ على تناسق الاتجاه: **Left Drawer** (وفق طلب العميل) بدل Right.
