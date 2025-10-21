@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { CreateTicketModal } from "@/components/create-ticket-modal";
 
 type Tool = "pan" | "zoom-in" | "zoom-out" | "pin" | "ruler";
 
@@ -54,6 +55,7 @@ export default function SheetViewer() {
   const [tempPin, setTempPin] = useState<TempPin | null>(null);
   const [crosshairPosition, setCrosshairPosition] = useState({ x: 0, y: 0 });
   const [showCrosshair, setShowCrosshair] = useState(false);
+  const [showTicketModal, setShowTicketModal] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
 
@@ -165,23 +167,34 @@ export default function SheetViewer() {
   
   const handleConfirmPin = useCallback(() => {
     if (tempPin) {
+      // Open ticket modal immediately
+      setShowTicketModal(true);
+    }
+  }, [tempPin]);
+  
+  const handleCancelPin = useCallback(() => {
+    setTempPin(null);
+  }, []);
+  
+  const handleTicketSubmit = useCallback((ticketData: any) => {
+    if (tempPin) {
+      // Create pin and ticket together
       const newPin: Pin = {
         id: `pin-${Date.now()}`,
         x: tempPin.x,
         y: tempPin.y,
         type: "generic",
-        title: `Pin ${pins.length + 1}`,
+        title: ticketData.title,
         status: "open",
       };
       setPins([...pins, newPin]);
       setTempPin(null);
-      // TODO: Open ticket creation modal
+      setShowTicketModal(false);
+      
+      // TODO: Save to API
+      console.log("Creating pin and ticket:", { pin: newPin, ticket: ticketData });
     }
   }, [tempPin, pins]);
-  
-  const handleCancelPin = useCallback(() => {
-    setTempPin(null);
-  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -516,6 +529,17 @@ export default function SheetViewer() {
           </ScrollArea>
         </div>
       </div>
+
+      {/* Create Ticket Modal */}
+      {tempPin && (
+        <CreateTicketModal
+          open={showTicketModal}
+          onOpenChange={setShowTicketModal}
+          pinPosition={tempPin}
+          drawingId={plan.id}
+          onSubmit={handleTicketSubmit}
+        />
+      )}
     </div>
   );
 }
