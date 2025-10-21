@@ -324,6 +324,7 @@ export const tickets = pgTable("tickets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
+  type: varchar("type", { length: 50 }).notNull().default("issue"), // "rfi", "issue", "clash", "change_request", "observation", "safety", "quality"
   pinId: varchar("pin_id").references(() => pins.id, { onDelete: "set null" }), // Nullable - ticket can exist without pin
   drawingId: varchar("drawing_id").notNull().references(() => drawings.id),
   disciplineId: varchar("discipline_id").notNull().references(() => disciplines.id),
