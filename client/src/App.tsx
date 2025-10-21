@@ -18,6 +18,13 @@ function Router() {
 
   return (
     <Switch>
+      {/* Public routes (only need access code) */}
+      <Route path="/sheets/:id" component={SheetViewer} />
+      <Route path="/sheet-viewer/:id" component={SheetViewer} />
+      <Route path="/plans" component={PlansManagement} />
+      <Route path="/ingest-plans" component={IngestPlansPage} />
+      
+      {/* Authenticated routes (need OIDC login) */}
       {isLoading || !isAuthenticated ? (
         <Route path="/" component={Landing} />
       ) : (
@@ -27,9 +34,6 @@ function Router() {
           <Route path="/threads" component={Home} />
           <Route path="/starred" component={Home} />
           <Route path="/drawings" component={Home} />
-          <Route path="/plans" component={PlansManagement} />
-          <Route path="/sheets/:id" component={SheetViewer} />
-          <Route path="/ingest-plans" component={IngestPlansPage} />
           <Route path="/channel/:id" component={Home} />
           <Route path="/dm/:userId" component={Home} />
           <Route path="/settings" component={Home} />
