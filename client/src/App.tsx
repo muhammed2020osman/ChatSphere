@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
+import IngestPlansPage from "@/pages/ingest-plans";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -24,6 +25,7 @@ function Router() {
           <Route path="/threads" component={Home} />
           <Route path="/starred" component={Home} />
           <Route path="/drawings" component={Home} />
+          <Route path="/ingest-plans" component={IngestPlansPage} />
           <Route path="/channel/:id" component={Home} />
           <Route path="/dm/:userId" component={Home} />
           <Route path="/settings" component={Home} />
