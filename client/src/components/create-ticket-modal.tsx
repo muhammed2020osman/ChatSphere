@@ -34,6 +34,7 @@ import { insertTicketSchema, type Discipline, type User } from "@shared/schema";
 const ticketFormSchema = insertTicketSchema.extend({
   title: z.string().min(3, "العنوان يجب أن يكون 3 أحرف على الأقل"),
   description: z.string().optional(),
+  type: z.enum(["rfi", "issue", "clash", "change_request", "observation", "safety", "quality"]),
   disciplineId: z.string().min(1, "يجب اختيار الـ Discipline"),
   priority: z.enum(["low", "medium", "high"]),
   assignedTo: z.string().optional(),
@@ -72,6 +73,7 @@ export function CreateTicketModal({
     defaultValues: {
       title: "",
       description: "",
+      type: "issue",
       disciplineId: "",
       priority: "medium",
       assignedTo: "",
@@ -140,6 +142,52 @@ export function CreateTicketModal({
                       data-testid="textarea-ticket-description"
                     />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Ticket Type */}
+            <FormField
+              control={form.control}
+              name="type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>نوع التذكرة *</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                    data-testid="select-ticket-type"
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر نوع التذكرة" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="rfi" data-testid="option-type-rfi">
+                        RFI - طلب معلومات
+                      </SelectItem>
+                      <SelectItem value="issue" data-testid="option-type-issue">
+                        مشكلة فنية (Issue)
+                      </SelectItem>
+                      <SelectItem value="clash" data-testid="option-type-clash">
+                        تعارض (Clash)
+                      </SelectItem>
+                      <SelectItem value="change_request" data-testid="option-type-change-request">
+                        طلب تغيير (Change Request)
+                      </SelectItem>
+                      <SelectItem value="observation" data-testid="option-type-observation">
+                        ملاحظة (Observation)
+                      </SelectItem>
+                      <SelectItem value="safety" data-testid="option-type-safety">
+                        سلامة (Safety)
+                      </SelectItem>
+                      <SelectItem value="quality" data-testid="option-type-quality">
+                        جودة (Quality)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
