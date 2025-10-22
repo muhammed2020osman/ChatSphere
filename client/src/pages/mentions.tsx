@@ -18,7 +18,9 @@ export default function MentionsPage() {
 
   const markAsReadMutation = useMutation({
     mutationFn: async (notificationId: string) => {
-      return await apiRequest("PATCH", `/api/notifications/${notificationId}/read`);
+      return await apiRequest(`/api/notifications/${notificationId}/read`, {
+        method: "PATCH",
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });

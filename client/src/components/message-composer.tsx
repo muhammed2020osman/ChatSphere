@@ -55,10 +55,16 @@ export function MessageComposer({
       if (channelId) {
         payload.channelId = channelId;
         payload.threadParentId = threadParentId;
-        return await apiRequest("POST", "/api/messages", payload);
+        return await apiRequest("/api/messages", {
+          method: "POST",
+          body: payload,
+        });
       } else if (recipientId) {
         payload.toUserId = recipientId;
-        return await apiRequest("POST", "/api/direct-messages", payload);
+        return await apiRequest("/api/direct-messages", {
+          method: "POST",
+          body: payload,
+        });
       }
     },
     onSuccess: () => {
@@ -116,7 +122,9 @@ export function MessageComposer({
       setIsUploading(true);
 
       // Get upload URL
-      const uploadResponse = await (await apiRequest("POST", "/api/objects/upload")).json() as { uploadURL: string };
+      const uploadResponse = await apiRequest<{ uploadURL: string }>("/api/objects/upload", {
+        method: "POST",
+      });
 
       // Upload file
       await fetch(uploadResponse.uploadURL, {
@@ -128,10 +136,13 @@ export function MessageComposer({
       });
 
       // Set ACL policy
-      const aclResponse = await (await apiRequest("PUT", "/api/attachments", {
-        attachmentURL: uploadResponse.uploadURL,
-        fileName: file.name,
-      })).json() as { objectPath: string };
+      const aclResponse = await apiRequest<{ objectPath: string }>("/api/attachments", {
+        method: "PUT",
+        body: {
+          attachmentURL: uploadResponse.uploadURL,
+          fileName: file.name,
+        },
+      });
 
       setAttachmentUrl(aclResponse.objectPath);
       setAttachmentName(file.name);

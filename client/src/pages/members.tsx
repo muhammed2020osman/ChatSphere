@@ -43,7 +43,10 @@ export default function Members() {
 
   const updateRoleMutation = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
-      return await apiRequest("PATCH", `/api/users/${userId}/role`, { role });
+      return await apiRequest(`/api/users/${userId}/role`, {
+        method: "PATCH",
+        body: { role },
+      });
     },
     onSuccess: () => {
       toast({
@@ -63,7 +66,9 @@ export default function Members() {
 
   const deleteUserMutation = useMutation({
     mutationFn: async (userId: string) => {
-      return await apiRequest("DELETE", `/api/users/${userId}`);
+      return await apiRequest(`/api/users/${userId}`, {
+        method: "DELETE",
+      });
     },
     onSuccess: () => {
       toast({

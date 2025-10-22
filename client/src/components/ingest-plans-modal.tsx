@@ -68,7 +68,7 @@ export function IngestPlansModal() {
     mutationFn: async (data: DrawingFormData) => {
       return await apiRequest<{ id: number }>("/api/drawings", {
         method: "POST",
-        body: JSON.stringify(data),
+        body: data,
       });
     },
     onError: (error: any) => {

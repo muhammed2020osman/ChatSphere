@@ -38,9 +38,12 @@ export function DrawingViewerDialog({ drawingId, open, onOpenChange }: DrawingVi
 
   const reviewMutation = useMutation({
     mutationFn: async ({ revisionId, status, notes }: { revisionId: string; status: string; notes?: string }) => {
-      await apiRequest("PATCH", `/api/revisions/${revisionId}/status`, {
-        status,
-        reviewNotes: notes || undefined,
+      await apiRequest(`/api/revisions/${revisionId}/status`, {
+        method: "PATCH",
+        body: {
+          status,
+          reviewNotes: notes || undefined,
+        },
       });
     },
     onSuccess: () => {

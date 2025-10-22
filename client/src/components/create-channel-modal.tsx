@@ -31,7 +31,10 @@ export function CreateChannelModal({ open, onOpenChange }: CreateChannelModalPro
 
   const createChannelMutation = useMutation({
     mutationFn: async (data: { name: string; description: string; isPrivate: boolean }) => {
-      return await apiRequest("POST", "/api/channels", data);
+      return await apiRequest("/api/channels", {
+        method: "POST",
+        body: data,
+      });
     },
     onSuccess: (channel: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/channels"] });

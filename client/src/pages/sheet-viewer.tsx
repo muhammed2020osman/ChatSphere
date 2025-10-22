@@ -432,7 +432,10 @@ export default function SheetViewer() {
       type: string;
       data: DrawingShape[];
     }) => {
-      return await apiRequest('POST', '/api/layers', layerData);
+      return await apiRequest('/api/layers', {
+        method: 'POST',
+        body: layerData,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/drawings', id, 'layers'] });

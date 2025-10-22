@@ -58,9 +58,13 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
   const toggleStarMutation = useMutation({
     mutationFn: async () => {
       if (starredStatus?.isStarred) {
-        return await apiRequest("DELETE", `/api/messages/${message.id}/star`);
+        return await apiRequest(`/api/messages/${message.id}/star`, {
+          method: "DELETE",
+        });
       } else {
-        return await apiRequest("POST", `/api/messages/${message.id}/star`);
+        return await apiRequest(`/api/messages/${message.id}/star`, {
+          method: "POST",
+        });
       }
     },
     onSuccess: () => {
@@ -78,9 +82,12 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
 
   const addReactionMutation = useMutation({
     mutationFn: async (icon: string) => {
-      return await apiRequest("POST", "/api/reactions", {
-        messageId: message.id,
-        icon,
+      return await apiRequest("/api/reactions", {
+        method: "POST",
+        body: {
+          messageId: message.id,
+          icon,
+        },
       });
     },
     onSuccess: () => {
@@ -97,7 +104,9 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
 
   const removeReactionMutation = useMutation({
     mutationFn: async (icon: string) => {
-      return await apiRequest("DELETE", `/api/reactions/${message.id}/${icon}`);
+      return await apiRequest(`/api/reactions/${message.id}/${icon}`, {
+        method: "DELETE",
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/messages", message.id, "reactions"] });
@@ -125,7 +134,10 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
 
   const editMessageMutation = useMutation({
     mutationFn: async (content: string) => {
-      return await apiRequest("PATCH", `/api/messages/${message.id}`, { content });
+      return await apiRequest(`/api/messages/${message.id}`, {
+        method: "PATCH",
+        body: { content },
+      });
     },
     onSuccess: () => {
       setIsEditing(false);
@@ -146,7 +158,9 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
 
   const deleteMessageMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("DELETE", `/api/messages/${message.id}`);
+      return await apiRequest(`/api/messages/${message.id}`, {
+        method: "DELETE",
+      });
     },
     onSuccess: () => {
       toast({
