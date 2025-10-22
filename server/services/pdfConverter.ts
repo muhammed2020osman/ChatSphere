@@ -46,9 +46,10 @@ export async function convertPDFToImage(
     const renderContext = {
       canvasContext: context as any,
       viewport: viewport,
+      background: 'white',
     };
 
-    await page.render(renderContext).promise;
+    await page.render(renderContext as any).promise;
 
     // Convert canvas to PNG buffer
     const imageBuffer = canvas.toBuffer('image/png');

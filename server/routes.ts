@@ -10,6 +10,7 @@ import { setupAuth, isAuthenticated, getSession } from "./replitAuth";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { extractMentions, findUserIdsByUsernames, requireAdmin } from "./utils";
 import { analyzeEngineeringDrawing } from "./services/gemini";
+import { convertPDFToImage, isPDF } from "./services/pdfConverter";
 import { 
   insertChannelSchema, 
   insertMessageSchema, 
@@ -1107,20 +1108,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const file = req.file;
       const fileName = file.originalname;
-      const fileType = file.mimetype;
+      let fileType = file.mimetype;
       const fileSize = file.size.toString();
-      const fileBuffer = file.buffer;
+      let fileBuffer = file.buffer;
 
-      // PDF files are not supported for AI analysis (Gemini Vision only supports images)
-      if (fileType === 'application/pdf') {
-        return res.status(400).json({ 
-          message: "PDF files are not yet supported. Please upload PNG or JPG images of your drawings." 
-        });
+      // Handle PDF files - convert to PNG for AI analysis
+      let isPdfFile = false;
+      let pdfUrl = '';
+      
+      if (fileType === 'application/pdf' || isPDF(fileBuffer)) {
+        console.log('PDF detected - converting to PNG for AI analysis...');
+        isPdfFile = true;
+        
+        try {
+          // Convert PDF to PNG
+          const pdfConversionResult = await convertPDFToImage(fileBuffer);
+          console.log(`PDF converted: ${pdfConversionResult.width}x${pdfConversionResult.height}, ${pdfConversionResult.pageCount} pages`);
+          
+          // Save original PDF first
+          const timestamp = Date.now();
+          const pdfFileName = `${drawingId}_${revisionNo}_${timestamp}.pdf`;
+          
+          const objectStorageService = new ObjectStorageService();
+          const privateObjectDir = objectStorageService.getPrivateObjectDir();
+          const pdfPath = `${privateObjectDir}/drawings/${pdfFileName}`;
+          
+          const pathWithoutLeadingSlash = pdfPath.startsWith('/') ? pdfPath.slice(1) : pdfPath;
+          const pdfParts = pathWithoutLeadingSlash.split('/');
+          const pdfBucketName = pdfParts[0];
+          const pdfObjectName = pdfParts.slice(1).join('/');
+          
+          const pdfBucket = objectStorageClient.bucket(pdfBucketName);
+          const pdfBlob = pdfBucket.file(pdfObjectName);
+          
+          // Upload PDF
+          await pdfBlob.save(fileBuffer, {
+            metadata: { contentType: 'application/pdf' },
+          });
+          await pdfBlob.makePublic();
+          pdfUrl = `https://storage.googleapis.com/${pdfBucketName}/${pdfObjectName}`;
+          console.log('Original PDF saved:', pdfUrl);
+          
+          // Use converted PNG for AI analysis
+          fileBuffer = pdfConversionResult.imageBuffer;
+          fileType = pdfConversionResult.mimeType;
+        } catch (pdfError) {
+          console.error('Failed to convert PDF:', pdfError);
+          return res.status(400).json({ 
+            message: "Failed to process PDF file. Please ensure it's a valid PDF or try uploading as PNG/JPG." 
+          });
+        }
       }
 
-      // Generate unique file name
+      // Generate unique file name for the image (PNG if converted from PDF)
       const timestamp = Date.now();
-      const fileExtension = fileName.split('.').pop();
+      const fileExtension = isPdfFile ? 'png' : fileName.split('.').pop();
       const uniqueFileName = `${drawingId}_${revisionNo}_${timestamp}.${fileExtension}`;
 
       // Upload to Object Storage using the service
