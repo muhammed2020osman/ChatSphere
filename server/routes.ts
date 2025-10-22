@@ -1040,6 +1040,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "sheetNo is required" });
       }
       
+      // Check if drawing with this sheetNo already exists
+      const existingDrawing = await storage.getDrawingBySheetNo(drawingData.sheetNo);
+      
+      if (existingDrawing) {
+        // If it exists without revisions (draft), reuse it
+        const revisions = await storage.getDrawingRevisions(existingDrawing.id);
+        if (revisions.length === 0) {
+          console.log(`Reusing existing draft drawing with sheet_no: ${drawingData.sheetNo}`);
+          return res.json(existingDrawing);
+        } else {
+          // If it has revisions, it's already uploaded - return error
+          return res.status(409).json({ 
+            message: "مخطط بهذا الرقم موجود بالفعل",
+            existingDrawingId: existingDrawing.id 
+          });
+        }
+      }
+      
       const drawing = await storage.createDrawing(drawingData);
       res.json(drawing);
     } catch (error) {

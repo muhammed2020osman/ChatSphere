@@ -879,6 +879,15 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
+  async getDrawingBySheetNo(sheetNo: string): Promise<Drawing | undefined> {
+    const [drawing] = await db
+      .select()
+      .from(drawings)
+      .where(eq(drawings.sheetNo, sheetNo))
+      .limit(1);
+    return drawing;
+  }
+
   async createDrawing(drawingData: InsertDrawing): Promise<Drawing> {
     const [drawing] = await db
       .insert(drawings)
