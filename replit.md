@@ -5,10 +5,15 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
 
 ## Recent Updates
 **October 22, 2025 - Phase 6: Upload Flow Fixes & AI Display Enhancement (Completed)**
-- ✅ **Fixed Duplicate Drawing Bug**: Prevented duplicate drawing creation on retry
-  - Added `createdDrawingId` state tracking to reuse existing drawing
-  - No more "duplicate key" errors when upload fails and user retries
-  - Clean state reset when starting new upload session
+- ✅ **Fixed Duplicate Drawing Bug**: Complete solution for duplicate prevention
+  - Added `createdDrawingId` state tracking (frontend session-level)
+  - Added `getDrawingBySheetNo()` storage method (backend database-level)
+  - Backend now checks for existing drawing before creation:
+    - If exists without revisions (draft) → reuses it
+    - If exists with revisions → returns 409 error with clear message
+    - If doesn't exist → creates new one
+  - Cleaned database from orphaned draft drawings
+  - No more "duplicate key" errors!
 - ✅ **Enhanced Upload Response**: Complete AI analysis data in response
   - Returns: `drawingId`, `revisionId`, `pageCount`, `extractedText`, `aiAnalysis`
   - AI analysis includes: title, titleBlock (discipline, floor), elements, dimensions, summary
