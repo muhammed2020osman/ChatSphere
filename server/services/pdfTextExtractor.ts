@@ -1,3 +1,5 @@
+import { PDFParse } from 'pdf-parse';
+
 export interface PDFTextContent {
   text: string;
   numPages: number;
@@ -25,18 +27,33 @@ export interface PDFTextContent {
  */
 export async function extractPDFText(pdfBuffer: Buffer): Promise<PDFTextContent> {
   try {
-    // Dynamic import for pdf-parse (CommonJS module)
-    const pdfParse = (await import('pdf-parse')).default;
-    const data = await pdfParse(pdfBuffer);
+    // Use pdf-parse v2 API
+    const parser = new PDFParse({ data: pdfBuffer });
+    const result = await parser.getText();
+    const infoResult = await parser.getInfo();
     
     // Extract structured information from text
-    const text = data.text;
+    const text = result.text;
     const metadata = extractStructuredData(text);
     
+    // Get number of pages from result.pages array
+    const numPages = (result as any).pages?.length || 1;
+    
+    // pdf-parse v2 InfoResult has 'info' property containing the metadata
+    const pdfInfo = (infoResult as any).info || {};
+    
     return {
-      text: data.text,
-      numPages: data.numpages,
-      info: data.info || {},
+      text: result.text,
+      numPages: numPages,
+      info: {
+        Title: pdfInfo.Title,
+        Author: pdfInfo.Author,
+        Subject: pdfInfo.Subject,
+        Creator: pdfInfo.Creator,
+        Producer: pdfInfo.Producer,
+        CreationDate: pdfInfo.CreationDate,
+        ModDate: pdfInfo.ModDate,
+      },
       metadata,
     };
   } catch (error) {
@@ -114,16 +131,13 @@ function extractStructuredData(text: string): PDFTextContent['metadata'] {
  */
 export async function extractPageText(pdfBuffer: Buffer, pageNumber: number): Promise<string> {
   try {
-    // Dynamic import for pdf-parse (CommonJS module)
-    const pdfParse = (await import('pdf-parse')).default;
-    const data = await pdfParse(pdfBuffer, {
-      max: pageNumber,
-    });
+    // Use pdf-parse v2 API - extract all text (v2 doesn't support page-specific extraction in the same way)
+    const parser = new PDFParse({ data: pdfBuffer });
+    const result = await parser.getText();
     
-    // pdf-parse doesn't support single page extraction directly
-    // This extracts up to the specified page
-    // For true per-page extraction, we'd need a more advanced library
-    return data.text;
+    // pdf-parse v2 doesn't support single page extraction directly
+    // This extracts all pages - for true per-page extraction, we'd need a more advanced library
+    return result.text;
   } catch (error) {
     console.error(`Error extracting page ${pageNumber} text:`, error);
     throw new Error(`Failed to extract page text: ${error instanceof Error ? error.message : 'Unknown error'}`);
