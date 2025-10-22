@@ -10,7 +10,8 @@ import { setupAuth, isAuthenticated, getSession } from "./replitAuth";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { extractMentions, findUserIdsByUsernames, requireAdmin } from "./utils";
 import { analyzeEngineeringDrawing } from "./services/gemini";
-import { convertPDFToImage, isPDF } from "./services/pdfConverter";
+import { convertPDFToImage, convertPDFPagesToImages, isPDF } from "./services/pdfConverter";
+import { extractPDFText } from "./services/pdfTextExtractor";
 import { 
   insertChannelSchema, 
   insertMessageSchema, 
@@ -1095,7 +1096,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Upload and analyze drawing file
+  // Upload and analyze drawing file with multi-page PDF support
   app.post('/api/drawings/:id/upload', isAuthenticated, upload.single('file'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -1122,72 +1123,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const fileSize = file.size.toString();
       let fileBuffer = file.buffer;
 
-      // Handle PDF files - convert to PNG for AI analysis
+      // Setup object storage
+      const objectStorageService = new ObjectStorageService();
+      const privateObjectDir = objectStorageService.getPrivateObjectDir();
+      const timestamp = Date.now();
+
+      // Handle PDF files - multi-page support
       let isPdfFile = false;
       let pdfUrl = '';
+      let pageResults: any[] = [];
+      let extractedTextData: any = null;
       
       if (fileType === 'application/pdf' || isPDF(fileBuffer)) {
-        console.log('PDF detected - converting to PNG for AI analysis...');
+        console.log('Multi-page PDF detected - processing...');
         isPdfFile = true;
         
         try {
-          // Convert PDF to PNG
-          const pdfConversionResult = await convertPDFToImage(fileBuffer);
-          console.log(`PDF converted: ${pdfConversionResult.width}x${pdfConversionResult.height}, ${pdfConversionResult.pageCount} pages`);
+          // Step 1: Extract text from entire PDF
+          console.log('Step 1: Extracting text from PDF...');
+          extractedTextData = await extractPDFText(fileBuffer);
+          console.log(`Text extracted from ${extractedTextData.numPages} pages. Metadata:`, extractedTextData.metadata);
           
-          // Save original PDF first
-          const timestamp = Date.now();
+          // Step 2: Convert all PDF pages to PNG images
+          console.log('Step 2: Converting all PDF pages to images...');
+          const pdfConversionResults = await convertPDFPagesToImages(fileBuffer);
+          console.log(`Converted ${pdfConversionResults.length} pages`);
+          
+          // Step 3: Save original PDF
+          console.log('Step 3: Saving original PDF...');
           const pdfFileName = `${drawingId}_${revisionNo}_${timestamp}.pdf`;
-          
-          const objectStorageService = new ObjectStorageService();
-          const privateObjectDir = objectStorageService.getPrivateObjectDir();
           const pdfPath = `${privateObjectDir}/drawings/${pdfFileName}`;
-          
-          const pathWithoutLeadingSlash = pdfPath.startsWith('/') ? pdfPath.slice(1) : pdfPath;
-          const pdfParts = pathWithoutLeadingSlash.split('/');
+          const pdfPathWithoutLeadingSlash = pdfPath.startsWith('/') ? pdfPath.slice(1) : pdfPath;
+          const pdfParts = pdfPathWithoutLeadingSlash.split('/');
           const pdfBucketName = pdfParts[0];
           const pdfObjectName = pdfParts.slice(1).join('/');
           
           const pdfBucket = objectStorageClient.bucket(pdfBucketName);
           const pdfBlob = pdfBucket.file(pdfObjectName);
           
-          // Upload PDF
           await pdfBlob.save(fileBuffer, {
             metadata: { contentType: 'application/pdf' },
           });
           
-          // Generate signed URL (valid for 7 days)
           const [pdfSignedUrl] = await pdfBlob.getSignedUrl({
             action: 'read',
-            expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+            expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
           });
           pdfUrl = pdfSignedUrl;
-          console.log('Original PDF saved with signed URL');
+          console.log('Original PDF saved');
           
-          // Use converted PNG for AI analysis
-          fileBuffer = pdfConversionResult.imageBuffer;
-          fileType = pdfConversionResult.mimeType;
+          // Step 4: Process each page - upload images and analyze with AI
+          console.log('Step 4: Processing individual pages...');
+          for (let pageIndex = 0; pageIndex < pdfConversionResults.length; pageIndex++) {
+            const pageResult = pdfConversionResults[pageIndex];
+            const pageNumber = pageIndex + 1;
+            
+            console.log(`Processing page ${pageNumber}/${pdfConversionResults.length}...`);
+            
+            // Upload page image
+            const pageImageFileName = `${drawingId}_${revisionNo}_p${pageNumber}_${timestamp}.png`;
+            const pageImagePath = `${privateObjectDir}/drawings/${pageImageFileName}`;
+            const pageImagePathWithoutSlash = pageImagePath.startsWith('/') ? pageImagePath.slice(1) : pageImagePath;
+            const pageImageParts = pageImagePathWithoutSlash.split('/');
+            const pageImageBucketName = pageImageParts[0];
+            const pageImageObjectName = pageImageParts.slice(1).join('/');
+            
+            const pageImageBucket = objectStorageClient.bucket(pageImageBucketName);
+            const pageImageBlob = pageImageBucket.file(pageImageObjectName);
+            
+            await pageImageBlob.save(pageResult.imageBuffer, {
+              metadata: { contentType: 'image/png' },
+            });
+            
+            const [pageImageUrl] = await pageImageBlob.getSignedUrl({
+              action: 'read',
+              expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
+            });
+            
+            // Analyze page with Gemini AI
+            let pageAiData = null;
+            try {
+              console.log(`Analyzing page ${pageNumber} with Gemini AI...`);
+              pageAiData = await analyzeEngineeringDrawing(pageResult.imageBuffer, 'image/png');
+              console.log(`Page ${pageNumber} AI analysis completed`);
+            } catch (aiError) {
+              console.error(`AI analysis failed for page ${pageNumber} (continuing):`, aiError);
+            }
+            
+            pageResults.push({
+              pageNumber,
+              imageUrl: pageImageUrl,
+              width: pageResult.width.toString(),
+              height: pageResult.height.toString(),
+              aiExtractedData: pageAiData,
+            });
+          }
+          
+          // Use first page for revision thumbnail
+          fileBuffer = pdfConversionResults[0].imageBuffer;
+          fileType = 'image/png';
+          
         } catch (pdfError) {
-          console.error('Failed to convert PDF:', pdfError);
+          console.error('Failed to process PDF:', pdfError);
           return res.status(400).json({ 
             message: "Failed to process PDF file. Please ensure it's a valid PDF or try uploading as PNG/JPG." 
           });
         }
+      } else {
+        // Single image file (PNG/JPG)
+        console.log('Single image file detected');
+        
+        // Analyze with Gemini AI
+        let aiData = null;
+        try {
+          console.log('Analyzing image with Gemini AI...');
+          aiData = await analyzeEngineeringDrawing(fileBuffer, fileType);
+          console.log('AI analysis completed');
+        } catch (aiError) {
+          console.error('AI analysis failed (continuing):', aiError);
+        }
+        
+        // Create single page result
+        pageResults.push({
+          pageNumber: 1,
+          imageUrl: '', // Will be set after upload
+          aiExtractedData: aiData,
+        });
       }
 
-      // Generate unique file name for the image (PNG if converted from PDF)
-      const timestamp = Date.now();
+      // Upload main thumbnail image
       const fileExtension = isPdfFile ? 'png' : fileName.split('.').pop();
       const uniqueFileName = `${drawingId}_${revisionNo}_${timestamp}.${fileExtension}`;
-
-      // Upload to Object Storage using the service
-      const objectStorageService = new ObjectStorageService();
-      const privateObjectDir = objectStorageService.getPrivateObjectDir();
-
-      // Parse the object directory path correctly
       const objectPath = `${privateObjectDir}/drawings/${uniqueFileName}`;
-      
-      // Remove leading slash and split
       const pathWithoutLeadingSlash = objectPath.startsWith('/') ? objectPath.slice(1) : objectPath;
       const parts = pathWithoutLeadingSlash.split('/');
       
@@ -1197,56 +1264,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const bucketName = parts[0];
       const objectName = parts.slice(1).join('/');
-
       const bucket = objectStorageClient.bucket(bucketName);
       const blob = bucket.file(objectName);
 
-      // Upload file to storage
       await blob.save(fileBuffer, {
-        metadata: {
-          contentType: fileType,
-        },
+        metadata: { contentType: fileType },
       });
 
-      // Generate signed URL (valid for 7 days)
-      const [fileUrl] = await blob.getSignedUrl({
+      const [thumbnailUrl] = await blob.getSignedUrl({
         action: 'read',
-        expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+        expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
       });
-
-      // Analyze drawing with Gemini AI (only for image files)
-      console.log('Analyzing drawing with Gemini AI...');
-      let aiExtractedData = null;
-      try {
-        aiExtractedData = await analyzeEngineeringDrawing(fileBuffer, fileType);
-        console.log('AI analysis completed:', aiExtractedData);
-      } catch (aiError) {
-        console.error('AI analysis failed (continuing without it):', aiError);
-        // Continue without AI data if analysis fails
-      }
 
       // Create drawing revision
       const revisionData = {
         drawingId,
         revisionNo,
         status: 'draft' as const,
-        fileUrl,
+        fileUrl: isPdfFile ? pdfUrl : thumbnailUrl, // PDF URL or image URL
+        thumbnailUrl,
         fileName,
-        fileType,
+        fileType: isPdfFile ? 'application/pdf' : fileType,
         fileSize,
-        aiExtractedData: aiExtractedData as any,
+        aiExtractedData: extractedTextData as any, // Store PDF text extraction in revision
         uploadedBy: userId,
       };
 
       const revision = await storage.createDrawingRevision(revisionData);
       
+      // Create drawing pages in database
+      if (pageResults.length > 0) {
+        console.log(`Creating ${pageResults.length} drawing pages in database...`);
+        for (const pageData of pageResults) {
+          // Update image URL for single image uploads
+          if (!isPdfFile) {
+            pageData.imageUrl = thumbnailUrl;
+          }
+          
+          await storage.createDrawingPage({
+            revisionId: revision.id,
+            pageNumber: pageData.pageNumber.toString(),
+            imageUrl: pageData.imageUrl,
+            thumbnailUrl: pageData.imageUrl, // Same as image for now
+            extractedText: extractedTextData?.text || null,
+            extractedMetadata: extractedTextData?.metadata || null,
+            aiExtractedData: pageData.aiExtractedData,
+            width: pageData.width || null,
+            height: pageData.height || null,
+          });
+        }
+        console.log('All pages created successfully');
+      }
+      
       res.json({
         revision,
-        aiExtractedData,
+        pageCount: pageResults.length,
+        extractedTextData: extractedTextData?.metadata || null,
       });
     } catch (error) {
       console.error("Error uploading drawing:", error);
       res.status(500).json({ message: "Failed to upload drawing" });
+    }
+  });
+
+  // Drawing Pages routes
+  app.get('/api/revisions/:id/pages', isAuthenticated, async (req, res) => {
+    try {
+      const pages = await storage.getRevisionPages(req.params.id);
+      res.json(pages);
+    } catch (error) {
+      console.error("Error fetching revision pages:", error);
+      res.status(500).json({ message: "Failed to fetch revision pages" });
+    }
+  });
+
+  app.get('/api/pages/:id', isAuthenticated, async (req, res) => {
+    try {
+      const page = await storage.getDrawingPage(req.params.id);
+      if (!page) {
+        return res.status(404).json({ message: "Page not found" });
+      }
+      res.json(page);
+    } catch (error) {
+      console.error("Error fetching page:", error);
+      res.status(500).json({ message: "Failed to fetch page" });
     }
   });
 

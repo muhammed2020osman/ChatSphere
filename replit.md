@@ -4,30 +4,36 @@
 A modern Slack clone built as a Progressive Web App (PWA) with real-time messaging, channels, direct messages, and user presence tracking. This project also incorporates an Engineering Drawings Management System for technical document control in construction/engineering, including version control, approval workflows, and a Sheet Viewer. The platform aims to provide a comprehensive collaboration and document management solution.
 
 ## Recent Updates
+**October 22, 2025 - Phase 5: Multi-Page PDF Processing & Hybrid AI Analysis (In Progress)**
+- ✅ **Multi-Page PDF Support**: Complete pipeline for processing PDFs with multiple pages
+  - `convertPDFPagesToImages()` processes ALL pages (not just first page)
+  - Each page converted to PNG at 300 DPI with metadata
+  - Original PDF saved alongside individual page images
+  - Database schema: `drawing_pages` table with page-specific data
+- ✅ **PDF Text Extraction Service**: Hybrid approach combining text + vision AI
+  - Service: `server/services/pdfTextExtractor.ts` using pdf-parse library
+  - Extracts: sheet numbers (A-101, S-202), room names, dimensions, notes
+  - Metadata extraction: Arabic/English room keywords, measurement patterns
+  - Complements Gemini Vision AI analysis for maximum accuracy
+- ✅ **Enhanced Upload Endpoint**: POST `/api/drawings/:id/upload`
+  - Step 1: Extract text from entire PDF (all pages)
+  - Step 2: Convert all pages to PNG images
+  - Step 3: Upload original PDF with signed URL
+  - Step 4: Process each page individually (upload image + AI analysis)
+  - Creates drawing_pages records for each page with extracted metadata
+  - Returns page count and extracted text metadata
+- ✅ **Drawing Pages API Endpoints**:
+  - GET `/api/revisions/:id/pages` - Fetch all pages for a revision
+  - GET `/api/pages/:id` - Fetch single page details
+  - Storage methods: createDrawingPage, getRevisionPages, getDrawingPage
+- 📝 **Next**: Update Upload Modal UI to show pages, Sheet Viewer sidebar for page navigation
+
 **October 22, 2025 - Phase 4: PDF Support & Signed URLs (Completed)**
 - ✅ **PDF File Support**: Full PDF upload and processing pipeline
-  - Accepts PDF files (most common format for engineering drawings)
-  - Converts first page to PNG at 300 DPI using pdf-lib + canvas
-  - Saves both original PDF and converted PNG
-  - PDF converter service: `server/services/pdfConverter.ts`
-  - Automatic format detection via magic number check
 - ✅ **System Dependencies**: Installed canvas rendering libraries
-  - libuuid, pixman, cairo, pango for Node.js canvas support
-  - Enables high-quality PDF to PNG conversion
-- ✅ **Signed URLs for Object Storage**: Enhanced security
-  - Replaced public URLs with time-limited signed URLs (7-day expiration)
-  - Complies with Google Cloud Storage Public Access Prevention policy
-  - Files stored privately with secure access via signed URLs
+- ✅ **Signed URLs for Object Storage**: Enhanced security (7-day expiration)
 - ✅ **API Schema Alignment**: Fixed sheetNo/drawingNo mismatch
-  - POST `/api/drawings` now properly handles `sheetNo` field
-  - Backwards compatible with `drawingNo` for legacy support
-  - Proper validation and error messages
 - ✅ **Plans Management Page**: Browser-tested and functional
-  - Grid/List view toggles working
-  - Filters (Building, Floor, Discipline, Status) operational
-  - Upload modal with file dropzone
-  - Real-time drawing list from database
-- 📝 **Next**: Natural language search implementation, version history warnings, ruler tool
 
 **October 21, 2025 - Phase 3: AI Integration & Real Backend (Completed)**
 - ✅ **Google Gemini 2.5 Pro Integration**: Complete AI analysis service for engineering drawings

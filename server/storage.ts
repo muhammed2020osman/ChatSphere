@@ -9,6 +9,7 @@ import {
   starredMessages,
   drawings,
   drawingRevisions,
+  drawingPages,
   disciplines,
   floors,
   layers,
@@ -37,6 +38,8 @@ import {
   type InsertDrawing,
   type DrawingRevision,
   type InsertDrawingRevision,
+  type DrawingPage,
+  type InsertDrawingPage,
   type DrawingWithDetails,
   type Discipline,
   type Floor,
@@ -110,6 +113,11 @@ export interface IStorage {
   createDrawingRevision(revision: InsertDrawingRevision): Promise<DrawingRevision>;
   getDrawingRevisions(drawingId: string): Promise<DrawingRevision[]>;
   updateRevisionStatus(revisionId: string, status: string, reviewedBy: string, reviewNotes?: string): Promise<DrawingRevision>;
+  
+  // Drawing Pages operations
+  createDrawingPage(page: InsertDrawingPage): Promise<DrawingPage>;
+  getRevisionPages(revisionId: string): Promise<DrawingPage[]>;
+  getDrawingPage(pageId: string): Promise<DrawingPage | undefined>;
   
   // Layers operations
   getDrawingLayers(drawingId: string): Promise<Layer[]>;
@@ -421,7 +429,7 @@ export class DatabaseStorage implements IStorage {
     const userCreatedThreadIds = userCreatedThreads.map(t => t.id);
 
     // Combine both: threads user created + threads user replied to
-    const allThreadIds = [...new Set([...userCreatedThreadIds, ...threadParentIds])];
+    const allThreadIds = Array.from(new Set([...userCreatedThreadIds, ...threadParentIds]));
 
     if (allThreadIds.length === 0) {
       return [];
@@ -945,6 +953,31 @@ export class DatabaseStorage implements IStorage {
     }
 
     return revision;
+  }
+
+  // Drawing Pages operations
+  async createDrawingPage(pageData: InsertDrawingPage): Promise<DrawingPage> {
+    const [page] = await db
+      .insert(drawingPages)
+      .values(pageData)
+      .returning();
+    return page;
+  }
+
+  async getRevisionPages(revisionId: string): Promise<DrawingPage[]> {
+    return await db
+      .select()
+      .from(drawingPages)
+      .where(eq(drawingPages.revisionId, revisionId))
+      .orderBy(drawingPages.pageNumber);
+  }
+
+  async getDrawingPage(pageId: string): Promise<DrawingPage | undefined> {
+    const [page] = await db
+      .select()
+      .from(drawingPages)
+      .where(eq(drawingPages.id, pageId));
+    return page;
   }
 
   // Layers operations

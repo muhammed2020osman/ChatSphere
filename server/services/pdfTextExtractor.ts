@@ -1,6 +1,3 @@
-// @ts-ignore - pdf-parse has module resolution issues
-const pdfParse = require('pdf-parse');
-
 export interface PDFTextContent {
   text: string;
   numPages: number;
@@ -28,6 +25,8 @@ export interface PDFTextContent {
  */
 export async function extractPDFText(pdfBuffer: Buffer): Promise<PDFTextContent> {
   try {
+    // Dynamic import for pdf-parse (CommonJS module)
+    const pdfParse = (await import('pdf-parse')).default;
     const data = await pdfParse(pdfBuffer);
     
     // Extract structured information from text
@@ -115,6 +114,8 @@ function extractStructuredData(text: string): PDFTextContent['metadata'] {
  */
 export async function extractPageText(pdfBuffer: Buffer, pageNumber: number): Promise<string> {
   try {
+    // Dynamic import for pdf-parse (CommonJS module)
+    const pdfParse = (await import('pdf-parse')).default;
     const data = await pdfParse(pdfBuffer, {
       max: pageNumber,
     });
