@@ -1316,10 +1316,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('All pages created successfully');
       }
       
+      // Compile AI data from all pages
+      const aiAnalysis = pageResults.length > 0 && pageResults[0].aiExtractedData 
+        ? pageResults[0].aiExtractedData 
+        : null;
+
       res.json({
-        revision,
+        drawingId: drawing.id,
+        revisionId: revision.id,
         pageCount: pageResults.length,
-        extractedTextData: extractedTextData?.metadata || null,
+        extractedText: {
+          fullText: extractedTextData?.text || "",
+          metadata: extractedTextData?.metadata || {
+            sheetNumbers: [],
+            roomNames: [],
+            dimensions: [],
+          },
+        },
+        aiAnalysis: aiAnalysis,
       });
     } catch (error) {
       console.error("Error uploading drawing:", error);

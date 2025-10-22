@@ -33,6 +33,26 @@ interface UploadResponse {
       dimensions: string[];
     };
   };
+  aiAnalysis?: {
+    title?: string;
+    titleBlock?: {
+      discipline?: string;
+      floor?: string;
+      sheetNumber?: string;
+      projectName?: string;
+    };
+    layers?: string[];
+    elements?: Array<{
+      type: string;
+      description: string;
+      quantity?: number;
+    }>;
+    dimensions?: Array<{
+      value: string;
+      unit?: string;
+    }>;
+    summary?: string;
+  };
 }
 
 interface DrawingPage {
@@ -62,6 +82,7 @@ export function IngestPlansModal() {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadResult, setUploadResult] = useState<UploadResponse | null>(null);
   const [drawingPages, setDrawingPages] = useState<DrawingPage[]>([]);
+  const [createdDrawingId, setCreatedDrawingId] = useState<number | null>(null);
 
   // Create drawing mutation
   const createDrawingMutation = useMutation({
@@ -190,12 +211,18 @@ export function IngestPlansModal() {
     setCurrentStep("processing");
 
     try {
-      // Step 1: Create drawing
-      const drawing = await createDrawingMutation.mutateAsync(formData);
+      let drawingId = createdDrawingId;
+      
+      // Step 1: Create drawing only if not already created
+      if (!drawingId) {
+        const drawing = await createDrawingMutation.mutateAsync(formData);
+        drawingId = drawing.id;
+        setCreatedDrawingId(drawingId);
+      }
       
       // Step 2: Upload file
       await uploadFileMutation.mutateAsync({
-        drawingId: drawing.id,
+        drawingId,
         file: selectedFile,
       });
     } catch (error) {
@@ -220,6 +247,7 @@ export function IngestPlansModal() {
     setUploadResult(null);
     setDrawingPages([]);
     setHasConflict(false);
+    setCreatedDrawingId(null);
   };
 
   const handleCancelAndClose = () => {
@@ -230,6 +258,7 @@ export function IngestPlansModal() {
     setCurrentStep("upload");
     setSelectedFile(null);
     setHasConflict(false);
+    setCreatedDrawingId(null);
   };
 
   const handleViewDrawing = () => {
@@ -588,11 +617,72 @@ export function IngestPlansModal() {
                   </div>
                 )}
 
+                {/* AI Analysis Results */}
+                {uploadResult.aiAnalysis && (
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold text-foreground">
+                      تحليل AI - المعلومات المستخرجة
+                    </h3>
+                    
+                    {uploadResult.aiAnalysis.summary && (
+                      <div className="p-4 rounded-lg border bg-card">
+                        <p className="font-medium text-muted-foreground mb-2">الملخص</p>
+                        <p className="text-sm text-foreground">{uploadResult.aiAnalysis.summary}</p>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      {uploadResult.aiAnalysis.titleBlock?.discipline && (
+                        <div className="p-3 rounded-lg border bg-card">
+                          <p className="font-medium text-muted-foreground mb-1">التخصص</p>
+                          <p className="text-foreground">{uploadResult.aiAnalysis.titleBlock.discipline}</p>
+                        </div>
+                      )}
+                      {uploadResult.aiAnalysis.titleBlock?.floor && (
+                        <div className="p-3 rounded-lg border bg-card">
+                          <p className="font-medium text-muted-foreground mb-1">الطابق</p>
+                          <p className="text-foreground">{uploadResult.aiAnalysis.titleBlock.floor}</p>
+                        </div>
+                      )}
+                      {uploadResult.aiAnalysis.titleBlock?.sheetNumber && (
+                        <div className="p-3 rounded-lg border bg-card">
+                          <p className="font-medium text-muted-foreground mb-1">رقم اللوحة</p>
+                          <p className="text-foreground">{uploadResult.aiAnalysis.titleBlock.sheetNumber}</p>
+                        </div>
+                      )}
+                      {uploadResult.aiAnalysis.title && (
+                        <div className="p-3 rounded-lg border bg-card">
+                          <p className="font-medium text-muted-foreground mb-1">العنوان</p>
+                          <p className="text-foreground">{uploadResult.aiAnalysis.title}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {uploadResult.aiAnalysis.elements && uploadResult.aiAnalysis.elements.length > 0 && (
+                      <div className="p-3 rounded-lg border bg-card">
+                        <p className="font-medium text-muted-foreground mb-2">العناصر المكتشفة</p>
+                        <div className="flex flex-wrap gap-2">
+                          {uploadResult.aiAnalysis.elements.slice(0, 8).map((element, idx) => (
+                            <span key={idx} className="px-2 py-1 text-xs rounded-md bg-muted text-foreground">
+                              {element.type}: {element.quantity || 1}
+                            </span>
+                          ))}
+                          {uploadResult.aiAnalysis.elements.length > 8 && (
+                            <span className="px-2 py-1 text-xs rounded-md bg-muted text-muted-foreground">
+                              +{uploadResult.aiAnalysis.elements.length - 8} المزيد
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Extracted Text Preview */}
                 {uploadResult.extractedText && uploadResult.extractedText.metadata && (
                   <div className="space-y-3">
                     <h3 className="text-lg font-semibold text-foreground">
-                      البيانات المستخرجة
+                      استخراج النصوص من PDF
                     </h3>
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       {uploadResult.extractedText.metadata.sheetNumbers.length > 0 && (
