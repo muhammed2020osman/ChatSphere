@@ -4,35 +4,32 @@
 A modern Slack clone built as a Progressive Web App (PWA) with real-time messaging, channels, direct messages, and user presence tracking. This project also incorporates an Engineering Drawings Management System for technical document control in construction/engineering, including version control, approval workflows, and a Sheet Viewer. The platform aims to provide a comprehensive collaboration and document management solution.
 
 ## Recent Updates
+**October 22, 2025 - Phase 6: Upload Flow Fixes & AI Display Enhancement (Completed)**
+- ✅ **Fixed Duplicate Drawing Bug**: Prevented duplicate drawing creation on retry
+  - Added `createdDrawingId` state tracking to reuse existing drawing
+  - No more "duplicate key" errors when upload fails and user retries
+  - Clean state reset when starting new upload session
+- ✅ **Enhanced Upload Response**: Complete AI analysis data in response
+  - Returns: `drawingId`, `revisionId`, `pageCount`, `extractedText`, `aiAnalysis`
+  - AI analysis includes: title, titleBlock (discipline, floor), elements, dimensions, summary
+  - PDF text extraction separate: sheet numbers, room names, dimensions
+- ✅ **Improved Success Screen**: Beautiful display of extracted data
+  - **AI Analysis Section**: Shows summary, discipline, floor, sheet number, title, detected elements
+  - **PDF Text Extraction Section**: Shows extracted sheet numbers and room names
+  - **Visual Elements Display**: Cards showing building elements with quantities
+  - Clean separation between AI-detected and text-extracted data
+- ✅ **Fixed API Request Function**: Corrected `apiRequest` signature
+  - Changed from `(method, url, data)` to `(url, options)` pattern
+  - Handles empty responses (204/205) safely
+  - Updated 11 files across the codebase
+
 **October 22, 2025 - Phase 5: Multi-Page PDF Processing & Hybrid AI Analysis (Completed)**
 - ✅ **Multi-Page PDF Support**: Complete end-to-end pipeline
-  - `convertPDFPagesToImages()` processes ALL pages at 300 DPI
-  - Each page stored with thumbnail, extracted text, and AI analysis
-  - Database schema: `drawing_pages` table with comprehensive metadata
 - ✅ **PDF Text Extraction Service**: Hybrid AI approach
-  - Service: `server/services/pdfTextExtractor.ts` using pdf-parse library
-  - Extracts: sheet numbers, room names, dimensions, notes
-  - Supports Arabic/English keywords and measurement patterns
-  - Complements Gemini Vision AI for maximum accuracy
-- ✅ **Enhanced Upload Endpoint**: POST `/api/drawings/:id/upload`
-  - Complete workflow: Text extraction → Page conversion → Upload → AI analysis
-  - Creates drawing_pages records for each page with metadata
-  - Returns page count and extracted text metadata
-- ✅ **Drawing Pages API Endpoints**:
-  - GET `/api/revisions/:id/pages` - Fetch all pages for a revision
-  - GET `/api/pages/:id` - Fetch single page details
-- ✅ **Upload Modal - Real API Integration**:
-  - Replaced mock data with actual API calls
-  - Displays multi-page thumbnails after upload
-  - Shows extracted metadata (sheet numbers, room names)
-  - Proper error handling and toast notifications
-- ✅ **Sheet Viewer - Page Navigation**:
-  - Added "Pages" tab in sidebar (alongside Layers/Pins)
-  - Thumbnail grid for page navigation
-  - Click thumbnail to switch pages
-  - Dynamic image display based on current page
-  - Page counter badge showing current position
-- 📝 **Next**: Enhanced AI analysis combining PDF text + Vision, comprehensive testing
+- ✅ **Enhanced Upload Endpoint**: Complete workflow
+- ✅ **Drawing Pages API Endpoints**: Full CRUD operations
+- ✅ **Upload Modal - Real API Integration**: Live data display
+- ✅ **Sheet Viewer - Page Navigation**: Multi-page support
 
 **October 22, 2025 - Phase 4: PDF Support & Signed URLs (Completed)**
 - ✅ **PDF File Support**: Full PDF upload and processing pipeline
