@@ -168,6 +168,24 @@ export const drawingRevisions = pgTable("drawing_revisions", {
   uniqueDrawingRevision: uniqueIndex("unique_drawing_revision").on(table.drawingId, table.revisionNo),
 }));
 
+// Drawing Pages table - Individual pages within multi-page PDF revisions
+export const drawingPages = pgTable("drawing_pages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  revisionId: varchar("revision_id").notNull().references(() => drawingRevisions.id, { onDelete: "cascade" }),
+  pageNumber: varchar("page_number", { length: 10 }).notNull(), // 1, 2, 3, etc.
+  imageUrl: varchar("image_url").notNull(), // PNG image URL for this page
+  thumbnailUrl: varchar("thumbnail_url"), // Smaller thumbnail for navigation
+  extractedText: text("extracted_text"), // Text extracted from this page via pdf-parse
+  extractedMetadata: jsonb("extracted_metadata"), // Metadata from text extraction (sheet numbers, room names, dimensions)
+  aiExtractedData: jsonb("ai_extracted_data"), // AI-extracted data from Gemini Vision for this page
+  width: varchar("width", { length: 20 }), // Image width in pixels
+  height: varchar("height", { length: 20 }), // Image height in pixels
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  // Ensure unique page number per revision
+  uniqueRevisionPage: uniqueIndex("unique_revision_page").on(table.revisionId, table.pageNumber),
+}));
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   channelsCreated: many(channels),
@@ -278,7 +296,7 @@ export const drawingsRelations = relations(drawings, ({ one, many }) => ({
   revisions: many(drawingRevisions),
 }));
 
-export const drawingRevisionsRelations = relations(drawingRevisions, ({ one }) => ({
+export const drawingRevisionsRelations = relations(drawingRevisions, ({ one, many }) => ({
   drawing: one(drawings, {
     fields: [drawingRevisions.drawingId],
     references: [drawings.id],
@@ -292,6 +310,14 @@ export const drawingRevisionsRelations = relations(drawingRevisions, ({ one }) =
     fields: [drawingRevisions.reviewedBy],
     references: [users.id],
     relationName: "revisionReviewer",
+  }),
+  pages: many(drawingPages),
+}));
+
+export const drawingPagesRelations = relations(drawingPages, ({ one }) => ({
+  revision: one(drawingRevisions, {
+    fields: [drawingPages.revisionId],
+    references: [drawingRevisions.id],
   }),
 }));
 
@@ -525,6 +551,13 @@ export const insertDrawingRevisionSchema = createInsertSchema(drawingRevisions).
 });
 export type InsertDrawingRevision = z.infer<typeof insertDrawingRevisionSchema>;
 export type DrawingRevision = typeof drawingRevisions.$inferSelect;
+
+export const insertDrawingPageSchema = createInsertSchema(drawingPages).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertDrawingPage = z.infer<typeof insertDrawingPageSchema>;
+export type DrawingPage = typeof drawingPages.$inferSelect;
 
 // Extended types for frontend use
 export type DrawingWithDetails = Drawing & {
