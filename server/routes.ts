@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage } from "http";
 import { parse as parseCookie } from "cookie";
+import { randomUUID } from "crypto";
 import passport from "passport";
 import multer from "multer";
 import { storage } from "./storage";
@@ -1119,20 +1120,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const drawingId = req.params.id;
-      const { revisionNo } = req.body;
+      let { revisionNo } = req.body;
       
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
-      }
-
-      if (!revisionNo) {
-        return res.status(400).json({ message: "Revision number is required" });
       }
 
       // Verify drawing exists
       const drawing = await storage.getDrawing(drawingId);
       if (!drawing) {
         return res.status(404).json({ message: "Drawing not found" });
+      }
+
+      // Auto-generate revision number if not provided
+      if (!revisionNo) {
+        const existingRevisions = await storage.getDrawingRevisions(drawingId);
+        const revisionCount = existingRevisions.length + 1;
+        // Use randomUUID() to ensure uniqueness even in concurrent scenarios
+        const uniqueId = randomUUID().split('-')[0]; // First segment of UUID (8 chars)
+        revisionNo = `R${revisionCount}_${uniqueId}`;
+        console.log(`Auto-generated revision number: ${revisionNo}`);
       }
 
       const file = req.file;
