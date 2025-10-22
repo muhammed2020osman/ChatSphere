@@ -1025,10 +1025,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/drawings', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      
+      // Map drawingNo to sheetNo if provided (for backwards compatibility)
+      const { drawingNo, ...rest } = req.body;
       const drawingData = {
-        ...req.body,
+        ...rest,
+        sheetNo: rest.sheetNo || drawingNo, // Use sheetNo if provided, fallback to drawingNo
         createdBy: userId,
       };
+      
+      // Validate required fields
+      if (!drawingData.sheetNo) {
+        return res.status(400).json({ message: "sheetNo is required" });
+      }
+      
       const drawing = await storage.createDrawing(drawingData);
       res.json(drawing);
     } catch (error) {
@@ -1145,9 +1155,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await pdfBlob.save(fileBuffer, {
             metadata: { contentType: 'application/pdf' },
           });
-          await pdfBlob.makePublic();
-          pdfUrl = `https://storage.googleapis.com/${pdfBucketName}/${pdfObjectName}`;
-          console.log('Original PDF saved:', pdfUrl);
+          
+          // Generate signed URL (valid for 7 days)
+          const [pdfSignedUrl] = await pdfBlob.getSignedUrl({
+            action: 'read',
+            expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+          });
+          pdfUrl = pdfSignedUrl;
+          console.log('Original PDF saved with signed URL');
           
           // Use converted PNG for AI analysis
           fileBuffer = pdfConversionResult.imageBuffer;
@@ -1193,11 +1208,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
-      // Make file publicly readable
-      await blob.makePublic();
-
-      // Get public URL
-      const fileUrl = `https://storage.googleapis.com/${bucketName}/${objectName}`;
+      // Generate signed URL (valid for 7 days)
+      const [fileUrl] = await blob.getSignedUrl({
+        action: 'read',
+        expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
 
       // Analyze drawing with Gemini AI (only for image files)
       console.log('Analyzing drawing with Gemini AI...');
