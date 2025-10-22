@@ -4,6 +4,31 @@
 A modern Slack clone built as a Progressive Web App (PWA) with real-time messaging, channels, direct messages, and user presence tracking. This project also incorporates an Engineering Drawings Management System for technical document control in construction/engineering, including version control, approval workflows, and a Sheet Viewer. The platform aims to provide a comprehensive collaboration and document management solution.
 
 ## Recent Updates
+**October 22, 2025 - Phase 4: PDF Support & Signed URLs (Completed)**
+- ✅ **PDF File Support**: Full PDF upload and processing pipeline
+  - Accepts PDF files (most common format for engineering drawings)
+  - Converts first page to PNG at 300 DPI using pdf-lib + canvas
+  - Saves both original PDF and converted PNG
+  - PDF converter service: `server/services/pdfConverter.ts`
+  - Automatic format detection via magic number check
+- ✅ **System Dependencies**: Installed canvas rendering libraries
+  - libuuid, pixman, cairo, pango for Node.js canvas support
+  - Enables high-quality PDF to PNG conversion
+- ✅ **Signed URLs for Object Storage**: Enhanced security
+  - Replaced public URLs with time-limited signed URLs (7-day expiration)
+  - Complies with Google Cloud Storage Public Access Prevention policy
+  - Files stored privately with secure access via signed URLs
+- ✅ **API Schema Alignment**: Fixed sheetNo/drawingNo mismatch
+  - POST `/api/drawings` now properly handles `sheetNo` field
+  - Backwards compatible with `drawingNo` for legacy support
+  - Proper validation and error messages
+- ✅ **Plans Management Page**: Browser-tested and functional
+  - Grid/List view toggles working
+  - Filters (Building, Floor, Discipline, Status) operational
+  - Upload modal with file dropzone
+  - Real-time drawing list from database
+- 📝 **Next**: Natural language search implementation, version history warnings, ruler tool
+
 **October 21, 2025 - Phase 3: AI Integration & Real Backend (Completed)**
 - ✅ **Google Gemini 2.5 Pro Integration**: Complete AI analysis service for engineering drawings
   - Extracts title block info (sheet no, revision, discipline, etc.)
@@ -13,8 +38,8 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
 - ✅ **Database Schema Enhanced**: Added `thumbnailUrl` and `aiExtractedData` (JSONB) to drawing_revisions
 - ✅ **File Upload Endpoint**: POST `/api/drawings/:id/upload`
   - Uploads to Replit Object Storage with proper path parsing
-  - Rejects PDFs (Gemini Vision requires images only)
-  - Performs AI analysis on images (PNG/JPG)
+  - Supports both PDF and image formats (PNG/JPG)
+  - Performs AI analysis via Gemini Vision API
   - Creates drawing revision with extracted metadata
   - Graceful fallback if AI analysis fails
 - ✅ **Sheet Viewer Backend Integration**:
@@ -24,7 +49,6 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
   - Resolves discipline/floor names from lookup dictionaries
   - Shows saved pins and layers from database
 - 🔐 **Security**: GEMINI_API_KEY managed via Replit Secrets
-- 📝 **Next**: Test upload flow, implement Ruler tool, update Plans page
 
 **October 21, 2025 - Phase 2: Pins/Tickets System & Drawing Tools**
 - ✅ Database Schemas: `pins`, `tickets`, `layers` tables
