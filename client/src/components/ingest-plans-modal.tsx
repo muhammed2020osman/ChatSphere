@@ -1,43 +1,152 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Upload, AlertCircle, CheckCircle2, FileText, X } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Upload, AlertCircle, CheckCircle2, FileText, X, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 type Step = "upload" | "review" | "processing" | "success";
 
-interface ExtractedData {
-  planCode: string;
-  planTitle: string;
-  building: string;
-  floor: string;
-  discipline: string;
-  thumbnail?: string;
+interface DrawingFormData {
+  sheetNo: string;
+  title: string;
+  buildingId: number;
+  floorId: number;
+  disciplineId: number;
+}
+
+interface UploadResponse {
+  drawingId: number;
+  revisionId: number;
+  pageCount: number;
+  extractedText: {
+    fullText: string;
+    metadata: {
+      sheetNumbers: string[];
+      roomNames: string[];
+      dimensions: string[];
+    };
+  };
+}
+
+interface DrawingPage {
+  id: number;
+  pageNumber: number;
+  imageUrl: string;
+  extractedText: string | null;
+  aiExtractedData: any;
 }
 
 export function IngestPlansModal() {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
   const [currentStep, setCurrentStep] = useState<Step>("upload");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [extractedData, setExtractedData] = useState<ExtractedData>({
-    planCode: "A-101",
-    planTitle: "Ground Floor Plan",
-    building: "Main Tower",
-    floor: "Ground Floor",
-    discipline: "Architectural",
+  const [formData, setFormData] = useState<DrawingFormData>({
+    sheetNo: "",
+    title: "",
+    buildingId: 1,
+    floorId: 1,
+    disciplineId: 1,
   });
-  const [isMultiPage, setIsMultiPage] = useState(false);
-  const [hasConflict, setHasConflict] = useState(true);
+  const [hasConflict, setHasConflict] = useState(false);
   const [conflictResolution, setConflictResolution] = useState<"version" | "new">("version");
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadResult, setUploadResult] = useState<UploadResponse | null>(null);
+  const [drawingPages, setDrawingPages] = useState<DrawingPage[]>([]);
+
+  // Create drawing mutation
+  const createDrawingMutation = useMutation({
+    mutationFn: async (data: DrawingFormData) => {
+      return await apiRequest<{ id: number }>("/api/drawings", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "خطأ في إنشاء المخطط",
+        description: error.message || "حدث خطأ أثناء إنشاء المخطط",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Upload file mutation
+  const uploadFileMutation = useMutation({
+    mutationFn: async ({ drawingId, file }: { drawingId: number; file: File }) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      const response = await fetch(`/api/drawings/${drawingId}/upload`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Upload failed");
+      }
+
+      return await response.json() as UploadResponse;
+    },
+    onSuccess: async (data) => {
+      setUploadResult(data);
+      
+      // Fetch all pages for this revision
+      const pagesResponse = await fetch(`/api/revisions/${data.revisionId}/pages`, {
+        credentials: "include",
+      });
+      
+      if (pagesResponse.ok) {
+        const pages = await pagesResponse.json();
+        setDrawingPages(pages);
+      }
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/drawings"] });
+      
+      setCurrentStep("success");
+      
+      toast({
+        title: "تم الرفع بنجاح!",
+        description: data.pageCount > 1 
+          ? `تم معالجة ${data.pageCount} صفحات بنجاح`
+          : "تم رفع المخطط بنجاح",
+      });
+    },
+    onError: (error: any) => {
+      setCurrentStep("review");
+      toast({
+        title: "خطأ في الرفع",
+        description: error.message || "حدث خطأ أثناء رفع الملف",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleFileSelect = (file: File) => {
     setSelectedFile(file);
+    
+    // Auto-fill sheet number from filename if possible
+    const filename = file.name.replace(/\.(pdf|png|jpg|jpeg)$/i, "");
+    const sheetMatch = filename.match(/[A-Z]-\d{3}/);
+    
+    setFormData({
+      ...formData,
+      sheetNo: sheetMatch ? sheetMatch[0] : filename,
+      title: filename,
+    });
+    
     setCurrentStep("review");
   };
 
@@ -59,30 +168,60 @@ export function IngestPlansModal() {
     }
   };
 
-  const handleProcess = () => {
+  const handleProcess = async () => {
+    if (!selectedFile) {
+      toast({
+        title: "لا يوجد ملف",
+        description: "يرجى اختيار ملف أولاً",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!formData.sheetNo.trim()) {
+      toast({
+        title: "رمز المخطط مطلوب",
+        description: "يرجى إدخال رمز المخطط",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setCurrentStep("processing");
-    setTimeout(() => {
-      setCurrentStep("success");
-    }, 3000);
+
+    try {
+      // Step 1: Create drawing
+      const drawing = await createDrawingMutation.mutateAsync(formData);
+      
+      // Step 2: Upload file
+      await uploadFileMutation.mutateAsync({
+        drawingId: drawing.id,
+        file: selectedFile,
+      });
+    } catch (error) {
+      console.error("Process error:", error);
+    }
   };
 
-  // حفظ والعودة لصفحة المخططات
   const handleSaveAndClose = () => {
-    // TODO: إضافة API call لحفظ المخطط
-    console.log("Saving plan and closing...", extractedData);
     setLocation("/plans");
   };
 
-  // حفظ وإضافة مخطط جديد
   const handleSaveAndAddMore = () => {
-    // TODO: إضافة API call لحفظ المخطط
-    console.log("Saving plan and adding more...", extractedData);
     setCurrentStep("upload");
     setSelectedFile(null);
+    setFormData({
+      sheetNo: "",
+      title: "",
+      buildingId: 1,
+      floorId: 1,
+      disciplineId: 1,
+    });
+    setUploadResult(null);
+    setDrawingPages([]);
     setHasConflict(false);
   };
 
-  // إلغاء والعودة لصفحة المخططات
   const handleCancelAndClose = () => {
     setLocation("/plans");
   };
@@ -93,11 +232,19 @@ export function IngestPlansModal() {
     setHasConflict(false);
   };
 
+  const handleViewDrawing = () => {
+    if (uploadResult) {
+      setLocation(`/sheet-viewer/${uploadResult.drawingId}`);
+    }
+  };
+
   const steps = [
     { id: "upload", label: "رفع الملفات", icon: Upload, active: currentStep === "upload" },
     { id: "review", label: "المراجعة والتوصيل", icon: FileText, active: currentStep === "review" },
     { id: "processing", label: "المعالجة", icon: AlertCircle, active: currentStep === "processing" || currentStep === "success" },
   ];
+
+  const isPending = createDrawingMutation.isPending || uploadFileMutation.isPending;
 
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-center bg-background/80 backdrop-blur-sm p-4">
@@ -176,7 +323,7 @@ export function IngestPlansModal() {
                         اسحب وأفلت الملفات هنا
                       </p>
                       <p className="text-sm text-muted-foreground mt-1">
-                        الصيغ المدعومة: PDF, IFC, JPG, PNG
+                        الصيغ المدعومة: PDF, JPG, PNG
                       </p>
                     </div>
                   </div>
@@ -184,7 +331,7 @@ export function IngestPlansModal() {
                     onClick={() => {
                       const input = document.createElement("input");
                       input.type = "file";
-                      input.accept = ".pdf,.ifc,.jpg,.jpeg,.png";
+                      input.accept = ".pdf,.jpg,.jpeg,.png";
                       input.onchange = (e) => {
                         const file = (e.target as HTMLInputElement).files?.[0];
                         if (file) handleFileSelect(file);
@@ -207,7 +354,7 @@ export function IngestPlansModal() {
                     مراجعة وتوصيل بيانات المخطط
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    قمنا باستخراج البيانات التالية تلقائياً. يرجى المراجعة والتأكيد.
+                    يرجى مراجعة البيانات والتأكيد
                   </p>
                 </div>
 
@@ -220,7 +367,7 @@ export function IngestPlansModal() {
                     <div className="flex-grow space-y-3">
                       <div className="flex justify-between items-center">
                         <p className="font-semibold text-foreground" data-testid="text-filename">
-                          {selectedFile?.name || "A-101-Architecture-GroundFloor.pdf"}
+                          {selectedFile?.name}
                         </p>
                         <Button
                           variant="ghost"
@@ -235,12 +382,14 @@ export function IngestPlansModal() {
                       {/* Form Fields */}
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="plan-code">رمز المخطط</Label>
+                          <Label htmlFor="plan-code">
+                            رمز المخطط <span className="text-destructive">*</span>
+                          </Label>
                           <Input
                             id="plan-code"
-                            value={extractedData.planCode}
+                            value={formData.sheetNo}
                             onChange={(e) =>
-                              setExtractedData({ ...extractedData, planCode: e.target.value })
+                              setFormData({ ...formData, sheetNo: e.target.value })
                             }
                             data-testid="input-plan-code"
                           />
@@ -249,9 +398,9 @@ export function IngestPlansModal() {
                           <Label htmlFor="plan-title">عنوان المخطط</Label>
                           <Input
                             id="plan-title"
-                            value={extractedData.planTitle}
+                            value={formData.title}
                             onChange={(e) =>
-                              setExtractedData({ ...extractedData, planTitle: e.target.value })
+                              setFormData({ ...formData, title: e.target.value })
                             }
                             data-testid="input-plan-title"
                           />
@@ -261,17 +410,17 @@ export function IngestPlansModal() {
                             المبنى <span className="text-destructive">*</span>
                           </Label>
                           <Select
-                            value={extractedData.building}
+                            value={formData.buildingId.toString()}
                             onValueChange={(value) =>
-                              setExtractedData({ ...extractedData, building: value })
+                              setFormData({ ...formData, buildingId: parseInt(value) })
                             }
                           >
                             <SelectTrigger id="building" data-testid="select-building">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Main Tower">البرج الرئيسي</SelectItem>
-                              <SelectItem value="Annex Building">المبنى الملحق</SelectItem>
+                              <SelectItem value="1">البرج الرئيسي</SelectItem>
+                              <SelectItem value="2">المبنى الملحق</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -280,18 +429,18 @@ export function IngestPlansModal() {
                             الطابق <span className="text-destructive">*</span>
                           </Label>
                           <Select
-                            value={extractedData.floor}
+                            value={formData.floorId.toString()}
                             onValueChange={(value) =>
-                              setExtractedData({ ...extractedData, floor: value })
+                              setFormData({ ...formData, floorId: parseInt(value) })
                             }
                           >
                             <SelectTrigger id="floor" data-testid="select-floor">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Ground Floor">الطابق الأرضي</SelectItem>
-                              <SelectItem value="Level 1">المستوى 1</SelectItem>
-                              <SelectItem value="Level 2">المستوى 2</SelectItem>
+                              <SelectItem value="1">الطابق الأرضي</SelectItem>
+                              <SelectItem value="2">المستوى 1</SelectItem>
+                              <SelectItem value="3">المستوى 2</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -300,43 +449,23 @@ export function IngestPlansModal() {
                             التخصص <span className="text-destructive">*</span>
                           </Label>
                           <Select
-                            value={extractedData.discipline}
+                            value={formData.disciplineId.toString()}
                             onValueChange={(value) =>
-                              setExtractedData({ ...extractedData, discipline: value })
+                              setFormData({ ...formData, disciplineId: parseInt(value) })
                             }
                           >
                             <SelectTrigger id="discipline" data-testid="select-discipline">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Architectural">معماري</SelectItem>
-                              <SelectItem value="Structural">إنشائي</SelectItem>
-                              <SelectItem value="MEP">كهروميكانيك</SelectItem>
+                              <SelectItem value="1">معماري</SelectItem>
+                              <SelectItem value="2">إنشائي</SelectItem>
+                              <SelectItem value="3">كهروميكانيك</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Multi-page PDF Toggle */}
-                  <div className="flex items-center justify-between gap-4 bg-primary/10 px-4 py-3 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-5 w-5 text-primary" />
-                      <div className="flex flex-col">
-                        <p className="text-primary text-sm font-medium">
-                          PDF متعدد الصفحات مكتشف
-                        </p>
-                        <p className="text-primary/80 text-xs">
-                          هل تريد تقسيمه إلى مخطط لكل صفحة؟
-                        </p>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={isMultiPage}
-                      onCheckedChange={setIsMultiPage}
-                      data-testid="switch-multipage"
-                    />
                   </div>
 
                   {/* Conflict Resolution */}
@@ -396,7 +525,9 @@ export function IngestPlansModal() {
                     جاري معالجة الملفات...
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    قد يستغرق هذا بضع لحظات. يرجى عدم إغلاق هذه النافذة.
+                    {selectedFile?.name.toLowerCase().endsWith('.pdf') 
+                      ? "جاري استخراج الصفحات وتحليل المحتوى..."
+                      : "جاري رفع الملف وتحليله..."}
                   </p>
                 </div>
                 <Progress value={66} className="w-full max-w-xs" />
@@ -404,17 +535,87 @@ export function IngestPlansModal() {
             )}
 
             {/* Step 4: Success */}
-            {currentStep === "success" && (
-              <div className="p-8 rounded-lg bg-success/10 border border-success/20 flex flex-col items-center justify-center text-center space-y-4 min-h-[300px]">
-                <CheckCircle2 className="h-16 w-16 text-success" />
-                <div className="space-y-2">
-                  <h2 className="text-xl font-bold text-foreground" data-testid="text-success-title">
-                    المخططات جاهزة!
-                  </h2>
-                  <p className="text-foreground/80">
-                    تم بنجاح! المخططات الجديدة تم إنشاؤها وهي متاحة الآن.
-                  </p>
+            {currentStep === "success" && uploadResult && (
+              <div className="space-y-6">
+                <div className="p-8 rounded-lg bg-success/10 border border-success/20 flex flex-col items-center justify-center text-center space-y-4">
+                  <CheckCircle2 className="h-16 w-16 text-success" />
+                  <div className="space-y-2">
+                    <h2 className="text-xl font-bold text-foreground" data-testid="text-success-title">
+                      المخطط جاهز!
+                    </h2>
+                    <p className="text-foreground/80">
+                      {uploadResult.pageCount > 1
+                        ? `تم معالجة ${uploadResult.pageCount} صفحات بنجاح`
+                        : "تم رفع المخطط بنجاح"}
+                    </p>
+                  </div>
                 </div>
+
+                {/* Multi-page Results */}
+                {drawingPages.length > 1 && (
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold text-foreground">
+                      الصفحات المعالجة ({drawingPages.length})
+                    </h3>
+                    <div className="grid grid-cols-3 gap-3 max-h-[400px] overflow-y-auto">
+                      {drawingPages.map((page) => (
+                        <div
+                          key={page.id}
+                          className="group relative rounded-lg border bg-card overflow-hidden hover-elevate active-elevate-2 cursor-pointer"
+                          onClick={() => setLocation(`/sheet-viewer/${uploadResult.drawingId}?page=${page.pageNumber}`)}
+                          data-testid={`page-thumbnail-${page.pageNumber}`}
+                        >
+                          <div className="aspect-[8.5/11] bg-muted flex items-center justify-center relative">
+                            {page.imageUrl ? (
+                              <img
+                                src={page.imageUrl}
+                                alt={`Page ${page.pageNumber}`}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <ImageIcon className="h-12 w-12 text-muted-foreground" />
+                            )}
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                          </div>
+                          <div className="p-2 border-t">
+                            <p className="text-xs font-medium text-center text-foreground">
+                              صفحة {page.pageNumber}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Extracted Text Preview */}
+                {uploadResult.extractedText && uploadResult.extractedText.metadata && (
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold text-foreground">
+                      البيانات المستخرجة
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      {uploadResult.extractedText.metadata.sheetNumbers.length > 0 && (
+                        <div className="p-3 rounded-lg border bg-card">
+                          <p className="font-medium text-muted-foreground mb-1">أرقام اللوحات</p>
+                          <p className="text-foreground">
+                            {uploadResult.extractedText.metadata.sheetNumbers.slice(0, 3).join(", ")}
+                            {uploadResult.extractedText.metadata.sheetNumbers.length > 3 && "..."}
+                          </p>
+                        </div>
+                      )}
+                      {uploadResult.extractedText.metadata.roomNames.length > 0 && (
+                        <div className="p-3 rounded-lg border bg-card">
+                          <p className="font-medium text-muted-foreground mb-1">الغرف</p>
+                          <p className="text-foreground">
+                            {uploadResult.extractedText.metadata.roomNames.slice(0, 3).join(", ")}
+                            {uploadResult.extractedText.metadata.roomNames.length > 3 && "..."}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -422,26 +623,30 @@ export function IngestPlansModal() {
 
         {/* Footer */}
         <div className="flex justify-end gap-4 p-6 border-t">
-          {/* زر إلغاء موجود دائماً */}
-          <Button
-            variant="outline"
-            onClick={handleCancelAndClose}
-            data-testid="button-cancel"
-          >
-            إلغاء
-          </Button>
-          
-          {/* أزرار خاصة بخطوة المراجعة */}
-          {currentStep === "review" && (
+          {/* Cancel button always visible */}
+          {currentStep !== "success" && (
             <Button
-              onClick={handleProcess}
-              data-testid="button-confirm-process"
+              variant="outline"
+              onClick={handleCancelAndClose}
+              disabled={isPending}
+              data-testid="button-cancel"
             >
-              تأكيد ومعالجة
+              إلغاء
             </Button>
           )}
           
-          {/* أزرار خاصة بخطوة النجاح */}
+          {/* Review step buttons */}
+          {currentStep === "review" && (
+            <Button
+              onClick={handleProcess}
+              disabled={isPending}
+              data-testid="button-confirm-process"
+            >
+              {isPending ? "جاري المعالجة..." : "تأكيد ومعالجة"}
+            </Button>
+          )}
+          
+          {/* Success step buttons */}
           {currentStep === "success" && (
             <>
               <Button
@@ -449,13 +654,20 @@ export function IngestPlansModal() {
                 onClick={handleSaveAndAddMore}
                 data-testid="button-save-add-more"
               >
-                حفظ وإضافة جديد
+                إضافة مخطط جديد
               </Button>
               <Button
+                variant="outline"
                 onClick={handleSaveAndClose}
-                data-testid="button-save-close"
+                data-testid="button-back-to-plans"
               >
-                حفظ
+                العودة للمخططات
+              </Button>
+              <Button
+                onClick={handleViewDrawing}
+                data-testid="button-view-drawing"
+              >
+                عرض المخطط
               </Button>
             </>
           )}

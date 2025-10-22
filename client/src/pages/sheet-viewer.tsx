@@ -24,6 +24,7 @@ import {
   Circle,
   Type,
   Eraser,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -63,12 +64,23 @@ interface DrawingShape {
   position?: { x: number; y: number }; // For text
 }
 
+interface DrawingPage {
+  id: number;
+  pageNumber: number;
+  imageUrl: string | null;
+  extractedText: string | null;
+  aiExtractedData: any;
+}
+
+type SidebarTab = "layers" | "pins" | "pages";
+
 export default function SheetViewer() {
   const { id } = useParams();
   const { toast } = useToast();
   const [activeTool, setActiveTool] = useState<Tool>("pan");
   const [zoom, setZoom] = useState(100);
-  const [showLayers, setShowLayers] = useState(true);
+  const [activeTab, setActiveTab] = useState<SidebarTab>("layers");
+  const [currentPage, setCurrentPage] = useState(1);
   const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
@@ -123,6 +135,12 @@ export default function SheetViewer() {
     queryKey: ['/api/floors'],
   });
 
+  // Fetch drawing pages if there's a latest revision
+  const { data: drawingPages = [], isLoading: pagesLoading } = useQuery<DrawingPage[]>({
+    queryKey: ['/api/revisions', latestRevision?.id, 'pages'],
+    enabled: !!latestRevision?.id,
+  });
+
   // Helper to find discipline/floor names
   const getDisciplineName = (disciplineId?: string | null) => {
     if (!disciplineId) return "Unknown";
@@ -156,6 +174,10 @@ export default function SheetViewer() {
     status: "draft",
     imageUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuClkpxrlywCUB6FBFEpz1MqmUVNsaboO4lQx_daxG5RrVolhPaqKLc_1J3XzZcB9iSKMFSSOldOPQxZvgPKdFjc0-nJQBUa3aeoCD12S1uRft2fh59pBU-YiPmMdPdJdiMdRJjQzebBz4CsQDDxBNLK2i2iaSUbhoAjtgDTjg73Uvbut66h6QqemaISlluWiRUy2DTes7feeGkY0VE4QHA4TOXmuEHcrZiY8V26ujQANak4A_aOpFmjn_Z7W7r97w8jUOoFwCZmOOI",
   };
+
+  // Get current page data and display image
+  const currentPageData = drawingPages.find(p => p.pageNumber === currentPage) || null;
+  const displayImageUrl = currentPageData?.imageUrl || latestRevision?.fileUrl || plan.imageUrl;
 
   // Group layers by discipline
   const layersByDiscipline = layers.reduce((acc, layer) => {
@@ -688,7 +710,7 @@ export default function SheetViewer() {
               }}
             >
               <img
-                src={plan.imageUrl}
+                src={displayImageUrl}
                 alt={plan.title}
                 className="max-w-full h-auto pointer-events-none"
                 data-testid="img-plan-canvas"
@@ -907,26 +929,35 @@ export default function SheetViewer() {
           <div className="flex border-b border-border">
             <button
               className={`flex-1 px-4 py-3 text-sm font-medium ${
-                showLayers ? "border-b-2 border-primary text-primary" : "text-muted-foreground"
+                activeTab === "layers" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"
               }`}
-              onClick={() => setShowLayers(true)}
+              onClick={() => setActiveTab("layers")}
               data-testid="tab-layers"
             >
               Layers
             </button>
             <button
               className={`flex-1 px-4 py-3 text-sm font-medium ${
-                !showLayers ? "border-b-2 border-primary text-primary" : "text-muted-foreground"
+                activeTab === "pins" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"
               }`}
-              onClick={() => setShowLayers(false)}
+              onClick={() => setActiveTab("pins")}
               data-testid="tab-pins"
             >
               Pins ({pins.length})
             </button>
+            <button
+              className={`flex-1 px-4 py-3 text-sm font-medium ${
+                activeTab === "pages" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"
+              }`}
+              onClick={() => setActiveTab("pages")}
+              data-testid="tab-pages"
+            >
+              Pages ({drawingPages.length || 1})
+            </button>
           </div>
 
           <ScrollArea className="flex-1">
-            {showLayers ? (
+            {activeTab === "layers" ? (
               <div className="p-4 space-y-3">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-foreground">Layers by Discipline</h3>
@@ -1000,7 +1031,7 @@ export default function SheetViewer() {
                   })
                 )}
               </div>
-            ) : (
+            ) : activeTab === "pins" ? (
               <div className="p-4 space-y-3">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-foreground">Pins on this Sheet</h3>
@@ -1048,6 +1079,65 @@ export default function SheetViewer() {
                       </div>
                     </Card>
                   ))
+                )}
+              </div>
+            ) : (
+              <div className="p-4 space-y-3">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-foreground">Drawing Pages</h3>
+                  {drawingPages.length > 1 && (
+                    <Badge variant="outline" className="text-xs">
+                      Page {currentPage} of {drawingPages.length}
+                    </Badge>
+                  )}
+                </div>
+                
+                {pagesLoading ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-muted-foreground">Loading pages...</p>
+                  </div>
+                ) : drawingPages.length === 0 ? (
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">Single page drawing</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {drawingPages.map((page) => (
+                      <div
+                        key={page.id}
+                        className={`group relative rounded-md border overflow-hidden cursor-pointer transition-all ${
+                          currentPage === page.pageNumber
+                            ? "border-primary border-2 shadow-md"
+                            : "border-border hover-elevate active-elevate-2"
+                        }`}
+                        onClick={() => setCurrentPage(page.pageNumber)}
+                        data-testid={`page-thumbnail-${page.pageNumber}`}
+                      >
+                        <div className="aspect-[8.5/11] bg-muted flex items-center justify-center relative">
+                          {page.imageUrl ? (
+                            <img
+                              src={page.imageUrl}
+                              alt={`Page ${page.pageNumber}`}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <FileText className="h-8 w-8 text-muted-foreground" />
+                          )}
+                          {currentPage === page.pageNumber && (
+                            <div className="absolute top-1 right-1 bg-primary text-primary-foreground rounded-full p-0.5">
+                              <Check className="h-3 w-3" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-1.5 border-t bg-card text-center">
+                          <p className="text-xs font-medium text-foreground">
+                            Page {page.pageNumber}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             )}
