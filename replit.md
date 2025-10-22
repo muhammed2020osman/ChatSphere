@@ -4,6 +4,13 @@
 A modern Slack clone built as a Progressive Web App (PWA) with real-time messaging, channels, direct messages, and user presence tracking. This project also incorporates an Engineering Drawings Management System for technical document control in construction/engineering, including version control, approval workflows, and a Sheet Viewer. The platform aims to provide a comprehensive collaboration and document management solution.
 
 ## Recent Updates
+**October 22, 2025 - Phase 7: Revision Number Auto-Generation (Completed)**
+- ✅ **Fixed "Revision number is required" Error**: Auto-generates revision numbers
+  - Frontend doesn't send revisionNo → Backend generates it automatically
+  - Pattern: `R1_a1b2c3d4` (counter + UUID for uniqueness)
+  - Prevents race conditions even with concurrent uploads
+  - Uses `randomUUID()` from Node.js crypto module
+
 **October 22, 2025 - Phase 6: Upload Flow Fixes & AI Display Enhancement (Completed)**
 - ✅ **Fixed Duplicate Drawing Bug**: Complete solution for duplicate prevention
   - Added `createdDrawingId` state tracking (frontend session-level)
