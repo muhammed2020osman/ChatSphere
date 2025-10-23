@@ -79,6 +79,7 @@ export default function SheetViewer() {
   const { toast } = useToast();
   const [activeTool, setActiveTool] = useState<Tool>("pan");
   const [zoom, setZoom] = useState(100);
+  const [initialZoomSet, setInitialZoomSet] = useState(false);
   const [activeTab, setActiveTab] = useState<SidebarTab>("layers");
   const [currentPage, setCurrentPage] = useState(1);
   const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
@@ -204,6 +205,52 @@ export default function SheetViewer() {
     mep: "#059669",
     annotations: "#D97706",
   };
+
+  // Reset auto-fit when image changes
+  useEffect(() => {
+    setInitialZoomSet(false);
+    setPanPosition({ x: 0, y: 0 }); // Also reset pan position
+  }, [displayImageUrl]);
+
+  // Auto-fit zoom on initial load
+  useEffect(() => {
+    if (!initialZoomSet && canvasRef.current && imageRef.current && displayImageUrl) {
+      const container = canvasRef.current;
+      const imageContainer = imageRef.current;
+      const img = imageContainer.querySelector('img') as HTMLImageElement;
+      
+      if (!img) return;
+      
+      const handleImageLoad = () => {
+        const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
+        const imageWidth = img.naturalWidth;
+        const imageHeight = img.naturalHeight;
+        
+        if (imageWidth && imageHeight && containerWidth && containerHeight) {
+          // Calculate zoom to fit 80% of container (leave some padding)
+          const widthRatio = (containerWidth * 0.8) / imageWidth;
+          const heightRatio = (containerHeight * 0.8) / imageHeight;
+          const fitRatio = Math.min(widthRatio, heightRatio);
+          const fitZoom = Math.round(fitRatio * 100);
+          
+          // Set zoom to fit, but constrain between 25% and 200%
+          const finalZoom = Math.max(25, Math.min(200, fitZoom));
+          setZoom(finalZoom);
+          setInitialZoomSet(true);
+        }
+      };
+      
+      if (img.complete && img.naturalWidth > 0) {
+        // Image already loaded
+        handleImageLoad();
+      } else {
+        // Wait for image to load
+        img.addEventListener('load', handleImageLoad, { once: true });
+        return () => img.removeEventListener('load', handleImageLoad);
+      }
+    }
+  }, [displayImageUrl, initialZoomSet]);
 
   const handleZoomIn = useCallback(() => {
     setZoom((prev) => Math.min(prev + 25, 400));
