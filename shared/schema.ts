@@ -150,7 +150,7 @@ export const drawings = pgTable("drawings", {
 export const drawingRevisions = pgTable("drawing_revisions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   drawingId: varchar("drawing_id").notNull().references(() => drawings.id, { onDelete: "cascade" }),
-  revisionNo: varchar("revision_no", { length: 10 }).notNull(), // e.g., "A", "B", "C", "0", "1"
+  revisionNo: varchar("revision_no", { length: 50 }).notNull(), // e.g., "A", "B", "C", "0", "1", or auto-generated "R1_abc123de"
   status: varchar("status", { length: 20 }).notNull().default("draft"), // draft, under_review, approved, rejected, superseded
   fileUrl: varchar("file_url").notNull(), // Object storage URL
   thumbnailUrl: varchar("thumbnail_url"), // Thumbnail image URL for preview
