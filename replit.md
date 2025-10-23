@@ -4,6 +4,24 @@
 A modern Slack clone built as a Progressive Web App (PWA) with real-time messaging, channels, direct messages, and user presence tracking. This project also incorporates an Engineering Drawings Management System for technical document control in construction/engineering, including version control, approval workflows, and a Sheet Viewer. The platform aims to provide a comprehensive collaboration and document management solution.
 
 ## Recent Updates
+**October 23, 2025 - Phase 8: Object Storage Signed URL Fix (Completed)**
+- ✅ **Fixed "Cannot sign data without client_email" Error**: Complete solution
+  - Root cause: Using Google Cloud Storage's `blob.getSignedUrl()` directly
+  - Replit Object Storage requires Sidecar API for signing URLs
+  - Exported `signObjectURL()` function from `server/objectStorage.ts`
+  - Replaced all 3 instances of `blob.getSignedUrl()` in upload endpoint:
+    - PDF file signing (line 1196)
+    - Page images signing (line 1228)
+    - Thumbnail signing (line 1306)
+  - New pattern: `signObjectURL({ bucketName, objectName, method: "GET", ttlSec: 7*24*60*60 })`
+  - Uses Replit Sidecar endpoint: `http://127.0.0.1:1106/object-storage/signed-object-url`
+  - All signed URLs now have 7-day expiration (604,800 seconds)
+- ✅ **PDF Text Extractor v2 API Migration**: Fixed pdf-parse integration
+  - Migrated from v1 function-based to v2 class-based API
+  - Pattern: `new PDFParse({ data: buffer })` → `await parser.getText()` → `await parser.getInfo()`
+  - Fixed metadata extraction: `infoResult.info` contains PDF metadata
+  - Fixed page count: `result.pages.length`
+
 **October 22, 2025 - Phase 7: Revision Number Auto-Generation (Completed)**
 - ✅ **Fixed "Revision number is required" Error**: Auto-generates revision numbers
   - Frontend doesn't send revisionNo → Backend generates it automatically
