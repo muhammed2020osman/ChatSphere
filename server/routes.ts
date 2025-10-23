@@ -8,7 +8,7 @@ import passport from "passport";
 import multer from "multer";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, getSession } from "./replitAuth";
-import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
+import { ObjectStorageService, ObjectNotFoundError, objectStorageClient, signObjectURL, parseObjectPath } from "./objectStorage";
 import { extractMentions, findUserIdsByUsernames, requireAdmin } from "./utils";
 import { analyzeEngineeringDrawing } from "./services/gemini";
 import { convertPDFToImage, convertPDFPagesToImages, isPDF } from "./services/pdfConverter";
@@ -1190,9 +1190,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             metadata: { contentType: 'application/pdf' },
           });
           
-          const [pdfSignedUrl] = await pdfBlob.getSignedUrl({
-            action: 'read',
-            expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
+          const pdfSignedUrl = await signObjectURL({
+            bucketName: pdfBucketName,
+            objectName: pdfObjectName,
+            method: "GET",
+            ttlSec: 7 * 24 * 60 * 60, // 7 days
           });
           pdfUrl = pdfSignedUrl;
           console.log('Original PDF saved');
@@ -1220,9 +1222,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               metadata: { contentType: 'image/png' },
             });
             
-            const [pageImageUrl] = await pageImageBlob.getSignedUrl({
-              action: 'read',
-              expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
+            const pageImageUrl = await signObjectURL({
+              bucketName: pageImageBucketName,
+              objectName: pageImageObjectName,
+              method: "GET",
+              ttlSec: 7 * 24 * 60 * 60, // 7 days
             });
             
             // Analyze page with Gemini AI
@@ -1296,9 +1300,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: { contentType: fileType },
       });
 
-      const [thumbnailUrl] = await blob.getSignedUrl({
-        action: 'read',
-        expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
+      const thumbnailUrl = await signObjectURL({
+        bucketName,
+        objectName,
+        method: "GET",
+        ttlSec: 7 * 24 * 60 * 60, // 7 days
       });
 
       // Create drawing revision
