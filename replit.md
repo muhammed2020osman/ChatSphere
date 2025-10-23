@@ -4,6 +4,25 @@
 A modern Slack clone built as a Progressive Web App (PWA) with real-time messaging, channels, direct messages, and user presence tracking. This project also incorporates an Engineering Drawings Management System for technical document control in construction/engineering, including version control, approval workflows, and a Sheet Viewer. The platform aims to provide a comprehensive collaboration and document management solution.
 
 ## Recent Updates
+**October 23, 2025 - Phase 11: Sheet Viewer Auto-Fit Zoom (Completed)**
+- ✅ **Fixed "Tiny Drawing in Center" Bug**: Intelligent auto-fit zoom on load
+  - Root cause: Default 100% zoom made large engineering drawings appear tiny
+  - Solution: Calculate optimal zoom based on viewport dimensions
+  - **Auto-Fit Algorithm**:
+    - Computes container (viewport) dimensions
+    - Gets image natural dimensions from loaded image element
+    - Calculates zoom to fit 80% of viewport (with padding)
+    - Clamps between 25% and 200% to avoid extremes
+  - **Smart Reset Behavior**:
+    - Resets auto-fit flag when `displayImageUrl` changes
+    - Resets pan position to center view
+    - Re-calculates zoom for each page/revision switch
+  - **Handles Edge Cases**:
+    - Waits for image load event if not already loaded
+    - Uses `naturalWidth`/`naturalHeight` for accurate dimensions
+    - Cleanup event listener on unmount
+- 📊 **User Benefit**: Drawings now fill most of the viewport on open, making them immediately readable without manual zoom adjustment
+
 **October 23, 2025 - Phase 10: Success Screen Complete Fields Display (Completed)**
 - ✅ **Always-Visible Fields Architecture**: All expected metadata fields now render persistently
   - Removed conditional rendering at section level - both AI and PDF sections always visible
