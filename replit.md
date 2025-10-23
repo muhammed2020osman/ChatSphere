@@ -4,6 +4,15 @@
 A modern Slack clone built as a Progressive Web App (PWA) with real-time messaging, channels, direct messages, and user presence tracking. This project also incorporates an Engineering Drawings Management System for technical document control in construction/engineering, including version control, approval workflows, and a Sheet Viewer. The platform aims to provide a comprehensive collaboration and document management solution.
 
 ## Recent Updates
+**October 23, 2025 - Phase 9: Database Schema Fix for Auto-Generated Revision Numbers (Completed)**
+- ✅ **Fixed "value too long for type character varying(10)" Error**: Complete solution
+  - Root cause: Auto-generated revision numbers (R1_8f2df9bf) were 11-13 characters but field was varchar(10)
+  - Expanded `revisionNo` field from varchar(10) to varchar(50) in shared/schema.ts
+  - Applied schema change with `npm run db:push` successfully
+  - Pattern: `R{count}_{UUID-8chars}` = 11-13 characters total
+  - Tested end-to-end: PDF upload successful, revision R1_6fdc210e saved to database
+  - System now handles auto-generated revision numbers without errors
+
 **October 23, 2025 - Phase 8: Object Storage Signed URL Fix (Completed)**
 - ✅ **Fixed "Cannot sign data without client_email" Error**: Complete solution
   - Root cause: Using Google Cloud Storage's `blob.getSignedUrl()` directly
