@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Upload, AlertCircle, CheckCircle2, FileText, X, ImageIcon } from "lucide-react";
+import { Upload, AlertCircle, CheckCircle2, FileText, X, ImageIcon, Bot, FileSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -566,16 +566,20 @@ export function IngestPlansModal() {
             {/* Step 4: Success */}
             {currentStep === "success" && uploadResult && (
               <div className="space-y-6">
-                <div className="p-8 rounded-lg bg-success/10 border border-success/20 flex flex-col items-center justify-center text-center space-y-4">
-                  <CheckCircle2 className="h-16 w-16 text-success" />
+                {/* Hero Section */}
+                <div className="p-8 rounded-lg bg-gradient-to-br from-success/10 to-success/5 border border-success/20 flex flex-col items-center justify-center text-center space-y-4">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-success/20 rounded-full blur-2xl"></div>
+                    <CheckCircle2 className="relative h-20 w-20 text-success" />
+                  </div>
                   <div className="space-y-2">
-                    <h2 className="text-xl font-bold text-foreground" data-testid="text-success-title">
-                      المخطط جاهز!
+                    <h2 className="text-2xl font-bold text-foreground" data-testid="text-success-title">
+                      تم استخراج المعلومات بنجاح!
                     </h2>
-                    <p className="text-foreground/80">
+                    <p className="text-foreground/70 text-base">
                       {uploadResult.pageCount > 1
-                        ? `تم معالجة ${uploadResult.pageCount} صفحات بنجاح`
-                        : "تم رفع المخطط بنجاح"}
+                        ? `تمت معالجة ${uploadResult.pageCount} صفحات وتحليلها بالذكاء الاصطناعي`
+                        : "تم تحليل المخطط واستخراج المعلومات الرئيسية"}
                     </p>
                   </div>
                 </div>
@@ -619,59 +623,123 @@ export function IngestPlansModal() {
 
                 {/* AI Analysis Results */}
                 {uploadResult.aiAnalysis && (
-                  <div className="space-y-3">
-                    <h3 className="text-lg font-semibold text-foreground">
-                      تحليل AI - المعلومات المستخرجة
-                    </h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent flex-1"></div>
+                      <div className="flex items-center gap-2 px-3">
+                        <Bot className="h-4 w-4 text-primary" />
+                        <h3 className="text-base font-semibold text-foreground">
+                          تحليل الذكاء الاصطناعي
+                        </h3>
+                      </div>
+                      <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent flex-1"></div>
+                    </div>
                     
+                    {/* AI Summary with Icon */}
                     {uploadResult.aiAnalysis.summary && (
-                      <div className="p-4 rounded-lg border bg-card">
-                        <p className="font-medium text-muted-foreground mb-2">الملخص</p>
-                        <p className="text-sm text-foreground">{uploadResult.aiAnalysis.summary}</p>
+                      <div className="p-5 rounded-xl border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+                            <FileText className="h-5 w-5" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-semibold text-foreground mb-2 text-sm">ملخص المخطط</p>
+                            <p className="text-sm text-foreground/80 leading-relaxed">{uploadResult.aiAnalysis.summary}</p>
+                          </div>
+                        </div>
                       </div>
                     )}
 
-                    <div className="grid grid-cols-2 gap-3 text-sm">
+                    {/* Title Block Information Grid */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {uploadResult.aiAnalysis.titleBlock?.sheetNumber && (
+                        <div className="p-4 rounded-lg border-2 border-border bg-card hover-elevate">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                            <p className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">رقم اللوحة</p>
+                          </div>
+                          <p className="text-lg font-bold text-foreground">{uploadResult.aiAnalysis.titleBlock.sheetNumber}</p>
+                        </div>
+                      )}
                       {uploadResult.aiAnalysis.titleBlock?.discipline && (
-                        <div className="p-3 rounded-lg border bg-card">
-                          <p className="font-medium text-muted-foreground mb-1">التخصص</p>
-                          <p className="text-foreground">{uploadResult.aiAnalysis.titleBlock.discipline}</p>
+                        <div className="p-4 rounded-lg border-2 border-border bg-card hover-elevate">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                            <p className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">التخصص</p>
+                          </div>
+                          <p className="text-lg font-bold text-foreground">{uploadResult.aiAnalysis.titleBlock.discipline}</p>
                         </div>
                       )}
                       {uploadResult.aiAnalysis.titleBlock?.floor && (
-                        <div className="p-3 rounded-lg border bg-card">
-                          <p className="font-medium text-muted-foreground mb-1">الطابق</p>
-                          <p className="text-foreground">{uploadResult.aiAnalysis.titleBlock.floor}</p>
+                        <div className="p-4 rounded-lg border-2 border-border bg-card hover-elevate">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                            <p className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">الطابق</p>
+                          </div>
+                          <p className="text-lg font-bold text-foreground">{uploadResult.aiAnalysis.titleBlock.floor}</p>
                         </div>
                       )}
-                      {uploadResult.aiAnalysis.titleBlock?.sheetNumber && (
-                        <div className="p-3 rounded-lg border bg-card">
-                          <p className="font-medium text-muted-foreground mb-1">رقم اللوحة</p>
-                          <p className="text-foreground">{uploadResult.aiAnalysis.titleBlock.sheetNumber}</p>
-                        </div>
-                      )}
-                      {uploadResult.aiAnalysis.title && (
-                        <div className="p-3 rounded-lg border bg-card">
-                          <p className="font-medium text-muted-foreground mb-1">العنوان</p>
-                          <p className="text-foreground">{uploadResult.aiAnalysis.title}</p>
+                      {uploadResult.aiAnalysis.titleBlock?.projectName && (
+                        <div className="p-4 rounded-lg border-2 border-border bg-card hover-elevate">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                            <p className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">المشروع</p>
+                          </div>
+                          <p className="text-lg font-bold text-foreground">{uploadResult.aiAnalysis.titleBlock.projectName}</p>
                         </div>
                       )}
                     </div>
 
+                    {/* Detected Building Elements */}
                     {uploadResult.aiAnalysis.elements && uploadResult.aiAnalysis.elements.length > 0 && (
-                      <div className="p-3 rounded-lg border bg-card">
-                        <p className="font-medium text-muted-foreground mb-2">العناصر المكتشفة</p>
+                      <div className="p-5 rounded-xl border bg-card">
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="p-1.5 rounded-md bg-accent/20 text-accent">
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                          </div>
+                          <p className="font-semibold text-foreground">العناصر الإنشائية المكتشفة</p>
+                          <span className="text-xs text-muted-foreground">({uploadResult.aiAnalysis.elements.length})</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {uploadResult.aiAnalysis.elements.slice(0, 10).map((element, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover-elevate">
+                              <div className="flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>
+                                <span className="text-sm font-medium text-foreground">{element.type}</span>
+                              </div>
+                              {element.quantity && (
+                                <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-accent/20 text-accent">
+                                  {element.quantity}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {uploadResult.aiAnalysis.elements.length > 10 && (
+                          <p className="text-xs text-muted-foreground text-center mt-3">
+                            + {uploadResult.aiAnalysis.elements.length - 10} عنصر إضافي
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Dimensions if available */}
+                    {uploadResult.aiAnalysis.dimensions && uploadResult.aiAnalysis.dimensions.length > 0 && (
+                      <div className="p-4 rounded-lg border bg-card">
+                        <p className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                          <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                          </svg>
+                          الأبعاد المكتشفة
+                        </p>
                         <div className="flex flex-wrap gap-2">
-                          {uploadResult.aiAnalysis.elements.slice(0, 8).map((element, idx) => (
-                            <span key={idx} className="px-2 py-1 text-xs rounded-md bg-muted text-foreground">
-                              {element.type}: {element.quantity || 1}
+                          {uploadResult.aiAnalysis.dimensions.slice(0, 6).map((dim, idx) => (
+                            <span key={idx} className="px-3 py-1.5 text-sm font-mono rounded-md bg-muted text-foreground border">
+                              {dim.value} {dim.unit || ''}
                             </span>
                           ))}
-                          {uploadResult.aiAnalysis.elements.length > 8 && (
-                            <span className="px-2 py-1 text-xs rounded-md bg-muted text-muted-foreground">
-                              +{uploadResult.aiAnalysis.elements.length - 8} المزيد
-                            </span>
-                          )}
                         </div>
                       </div>
                     )}
@@ -679,28 +747,54 @@ export function IngestPlansModal() {
                 )}
 
                 {/* Extracted Text Preview */}
-                {uploadResult.extractedText && uploadResult.extractedText.metadata && (
-                  <div className="space-y-3">
-                    <h3 className="text-lg font-semibold text-foreground">
-                      استخراج النصوص من PDF
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
+                {uploadResult.extractedText && uploadResult.extractedText.metadata && 
+                 (uploadResult.extractedText.metadata.sheetNumbers.length > 0 || 
+                  uploadResult.extractedText.metadata.roomNames.length > 0 ||
+                  uploadResult.extractedText.metadata.dimensions.length > 0) && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent flex-1"></div>
+                      <div className="flex items-center gap-2 px-3">
+                        <FileSearch className="h-4 w-4 text-accent" />
+                        <h3 className="text-base font-semibold text-foreground">
+                          استخراج النصوص من PDF
+                        </h3>
+                      </div>
+                      <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent flex-1"></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
                       {uploadResult.extractedText.metadata.sheetNumbers.length > 0 && (
-                        <div className="p-3 rounded-lg border bg-card">
-                          <p className="font-medium text-muted-foreground mb-1">أرقام اللوحات</p>
-                          <p className="text-foreground">
-                            {uploadResult.extractedText.metadata.sheetNumbers.slice(0, 3).join(", ")}
-                            {uploadResult.extractedText.metadata.sheetNumbers.length > 3 && "..."}
-                          </p>
+                        <div className="p-4 rounded-lg border bg-gradient-to-br from-card to-muted/20">
+                          <p className="font-semibold text-xs text-muted-foreground mb-2 uppercase tracking-wide">أرقام اللوحات</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {uploadResult.extractedText.metadata.sheetNumbers.slice(0, 5).map((num, idx) => (
+                              <span key={idx} className="px-2 py-1 text-xs font-mono rounded bg-primary/10 text-primary border border-primary/20">
+                                {num}
+                              </span>
+                            ))}
+                            {uploadResult.extractedText.metadata.sheetNumbers.length > 5 && (
+                              <span className="px-2 py-1 text-xs rounded bg-muted text-muted-foreground">
+                                +{uploadResult.extractedText.metadata.sheetNumbers.length - 5}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       )}
                       {uploadResult.extractedText.metadata.roomNames.length > 0 && (
-                        <div className="p-3 rounded-lg border bg-card">
-                          <p className="font-medium text-muted-foreground mb-1">الغرف</p>
-                          <p className="text-foreground">
-                            {uploadResult.extractedText.metadata.roomNames.slice(0, 3).join(", ")}
-                            {uploadResult.extractedText.metadata.roomNames.length > 3 && "..."}
-                          </p>
+                        <div className="p-4 rounded-lg border bg-gradient-to-br from-card to-muted/20">
+                          <p className="font-semibold text-xs text-muted-foreground mb-2 uppercase tracking-wide">الغرف والمساحات</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {uploadResult.extractedText.metadata.roomNames.slice(0, 5).map((room, idx) => (
+                              <span key={idx} className="px-2 py-1 text-xs rounded bg-accent/10 text-accent border border-accent/20">
+                                {room}
+                              </span>
+                            ))}
+                            {uploadResult.extractedText.metadata.roomNames.length > 5 && (
+                              <span className="px-2 py-1 text-xs rounded bg-muted text-muted-foreground">
+                                +{uploadResult.extractedText.metadata.roomNames.length - 5}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
