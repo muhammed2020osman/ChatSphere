@@ -68,4 +68,4 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
 - **TanStack Query (React Query)**: Data fetching and state management.
 - **Google Gemini 2.5 Pro**: AI analysis for extracting metadata from engineering drawings.
 - **pdf-parse**: PDF text extraction.
-- **pdfjs-dist**: Client-side PDF rendering library.
+- **pdfjs-dist**: Client-side PDF rendering library. Worker bundled via Vite using `?url` import to avoid CDN dependencies.
