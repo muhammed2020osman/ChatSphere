@@ -528,10 +528,11 @@ export default function SheetViewer() {
         description: ticketData.description,
       });
       
-      // Create ticket with the pin ID and keep layerId
+      // Create ticket with pinId and drawingId (both added here, not from form)
       await createTicketMutation.mutateAsync({
         ...ticketData,
-        pinId: (pinResponse as any).id,
+        drawingId: id!, // Add drawingId from route param
+        pinId: (pinResponse as any).id, // Add pinId from created pin
       });
       
       // Close modal and reset tempPin

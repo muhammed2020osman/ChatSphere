@@ -31,9 +31,9 @@ import { Button } from "@/components/ui/button";
 import { insertTicketSchema, type Discipline, type User, type Layer } from "@shared/schema";
 
 // Extend ticket schema for form validation
-// Remove pinId - set by the parent component after pin creation
+// Remove pinId and drawingId - these are set by the parent component
 const ticketFormSchema = insertTicketSchema
-  .omit({ pinId: true })
+  .omit({ pinId: true, drawingId: true })
   .extend({
     title: z.string().min(3, "العنوان يجب أن يكون 3 أحرف على الأقل"),
     description: z.string().optional(),
@@ -85,7 +85,6 @@ export function CreateTicketModal({
       disciplineId: drawingDisciplineId || "", // Auto-populate from drawing
       priority: "medium",
       assignedTo: "",
-      drawingId,
       layerId: "",
     },
   });
