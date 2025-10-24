@@ -13,6 +13,7 @@ import Home from "@/pages/home";
 import IngestPlansPage from "@/pages/ingest-plans";
 import PlansManagement from "@/pages/plans-management";
 import SheetViewer from "@/pages/sheet-viewer";
+import TicketsHub from "@/pages/tickets-hub";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/sheet-viewer/:id" component={SheetViewer} />
       <Route path="/plans" component={PlansManagement} />
       <Route path="/ingest-plans" component={IngestPlansPage} />
+      <Route path="/tickets" component={TicketsHub} />
       
       {/* Authenticated routes (need OIDC login) */}
       {isLoading || !isAuthenticated ? (
