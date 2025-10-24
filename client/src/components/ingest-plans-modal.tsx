@@ -126,13 +126,13 @@ export function IngestPlansModal() {
   const watchedVersionType = manualForm.watch("versionType");
   const watchedDisciplineId = manualForm.watch("disciplineId");
 
-  // Fetch disciplines
-  const { data: disciplines = [], isLoading: isDisciplinesLoading } = useQuery<Discipline[]>({
+  // Fetch disciplines (public reference data - no auth required)
+  const { data: disciplines = [], isLoading: isDisciplinesLoading, error: disciplinesError } = useQuery<Discipline[]>({
     queryKey: ["/api/disciplines"],
   });
 
-  // Fetch floors
-  const { data: floors = [], isLoading: isFloorsLoading } = useQuery<Floor[]>({
+  // Fetch floors (public reference data - no auth required)
+  const { data: floors = [], isLoading: isFloorsLoading, error: floorsError } = useQuery<Floor[]>({
     queryKey: ["/api/floors"],
   });
 
@@ -840,6 +840,15 @@ export function IngestPlansModal() {
                   </p>
                 </div>
 
+                {/* Error state - if disciplines or floors failed to load */}
+                {(disciplinesError || floorsError) && (
+                  <div className="p-4 rounded-lg border border-destructive/20 bg-destructive/10">
+                    <p className="text-sm text-destructive">
+                      حدث خطأ في تحميل البيانات المطلوبة. يرجى تسجيل الدخول أولاً أو إعادة المحاولة.
+                    </p>
+                  </div>
+                )}
+
                 <Form {...manualForm}>
                   <form onSubmit={manualForm.handleSubmit(handleManualFormSubmit)} className="space-y-6">
                     {/* 1. File Upload Section */}
@@ -975,14 +984,20 @@ export function IngestPlansModal() {
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {disciplines.map((discipline) => (
-                                    <SelectItem
-                                      key={discipline.id}
-                                      value={discipline.id}
-                                    >
-                                      {discipline.name}
+                                  {disciplines.length > 0 ? (
+                                    disciplines.map((discipline) => (
+                                      <SelectItem
+                                        key={discipline.id}
+                                        value={discipline.id}
+                                      >
+                                        {discipline.name}
+                                      </SelectItem>
+                                    ))
+                                  ) : (
+                                    <SelectItem value="" disabled>
+                                      لا توجد تخصصات متاحة
                                     </SelectItem>
-                                  ))}
+                                  )}
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -1008,11 +1023,17 @@ export function IngestPlansModal() {
                                 </FormControl>
                                 <SelectContent>
                                   <SelectItem value="">لا يوجد</SelectItem>
-                                  {floors.map((floor) => (
-                                    <SelectItem key={floor.id} value={floor.id}>
-                                      {floor.name}
+                                  {floors.length > 0 ? (
+                                    floors.map((floor) => (
+                                      <SelectItem key={floor.id} value={floor.id}>
+                                        {floor.name}
+                                      </SelectItem>
+                                    ))
+                                  ) : (
+                                    <SelectItem value="none" disabled>
+                                      لا توجد طوابق متاحة
                                     </SelectItem>
-                                  ))}
+                                  )}
                                 </SelectContent>
                               </Select>
                               <FormMessage />

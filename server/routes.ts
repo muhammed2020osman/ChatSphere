@@ -980,8 +980,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }
 
-  // Drawings routes
-  app.get('/api/disciplines', isAuthenticated, async (req, res) => {
+  // Drawings routes - Public reference data endpoints (no auth required)
+  app.get('/api/disciplines', async (req, res) => {
     try {
       const disciplines = await storage.getDisciplines();
       res.json(disciplines);
@@ -991,7 +991,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/floors', isAuthenticated, async (req, res) => {
+  app.get('/api/floors', async (req, res) => {
     try {
       const floors = await storage.getFloors();
       res.json(floors);
