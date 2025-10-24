@@ -190,7 +190,7 @@ export function TicketPreviewPanel({
                 </SheetTitle>
                 {!isLoading && ticket && (
                   <p className="text-sm text-muted-foreground" data-testid="text-ticket-id">
-                    Ticket #{ticket.id.slice(0, 8)}
+                    Ticket #{ticket.id?.slice(0, 8) || ticket.id}
                   </p>
                 )}
               </div>

@@ -518,22 +518,19 @@ export default function SheetViewer() {
     if (!tempPin) return;
     
     try {
-      // Extract layerId from ticket data
-      const { layerId, ...ticketWithoutLayer } = ticketData;
-      
       // Create pin first
       const pinResponse = await createPinMutation.mutateAsync({
         drawingId: id!,
-        layerId: layerId,
+        layerId: ticketData.layerId || null,
         x: tempPin.x.toString(),
         y: tempPin.y.toString(),
         label: ticketData.title,
         description: ticketData.description,
       });
       
-      // Create ticket with the pin ID
+      // Create ticket with the pin ID and keep layerId
       await createTicketMutation.mutateAsync({
-        ...ticketWithoutLayer,
+        ...ticketData,
         pinId: (pinResponse as any).id,
       });
       

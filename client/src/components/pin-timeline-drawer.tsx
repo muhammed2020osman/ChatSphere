@@ -238,7 +238,7 @@ export function PinTimelineDrawer({
                                     {ticket.title}
                                   </h4>
                                   <p className="text-xs text-muted-foreground mb-2" data-testid={`text-ticket-id-${ticket.id}`}>
-                                    #{ticket.id.slice(0, 8)}
+                                    #{ticket.id?.slice(0, 8) || ticket.id}
                                   </p>
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <Badge
