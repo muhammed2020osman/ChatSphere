@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+// @ts-ignore - Vite URL import
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Use local worker bundled by Vite instead of CDN to avoid network issues
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 interface PDFViewerCanvasProps {
   pdfUrl: string;
