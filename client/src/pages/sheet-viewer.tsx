@@ -48,7 +48,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PDFViewerCanvas } from "@/components/pdf-viewer-canvas";
-import type { Layer, Pin, Discipline, DrawingRevision, DrawingWithDetails, Floor } from "@shared/schema";
+import type { Layer, Pin, Discipline, DrawingRevision, DrawingWithDetails, Floor, Ticket } from "@shared/schema";
+
+// Extend Pin type to include tickets
+type PinWithTickets = Pin & {
+  tickets?: Ticket[];
+};
 
 type Tool = "pan" | "zoom-in" | "zoom-out" | "pin" | "ruler" | "pen" | "line" | "rectangle" | "circle" | "text" | "eraser";
 
@@ -138,7 +143,7 @@ export default function SheetViewer() {
   });
 
   // Fetch pins for this drawing
-  const { data: pins = [], isLoading: pinsLoading } = useQuery<Pin[]>({
+  const { data: pins = [], isLoading: pinsLoading } = useQuery<PinWithTickets[]>({
     queryKey: ['/api/drawings', id, 'pins'],
     enabled: !!id,
   });
@@ -1457,26 +1462,85 @@ export default function SheetViewer() {
                     </p>
                   </div>
                 ) : (
-                  visiblePins.map((pin) => (
-                    <Card
-                      key={pin.id}
-                      className="p-3 cursor-pointer hover:shadow-md transition-shadow"
-                      data-testid={`pin-card-${pin.id}`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <MapPin className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground">{pin.label || "Untitled Pin"}</p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Position: ({Math.round(parseFloat(pin.x))}, {Math.round(parseFloat(pin.y))})
-                          </p>
-                          {pin.description && (
-                            <p className="text-xs text-muted-foreground mt-1">{pin.description}</p>
-                          )}
+                  visiblePins.map((pin) => {
+                    const firstTicket = pin.tickets && pin.tickets.length > 0 ? pin.tickets[0] : null;
+                    const ticketCount = pin.tickets?.length || 0;
+                    
+                    // Map ticket types to Arabic labels
+                    const typeLabels: Record<string, string> = {
+                      rfi: "طلب معلومات",
+                      issue: "مشكلة",
+                      clash: "تعارض",
+                      change_request: "طلب تغيير",
+                      observation: "ملاحظة",
+                      safety: "سلامة",
+                      quality: "جودة",
+                    };
+                    
+                    // Map status to Arabic and colors
+                    const statusInfo: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+                      open: { label: "مفتوحة", variant: "default" },
+                      in_progress: { label: "قيد التنفيذ", variant: "secondary" },
+                      resolved: { label: "محلولة", variant: "outline" },
+                      closed: { label: "مغلقة", variant: "outline" },
+                    };
+                    
+                    const priorityInfo: Record<string, { label: string; variant: "default" | "secondary" | "destructive" }> = {
+                      low: { label: "منخفضة", variant: "secondary" },
+                      medium: { label: "متوسطة", variant: "default" },
+                      high: { label: "عالية", variant: "destructive" },
+                    };
+                    
+                    return (
+                      <Card
+                        key={pin.id}
+                        className="p-3 cursor-pointer hover:shadow-md transition-shadow"
+                        data-testid={`pin-card-${pin.id}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <MapPin className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            {firstTicket ? (
+                              <>
+                                <div className="flex items-start justify-between gap-2 mb-2">
+                                  <p className="text-sm font-medium text-foreground">{firstTicket.title}</p>
+                                  {ticketCount > 1 && (
+                                    <Badge variant="outline" className="text-xs flex-shrink-0">
+                                      +{ticketCount - 1}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap gap-1 mb-2">
+                                  <Badge variant="outline" className="text-xs">
+                                    {typeLabels[firstTicket.type] || firstTicket.type}
+                                  </Badge>
+                                  <Badge variant={statusInfo[firstTicket.status]?.variant || "default"} className="text-xs">
+                                    {statusInfo[firstTicket.status]?.label || firstTicket.status}
+                                  </Badge>
+                                  <Badge variant={priorityInfo[firstTicket.priority]?.variant || "default"} className="text-xs">
+                                    {priorityInfo[firstTicket.priority]?.label || firstTicket.priority}
+                                  </Badge>
+                                </div>
+                                {firstTicket.description && (
+                                  <p className="text-xs text-muted-foreground line-clamp-2">{firstTicket.description}</p>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-sm font-medium text-foreground">{pin.label || "دبوس بدون تذكرة"}</p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  الموقع: ({Math.round(parseFloat(pin.x))}, {Math.round(parseFloat(pin.y))})
+                                </p>
+                                {pin.description && (
+                                  <p className="text-xs text-muted-foreground mt-1">{pin.description}</p>
+                                )}
+                              </>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </Card>
-                  ))
+                      </Card>
+                    );
+                  })
                 )}
               </div>
             ) : (

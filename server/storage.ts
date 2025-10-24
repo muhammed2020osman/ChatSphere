@@ -1085,11 +1085,31 @@ export class DatabaseStorage implements IStorage {
 
   // Pins operations
   async getDrawingPins(drawingId: string): Promise<Pin[]> {
-    return await db
-      .select()
+    const pinsData = await db
+      .select({
+        pin: pins,
+        ticket: tickets,
+      })
       .from(pins)
+      .leftJoin(tickets, eq(tickets.pinId, pins.id))
       .where(eq(pins.drawingId, drawingId))
       .orderBy(pins.createdAt);
+    
+    // Group tickets by pin
+    const pinsMap = new Map<string, any>();
+    for (const row of pinsData) {
+      if (!pinsMap.has(row.pin.id)) {
+        pinsMap.set(row.pin.id, {
+          ...row.pin,
+          tickets: [],
+        });
+      }
+      if (row.ticket) {
+        pinsMap.get(row.pin.id).tickets.push(row.ticket);
+      }
+    }
+    
+    return Array.from(pinsMap.values());
   }
 
   async createPin(pinData: InsertPin): Promise<Pin> {
