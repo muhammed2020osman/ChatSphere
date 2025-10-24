@@ -53,6 +53,7 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
   - Database indexes on frequently queried columns (updatedAt, disciplineId, floorId, drawingId)
   - Efficient database queries with Drizzle ORM
   - Client-side PDF rendering with pdfjs-dist
+  - PDF viewer improvements: 30-second timeout with retry logic (2 attempts), progress indicator, proper resource cleanup with loadingTask.destroy() to prevent memory leaks
 - **Error Handling**: Global ErrorBoundary component wraps the entire app, loading states for all data fetches, proper error messages for failed API calls
 - **Scalability**: PostgreSQL for data storage, WebSockets for real-time communication, and Replit Object Storage for file handling.
 
