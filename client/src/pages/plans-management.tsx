@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, Download, History, MoreVertical, Grid3x3, List, Upload, Search } from "lucide-react";
+import { FileText, Download, History, MoreVertical, Grid3x3, List, Upload, Bot, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,28 +20,35 @@ import { Card } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
+import type { DrawingWithDetails } from "@shared/schema";
 
 type ViewMode = "grid" | "list";
 
-interface Plan {
-  id: string;
-  sheetNo: string;
-  title: string;
-  discipline: {
-    code: string;
-    name: string;
-  };
-  floor: {
-    code: string;
-    name: string;
-  };
-  latestRevision: {
-    revisionNo: string;
-    status: string;
-    uploadedAt: string;
-    fileUrl: string;
-  };
-  thumbnailUrl?: string;
+function UploadMethodBadge({ method, planId }: { method?: string; planId: string }) {
+  if (!method) return null;
+  
+  return method === 'ai' ? (
+    <Badge variant="default" className="gap-1" data-testid={`badge-upload-method-${planId}`}>
+      <Bot className="h-3 w-3" />
+      <span>AI</span>
+    </Badge>
+  ) : (
+    <Badge variant="secondary" className="gap-1" data-testid={`badge-upload-method-${planId}`}>
+      <Edit className="h-3 w-3" />
+      <span>يدوي</span>
+    </Badge>
+  );
+}
+
+function RevisionCountBadge({ count, planId }: { count?: number; planId: string }) {
+  if (!count || count <= 1) return null;
+  
+  return (
+    <Badge variant="outline" className="gap-1" data-testid={`badge-revision-count-${planId}`}>
+      <History className="h-3 w-3" />
+      <span>{count} إصدارات</span>
+    </Badge>
+  );
 }
 
 export default function PlansManagement() {
@@ -52,26 +59,9 @@ export default function PlansManagement() {
   const [disciplineFilter, setDisciplineFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  // Mock data for now - will be replaced with API call
-  const mockPlans: Plan[] = [
-    {
-      id: "1",
-      sheetNo: "A-101",
-      title: "Architectural - Floor 02 - Tower A",
-      discipline: { code: "ARCH", name: "Architectural" },
-      floor: { code: "02", name: "Floor 02" },
-      latestRevision: {
-        revisionNo: "3",
-        status: "approved",
-        uploadedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        fileUrl: "#",
-      },
-      thumbnailUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuClkpxrlywCUB6FBFEpz1MqmUVNsaboO4lQx_daxG5RrVolhPaqKLc_1J3XzZcB9iSKMFSSOldOPQxZvgPKdFjc0-nJQBUa3aeoCD12S1uRft2fh59pBU-YiPmMdPdJdiMdRJjQzebBz4CsQDDxBNLK2i2iaSUbhoAjtgDTjg73Uvbut66h6QqemaISlluWiRUy2DTes7feeGkY0VE4QHA4TOXmuEHcrZiY8V26ujQANak4A_aOpFmjn_Z7W7r97w8jUOoFwCZmOOI",
-    },
-    // Add more mock data as needed
-  ];
-
-  const plans = mockPlans;
+  const { data: plans, isLoading } = useQuery<DrawingWithDetails[]>({
+    queryKey: ['/api/drawings'],
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -88,8 +78,8 @@ export default function PlansManagement() {
     }
   };
 
-  const getRelativeTime = (dateString: string) => {
-    const date = new Date(dateString);
+  const getRelativeTime = (dateInput: string | Date) => {
+    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
     const now = new Date();
     const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
     
@@ -99,6 +89,57 @@ export default function PlansManagement() {
     if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} weeks ago`;
     return `${Math.floor(diffInDays / 30)} months ago`;
   };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "approved": return "Approved";
+      case "under_review": return "Under Review";
+      case "draft": return "Draft";
+      case "rejected": return "Rejected";
+      case "superseded": return "Superseded";
+      default: return "Unknown";
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-screen overflow-hidden">
+        <div className="px-6 py-4 border-b border-border bg-card">
+          <div className="flex flex-wrap justify-between items-center gap-4">
+            <div className="flex flex-col gap-1">
+              <h1 className="text-3xl font-bold leading-tight tracking-tight text-foreground">
+                Construction Plans
+              </h1>
+              <p className="text-muted-foreground text-base font-normal leading-normal">
+                Manage, upload, and view different construction plans for KSA projects.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link href="/ingest-plans">
+                <Button className="gap-2" data-testid="button-upload-plans">
+                  <Upload className="h-4 w-4" />
+                  <span>Upload Plans</span>
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 bg-background/30">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <Card key={i} className="overflow-hidden">
+                <Skeleton className="aspect-[4/3] w-full" />
+                <div className="p-4 space-y-2">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -209,7 +250,19 @@ export default function PlansManagement() {
 
       {/* Plans Grid/List */}
       <div className="flex-1 overflow-y-auto p-6 bg-background/30">
-        {viewMode === "grid" ? (
+        {!plans || plans.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <FileText className="h-16 w-16 text-muted-foreground mb-4" />
+            <h2 className="text-xl font-semibold text-foreground mb-2">No plans found</h2>
+            <p className="text-muted-foreground mb-4">Upload your first construction plan to get started.</p>
+            <Link href="/ingest-plans">
+              <Button className="gap-2" data-testid="button-upload-plans-empty">
+                <Upload className="h-4 w-4" />
+                <span>Upload Plans</span>
+              </Button>
+            </Link>
+          </div>
+        ) : viewMode === "grid" ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {plans.map((plan) => (
               <Card
@@ -220,9 +273,9 @@ export default function PlansManagement() {
                 {/* Thumbnail */}
                 <Link href={`/sheets/${plan.id}`}>
                   <div className="aspect-[4/3] bg-muted flex items-center justify-center cursor-pointer hover-elevate">
-                    {plan.thumbnailUrl ? (
+                    {plan.latestRevision?.thumbnailUrl ? (
                       <img
-                        src={plan.thumbnailUrl}
+                        src={plan.latestRevision.thumbnailUrl}
                         alt={plan.title}
                         className="w-full h-full object-cover"
                         data-testid={`img-plan-${plan.id}`}
@@ -239,17 +292,34 @@ export default function PlansManagement() {
                     {plan.title}
                   </h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Last updated: {getRelativeTime(plan.latestRevision.uploadedAt)}
+                    {plan.latestRevision?.uploadedAt 
+                      ? `Last updated: ${getRelativeTime(plan.latestRevision.uploadedAt)}`
+                      : "No revisions yet"}
                   </p>
-                  <div className="mt-4 flex items-center justify-between">
-                    <Badge className={getStatusColor(plan.latestRevision.status)}>
-                      {plan.latestRevision.status === "approved" ? "Approved" : 
-                       plan.latestRevision.status === "under_review" ? "Under Review" : 
-                       plan.latestRevision.status === "draft" ? "Draft" : "Unknown"}
-                    </Badge>
-                    <span className="text-sm font-semibold text-foreground/80">
-                      Version {plan.latestRevision.revisionNo}
-                    </span>
+                  
+                  {/* Badges Section */}
+                  <div className="mt-3 flex items-center gap-2 flex-wrap">
+                    <UploadMethodBadge 
+                      method={plan.latestRevision?.uploadMethod} 
+                      planId={plan.id} 
+                    />
+                    <RevisionCountBadge 
+                      count={plan.revisionCount} 
+                      planId={plan.id} 
+                    />
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between gap-2 flex-wrap">
+                    {plan.latestRevision?.status && (
+                      <Badge className={getStatusColor(plan.latestRevision.status)}>
+                        {getStatusLabel(plan.latestRevision.status)}
+                      </Badge>
+                    )}
+                    {plan.latestRevision?.revisionNo && (
+                      <span className="text-sm font-semibold text-foreground/80">
+                        Version {plan.latestRevision.revisionNo}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -302,9 +372,9 @@ export default function PlansManagement() {
               >
                 <div className="flex items-center gap-4 flex-1">
                   <div className="w-16 h-16 bg-muted rounded flex items-center justify-center flex-shrink-0">
-                    {plan.thumbnailUrl ? (
+                    {plan.latestRevision?.thumbnailUrl ? (
                       <img
-                        src={plan.thumbnailUrl}
+                        src={plan.latestRevision.thumbnailUrl}
                         alt={plan.title}
                         className="w-full h-full object-cover rounded"
                       />
@@ -319,20 +389,37 @@ export default function PlansManagement() {
                       </h3>
                     </Link>
                     <p className="text-sm text-muted-foreground">
-                      {plan.discipline.name} • {plan.floor.name}
+                      {plan.discipline.name} • {plan.floor?.name || "No floor"}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-6">
-                  <div className="text-center">
-                    <Badge className={getStatusColor(plan.latestRevision.status)}>
-                      {plan.latestRevision.status === "approved" ? "Approved" : 
-                       plan.latestRevision.status === "under_review" ? "Under Review" : "Draft"}
-                    </Badge>
+                <div className="flex items-center gap-6 flex-wrap">
+                  {/* Badges Section */}
+                  <div className="flex items-center gap-2">
+                    <UploadMethodBadge 
+                      method={plan.latestRevision?.uploadMethod} 
+                      planId={plan.id} 
+                    />
+                    <RevisionCountBadge 
+                      count={plan.revisionCount} 
+                      planId={plan.id} 
+                    />
                   </div>
-                  <div className="text-sm text-foreground/80 w-24 text-center">
-                    Version {plan.latestRevision.revisionNo}
-                  </div>
+                  
+                  {plan.latestRevision?.status && (
+                    <div className="text-center">
+                      <Badge className={getStatusColor(plan.latestRevision.status)}>
+                        {getStatusLabel(plan.latestRevision.status)}
+                      </Badge>
+                    </div>
+                  )}
+                  
+                  {plan.latestRevision?.revisionNo && (
+                    <div className="text-sm text-foreground/80 w-24 text-center">
+                      Version {plan.latestRevision.revisionNo}
+                    </div>
+                  )}
+                  
                   <div className="flex items-center gap-2">
                     <Button variant="ghost" size="icon">
                       <Download className="h-4 w-4" />

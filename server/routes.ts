@@ -1372,6 +1372,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Manual upload endpoint (without AI processing)
+  app.post('/api/drawings/upload-manual', isAuthenticated, upload.single('file'), async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { sheetNo, title, disciplineId, floorId, versionType, parentDrawingId, revisionNotes } = req.body;
+
+      // Validation: Ensure file exists
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      // Validation: Ensure file is PDF
+      const file = req.file;
+      const isPdfFile = file.mimetype === 'application/pdf' || isPDF(file.buffer);
+      if (!isPdfFile) {
+        return res.status(400).json({ message: "Invalid file type. Only PDF files are allowed for manual upload." });
+      }
+
+      // Validation: Required fields
+      if (!sheetNo || !title || !disciplineId || !versionType) {
+        return res.status(400).json({ message: "Missing required fields: sheetNo, title, disciplineId, versionType" });
+      }
+
+      if (!['new', 'update'].includes(versionType)) {
+        return res.status(400).json({ message: "Invalid versionType. Must be 'new' or 'update'" });
+      }
+
+      if (versionType === 'update' && !parentDrawingId) {
+        return res.status(400).json({ message: "parentDrawingId is required when versionType is 'update'" });
+      }
+
+      let drawingId: string;
+
+      // Drawing Creation/Selection based on versionType
+      if (versionType === 'new') {
+        // Create new drawing
+        const drawingData = {
+          sheetNo,
+          title,
+          disciplineId,
+          floorId: floorId || null,
+          createdBy: userId,
+        };
+        const drawing = await storage.createDrawing(drawingData);
+        drawingId = drawing.id;
+      } else {
+        // versionType === 'update'
+        // Use parentDrawingId and verify it exists
+        const drawing = await storage.getDrawing(parentDrawingId);
+        if (!drawing) {
+          return res.status(404).json({ message: "Parent drawing not found" });
+        }
+        drawingId = parentDrawingId;
+      }
+
+      // Revision Number Generation
+      const existingRevisions = await storage.getDrawingRevisions(drawingId);
+      const revisionCount = existingRevisions.length + 1;
+      const uniqueId = randomUUID().split('-')[0]; // First segment of UUID (8 chars)
+      const revisionNo = `R${revisionCount}_${uniqueId}`;
+      console.log(`Auto-generated revision number: ${revisionNo}`);
+
+      // File Upload (PDF Only - NO CONVERSION)
+      const objectStorageService = new ObjectStorageService();
+      const privateObjectDir = objectStorageService.getPrivateObjectDir();
+      const timestamp = Date.now();
+      const fileName = file.originalname;
+      const fileSize = file.size.toString();
+
+      // Save original PDF to Object Storage
+      const pdfFileName = `${drawingId}_${revisionNo}_${timestamp}.pdf`;
+      const pdfPath = `${privateObjectDir}/drawings/${pdfFileName}`;
+      const pdfPathWithoutLeadingSlash = pdfPath.startsWith('/') ? pdfPath.slice(1) : pdfPath;
+      const pdfParts = pdfPathWithoutLeadingSlash.split('/');
+      
+      if (pdfParts.length < 2) {
+        throw new Error('Invalid object storage path configuration');
+      }
+
+      const pdfBucketName = pdfParts[0];
+      const pdfObjectName = pdfParts.slice(1).join('/');
+      
+      const pdfBucket = objectStorageClient.bucket(pdfBucketName);
+      const pdfBlob = pdfBucket.file(pdfObjectName);
+      
+      await pdfBlob.save(file.buffer, {
+        metadata: { contentType: 'application/pdf' },
+      });
+      
+      // Generate signed URL (7 days expiration)
+      const pdfSignedUrl = await signObjectURL({
+        bucketName: pdfBucketName,
+        objectName: pdfObjectName,
+        method: "GET",
+        ttlSec: 7 * 24 * 60 * 60, // 7 days
+      });
+
+      console.log('Manual PDF upload completed - no AI processing');
+
+      // Create Revision with uploadMethod='manual'
+      const revisionData = {
+        drawingId,
+        revisionNo,
+        status: 'draft' as const,
+        fileUrl: pdfSignedUrl,
+        thumbnailUrl: null, // No thumbnail for manual upload
+        fileName,
+        fileType: 'application/pdf',
+        fileSize,
+        uploadMethod: 'manual', // CRITICAL: Set upload method to manual
+        aiExtractedData: null, // No AI data for manual upload
+        uploadedBy: userId,
+        reviewNotes: revisionNotes || null,
+      };
+
+      const revision = await storage.createDrawingRevision(revisionData);
+
+      // Return simplified response compatible with frontend success screen
+      res.json({
+        drawingId,
+        revisionId: revision.id,
+        pageCount: 1,
+        uploadMethod: 'manual',
+        extractedText: null,
+        aiAnalysis: null,
+      });
+    } catch (error) {
+      console.error("Error uploading drawing manually:", error);
+      res.status(500).json({ message: "Failed to upload drawing" });
+    }
+  });
+
   // Drawing Pages routes
   app.get('/api/revisions/:id/pages', isAuthenticated, async (req, res) => {
     try {

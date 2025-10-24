@@ -1,17 +1,23 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Upload, AlertCircle, CheckCircle2, FileText, X, ImageIcon, Bot, FileSearch } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import type { Discipline, Floor, DrawingWithDetails } from "@shared/schema";
 
-type Step = "upload" | "review" | "processing" | "success";
+type Step = "selection" | "upload" | "review" | "processing" | "success" | "manual_form";
 
 interface DrawingFormData {
   sheetNo: string;
@@ -20,6 +26,23 @@ interface DrawingFormData {
   floorId: number;
   disciplineId: number;
 }
+
+// Manual upload form schema
+const manualUploadSchema = z.object({
+  file: z.instanceof(File, { message: "يرجى اختيار ملف PDF" })
+    .refine((file) => file.type === "application/pdf", {
+      message: "يجب أن يكون الملف بصيغة PDF فقط",
+    }),
+  sheetNo: z.string().min(1, "رقم اللوحة مطلوب"),
+  title: z.string().min(1, "اسم المخطط مطلوب"),
+  disciplineId: z.string().min(1, "التخصص مطلوب"),
+  floorId: z.string().optional(),
+  versionType: z.enum(["new", "update"]).default("new"),
+  parentDrawingId: z.string().optional(),
+  revisionNotes: z.string().optional(),
+});
+
+type ManualUploadFormValues = z.infer<typeof manualUploadSchema>;
 
 interface UploadResponse {
   drawingId: number;
@@ -68,7 +91,8 @@ export function IngestPlansModal() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const [currentStep, setCurrentStep] = useState<Step>("upload");
+  const [currentStep, setCurrentStep] = useState<Step>("selection");
+  const [uploadMode, setUploadMode] = useState<'ai' | 'manual' | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [formData, setFormData] = useState<DrawingFormData>({
     sheetNo: "",
@@ -83,6 +107,45 @@ export function IngestPlansModal() {
   const [uploadResult, setUploadResult] = useState<UploadResponse | null>(null);
   const [drawingPages, setDrawingPages] = useState<DrawingPage[]>([]);
   const [createdDrawingId, setCreatedDrawingId] = useState<number | null>(null);
+
+  // Manual upload form
+  const manualForm = useForm<ManualUploadFormValues>({
+    resolver: zodResolver(manualUploadSchema),
+    defaultValues: {
+      sheetNo: "",
+      title: "",
+      disciplineId: "",
+      floorId: "",
+      versionType: "new",
+      parentDrawingId: "",
+      revisionNotes: "",
+    },
+  });
+
+  const watchedFile = manualForm.watch("file");
+  const watchedVersionType = manualForm.watch("versionType");
+  const watchedDisciplineId = manualForm.watch("disciplineId");
+
+  // Fetch disciplines
+  const { data: disciplines = [], isLoading: isDisciplinesLoading } = useQuery<Discipline[]>({
+    queryKey: ["/api/disciplines"],
+  });
+
+  // Fetch floors
+  const { data: floors = [], isLoading: isFloorsLoading } = useQuery<Floor[]>({
+    queryKey: ["/api/floors"],
+  });
+
+  // Fetch drawings (for update mode)
+  const { data: existingDrawings = [], isLoading: isDrawingsLoading } = useQuery<DrawingWithDetails[]>({
+    queryKey: ["/api/drawings"],
+    enabled: watchedVersionType === "update",
+  });
+
+  // Filter drawings by discipline if selected
+  const filteredDrawings = existingDrawings.filter(
+    (drawing) => !watchedDisciplineId || drawing.disciplineId === watchedDisciplineId
+  );
 
   // Create drawing mutation
   const createDrawingMutation = useMutation({
@@ -147,6 +210,66 @@ export function IngestPlansModal() {
     },
     onError: (error: any) => {
       setCurrentStep("review");
+      toast({
+        title: "خطأ في الرفع",
+        description: error.message || "حدث خطأ أثناء رفع الملف",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Manual upload mutation
+  const manualUploadMutation = useMutation({
+    mutationFn: async (values: ManualUploadFormValues) => {
+      const formData = new FormData();
+      formData.append("file", values.file);
+      formData.append("sheetNo", values.sheetNo);
+      formData.append("title", values.title);
+      formData.append("disciplineId", values.disciplineId);
+      if (values.floorId) formData.append("floorId", values.floorId);
+      formData.append("versionType", values.versionType);
+      if (values.parentDrawingId) formData.append("parentDrawingId", values.parentDrawingId);
+      if (values.revisionNotes) formData.append("revisionNotes", values.revisionNotes);
+
+      const response = await fetch("/api/drawings/upload-manual", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Upload failed");
+      }
+
+      return await response.json() as UploadResponse;
+    },
+    onSuccess: async (data) => {
+      setUploadResult(data);
+      
+      // Fetch all pages for this revision if multi-page
+      if (data.pageCount > 1) {
+        const pagesResponse = await fetch(`/api/revisions/${data.revisionId}/pages`, {
+          credentials: "include",
+        });
+        
+        if (pagesResponse.ok) {
+          const pages = await pagesResponse.json();
+          setDrawingPages(pages);
+        }
+      }
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/drawings"] });
+      
+      setCurrentStep("success");
+      
+      toast({
+        title: "تم الرفع بنجاح!",
+        description: "تم رفع المخطط ومعالجته بنجاح",
+      });
+    },
+    onError: (error: any) => {
       toast({
         title: "خطأ في الرفع",
         description: error.message || "حدث خطأ أثناء رفع الملف",
@@ -235,7 +358,8 @@ export function IngestPlansModal() {
   };
 
   const handleSaveAndAddMore = () => {
-    setCurrentStep("upload");
+    setCurrentStep("selection");
+    setUploadMode(null);
     setSelectedFile(null);
     setFormData({
       sheetNo: "",
@@ -255,7 +379,8 @@ export function IngestPlansModal() {
   };
 
   const handleReset = () => {
-    setCurrentStep("upload");
+    setCurrentStep("selection");
+    setUploadMode(null);
     setSelectedFile(null);
     setHasConflict(false);
     setCreatedDrawingId(null);
@@ -267,8 +392,61 @@ export function IngestPlansModal() {
     }
   };
 
+  // Handle manual form file selection
+  const handleManualFileSelect = (file: File) => {
+    manualForm.setValue("file", file, { shouldValidate: true });
+    
+    // Auto-fill sheet number and title from filename
+    const filename = file.name.replace(/\.pdf$/i, "");
+    const sheetMatch = filename.match(/[A-Z]-\d{3}/);
+    
+    if (!manualForm.getValues("sheetNo")) {
+      manualForm.setValue("sheetNo", sheetMatch ? sheetMatch[0] : filename);
+    }
+    if (!manualForm.getValues("title")) {
+      manualForm.setValue("title", filename);
+    }
+  };
+
+  // Handle manual form drag and drop
+  const handleManualDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleManualDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleManualDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file && file.type === "application/pdf") {
+      handleManualFileSelect(file);
+    } else if (file) {
+      toast({
+        title: "نوع ملف غير صحيح",
+        description: "يرجى اختيار ملف PDF فقط",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle manual form submission
+  const handleManualFormSubmit = async (values: ManualUploadFormValues) => {
+    setCurrentStep("processing");
+    try {
+      await manualUploadMutation.mutateAsync(values);
+    } catch (error) {
+      setCurrentStep("manual_form");
+      console.error("Manual upload error:", error);
+    }
+  };
+
   const steps = [
-    { id: "upload", label: "رفع الملفات", icon: Upload, active: currentStep === "upload" },
+    { id: "selection", label: "اختيار الطريقة", icon: FileSearch, active: currentStep === "selection" },
+    { id: "upload", label: "رفع الملفات", icon: Upload, active: currentStep === "upload" || currentStep === "manual_form" },
     { id: "review", label: "المراجعة والتوصيل", icon: FileText, active: currentStep === "review" },
     { id: "processing", label: "المعالجة", icon: AlertCircle, active: currentStep === "processing" || currentStep === "success" },
   ];
@@ -331,7 +509,84 @@ export function IngestPlansModal() {
 
           {/* Content Area */}
           <div className="w-3/4 p-6 space-y-6 border-l">
-            {/* Step 1: Upload */}
+            {/* Step 0: Selection */}
+            {currentStep === "selection" && (
+              <div className="space-y-6">
+                <div className="text-center">
+                  <h2 className="text-2xl font-bold text-foreground" data-testid="text-selection-title">
+                    اختر طريقة رفع المخطط
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    اختر الطريقة المناسبة لحالة المخططات لديك
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                  {/* AI-Assisted Upload Option */}
+                  <div
+                    className="group relative rounded-xl border-2 border-primary/20 bg-gradient-to-br from-primary/10 to-accent/5 p-6 cursor-pointer hover-elevate active-elevate-2 transition-all"
+                    onClick={() => {
+                      setUploadMode('ai');
+                      setCurrentStep('upload');
+                    }}
+                    data-testid="card-ai-upload"
+                  >
+                    <div className="flex flex-col items-center text-center space-y-4">
+                      <div className="p-4 rounded-full bg-gradient-to-br from-primary to-accent text-primary-foreground">
+                        <Bot className="h-10 w-10" />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="text-xl font-bold text-foreground">
+                          رفع بمساعدة الذكاء الاصطناعي
+                        </h3>
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          مثالي للمخططات الجديدة - يستخرج المعلومات تلقائياً من المخطط
+                        </p>
+                      </div>
+                      <Button 
+                        className="w-full mt-4"
+                        data-testid="button-select-ai"
+                      >
+                        اختيار هذه الطريقة
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Manual Upload Option */}
+                  <div
+                    className="group relative rounded-xl border-2 border-border bg-gradient-to-br from-secondary/10 to-muted/5 p-6 cursor-pointer hover-elevate active-elevate-2 transition-all"
+                    onClick={() => {
+                      setUploadMode('manual');
+                      setCurrentStep('manual_form');
+                    }}
+                    data-testid="card-manual-upload"
+                  >
+                    <div className="flex flex-col items-center text-center space-y-4">
+                      <div className="p-4 rounded-full bg-gradient-to-br from-secondary to-muted text-secondary-foreground">
+                        <Upload className="h-10 w-10" />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="text-xl font-bold text-foreground">
+                          رفع يدوي
+                        </h3>
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          للمخططات الممسوحة أو منخفضة الجودة - إدخال المعلومات يدوياً
+                        </p>
+                      </div>
+                      <Button 
+                        variant="secondary"
+                        className="w-full mt-4"
+                        data-testid="button-select-manual"
+                      >
+                        اختيار هذه الطريقة
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 1: Upload (AI Mode) */}
             {currentStep === "upload" && (
               <div className="space-y-4">
                 <div
@@ -560,6 +815,341 @@ export function IngestPlansModal() {
                   </p>
                 </div>
                 <Progress value={66} className="w-full max-w-xs" />
+              </div>
+            )}
+
+            {/* Manual Upload Form */}
+            {currentStep === "manual_form" && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold text-foreground" data-testid="text-manual-form-title">
+                    رفع يدوي - إدخال البيانات
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    أدخل معلومات المخطط يدوياً
+                  </p>
+                </div>
+
+                <Form {...manualForm}>
+                  <form onSubmit={manualForm.handleSubmit(handleManualFormSubmit)} className="space-y-6">
+                    {/* 1. File Upload Section */}
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-foreground">رفع الملف</h3>
+                      
+                      {!watchedFile ? (
+                        <div
+                          className={`flex flex-col items-center gap-4 rounded-lg border-2 border-dashed px-6 py-8 transition-colors cursor-pointer ${
+                            isDragging
+                              ? "border-primary bg-primary/5"
+                              : "border-border hover:border-primary/50"
+                          }`}
+                          onDragOver={handleManualDragOver}
+                          onDragLeave={handleManualDragLeave}
+                          onDrop={handleManualDrop}
+                          onClick={() => {
+                            const input = document.createElement("input");
+                            input.type = "file";
+                            input.accept = ".pdf";
+                            input.onchange = (e) => {
+                              const file = (e.target as HTMLInputElement).files?.[0];
+                              if (file) handleManualFileSelect(file);
+                            };
+                            input.click();
+                          }}
+                          data-testid="dropzone-manual-upload"
+                        >
+                          <Upload className="h-10 w-10 text-primary" />
+                          <div className="text-center">
+                            <p className="font-medium text-foreground">
+                              اسحب وأفلت ملف PDF هنا أو انقر للاختيار
+                            </p>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              PDF فقط
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-4 rounded-lg border bg-card flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
+                              <FileText className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground text-sm" data-testid="text-selected-filename">
+                                {watchedFile.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {(watchedFile.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => manualForm.setValue("file", undefined as any)}
+                            data-testid="button-remove-manual-file"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                      {manualForm.formState.errors.file && (
+                        <p className="text-sm text-destructive">
+                          {manualForm.formState.errors.file.message}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* 2. Basic Information */}
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-foreground">معلومات أساسية</h3>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={manualForm.control}
+                          name="sheetNo"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                رقم اللوحة <span className="text-destructive">*</span>
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  placeholder="مثال: A-101"
+                                  data-testid="input-manual-sheet-no"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={manualForm.control}
+                          name="title"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                اسم المخطط <span className="text-destructive">*</span>
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  placeholder="مثال: Ground Floor Plan"
+                                  data-testid="input-manual-title"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={manualForm.control}
+                          name="disciplineId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                التخصص <span className="text-destructive">*</span>
+                              </FormLabel>
+                              <Select
+                                value={field.value}
+                                onValueChange={field.onChange}
+                                disabled={isDisciplinesLoading}
+                              >
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-manual-discipline">
+                                    <SelectValue placeholder="اختر التخصص" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {disciplines.map((discipline) => (
+                                    <SelectItem
+                                      key={discipline.id}
+                                      value={discipline.id}
+                                    >
+                                      {discipline.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={manualForm.control}
+                          name="floorId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>الطابق (اختياري)</FormLabel>
+                              <Select
+                                value={field.value}
+                                onValueChange={field.onChange}
+                                disabled={isFloorsLoading}
+                              >
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-manual-floor">
+                                    <SelectValue placeholder="اختر الطابق" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="">لا يوجد</SelectItem>
+                                  {floors.map((floor) => (
+                                    <SelectItem key={floor.id} value={floor.id}>
+                                      {floor.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 3. Version Type */}
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-foreground">نوع الرفع</h3>
+                      
+                      <FormField
+                        control={manualForm.control}
+                        name="versionType"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <RadioGroup
+                                value={field.value}
+                                onValueChange={field.onChange}
+                                className="space-y-3"
+                              >
+                                <div className="flex items-center space-x-2 space-x-reverse">
+                                  <RadioGroupItem
+                                    value="new"
+                                    id="version-new"
+                                    data-testid="radio-version-new"
+                                  />
+                                  <Label htmlFor="version-new" className="cursor-pointer font-normal">
+                                    مخطط جديد
+                                  </Label>
+                                </div>
+                                <div className="flex items-center space-x-2 space-x-reverse">
+                                  <RadioGroupItem
+                                    value="update"
+                                    id="version-update"
+                                    data-testid="radio-version-update"
+                                  />
+                                  <Label htmlFor="version-update" className="cursor-pointer font-normal">
+                                    تحديث لمخطط موجود
+                                  </Label>
+                                </div>
+                              </RadioGroup>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    {/* 4. Conditional: Parent Drawing Selection */}
+                    {watchedVersionType === "update" && (
+                      <div className="space-y-3 p-4 rounded-lg bg-muted/30 border">
+                        <FormField
+                          control={manualForm.control}
+                          name="parentDrawingId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                اختر المخطط للتحديث <span className="text-destructive">*</span>
+                              </FormLabel>
+                              <Select
+                                value={field.value}
+                                onValueChange={field.onChange}
+                                disabled={isDrawingsLoading}
+                              >
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-parent-drawing">
+                                    <SelectValue placeholder="اختر المخطط" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {filteredDrawings.length === 0 ? (
+                                    <div className="p-2 text-sm text-muted-foreground text-center">
+                                      {watchedDisciplineId
+                                        ? "لا توجد مخططات في هذا التخصص"
+                                        : "لا توجد مخططات متاحة"}
+                                    </div>
+                                  ) : (
+                                    filteredDrawings.map((drawing) => (
+                                      <SelectItem
+                                        key={drawing.id}
+                                        value={drawing.id}
+                                      >
+                                        {drawing.sheetNo} - {drawing.title}
+                                      </SelectItem>
+                                    ))
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    )}
+
+                    {/* 5. Revision Notes */}
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-foreground">ملاحظات الإصدار (اختياري)</h3>
+                      
+                      <FormField
+                        control={manualForm.control}
+                        name="revisionNotes"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Textarea
+                                {...field}
+                                placeholder="اذكر التغييرات أو التحديثات في هذا الإصدار، مثلاً: تصحيح الأبعاد، تحديث توزيع الغرف"
+                                rows={3}
+                                data-testid="textarea-revision-notes"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    {/* Form Actions */}
+                    <div className="flex gap-3 pt-4 border-t">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setCurrentStep("selection");
+                          manualForm.reset();
+                        }}
+                        disabled={manualUploadMutation.isPending}
+                        data-testid="button-cancel-manual"
+                      >
+                        إلغاء
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={!manualForm.formState.isValid || !watchedFile || manualUploadMutation.isPending}
+                        className="flex-1"
+                        data-testid="button-submit-manual"
+                      >
+                        {manualUploadMutation.isPending ? "جاري الرفع..." : "رفع المخطط"}
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
               </div>
             )}
 

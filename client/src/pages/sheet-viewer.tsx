@@ -25,6 +25,8 @@ import {
   Type,
   Eraser,
   FileText,
+  ChevronDown,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +40,14 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { CreateTicketModal } from "@/components/create-ticket-modal";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { PDFViewerCanvas } from "@/components/pdf-viewer-canvas";
 import type { Layer, Pin, Discipline, DrawingRevision, DrawingWithDetails, Floor } from "@shared/schema";
 
 type Tool = "pan" | "zoom-in" | "zoom-out" | "pin" | "ruler" | "pen" | "line" | "rectangle" | "circle" | "text" | "eraser";
@@ -96,6 +106,7 @@ export default function SheetViewer() {
   const [drawings, setDrawings] = useState<DrawingShape[]>([]);
   const [currentDrawing, setCurrentDrawing] = useState<DrawingShape | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
 
@@ -105,14 +116,20 @@ export default function SheetViewer() {
     enabled: !!id,
   });
 
-  // Fetch latest revision for this drawing
+  // Fetch all revisions for this drawing (sorted by uploadedAt descending)
   const { data: revisions = [] } = useQuery<DrawingRevision[]>({
     queryKey: ['/api/drawings', id, 'revisions'],
     enabled: !!id,
   });
 
-  // Get latest revision with file
+  // Get latest revision (first one, assuming sorted by uploadedAt desc)
   const latestRevision: DrawingRevision | null = revisions.length > 0 ? revisions[0] : null;
+  
+  // Get selected revision or fall back to latest
+  const selectedRevision = revisions.find(r => r.id === selectedRevisionId) || latestRevision;
+  
+  // Determine if viewing latest revision
+  const isLatestRevision = !selectedRevisionId || selectedRevisionId === latestRevision?.id;
 
   // Fetch layers for this drawing
   const { data: layers = [], isLoading: layersLoading } = useQuery<Layer[]>({
@@ -136,10 +153,10 @@ export default function SheetViewer() {
     queryKey: ['/api/floors'],
   });
 
-  // Fetch drawing pages if there's a latest revision
+  // Fetch drawing pages for the selected revision
   const { data: drawingPages = [], isLoading: pagesLoading } = useQuery<DrawingPage[]>({
-    queryKey: ['/api/revisions', latestRevision?.id, 'pages'],
-    enabled: !!latestRevision?.id,
+    queryKey: ['/api/revisions', selectedRevision?.id, 'pages'],
+    enabled: !!selectedRevision?.id,
   });
 
   // Helper to find discipline/floor names
@@ -162,9 +179,9 @@ export default function SheetViewer() {
     title: drawing.title || "Drawing",
     discipline: drawing.discipline?.name || getDisciplineName(drawing.disciplineId),
     floor: drawing.floor?.name || getFloorName(drawing.floorId),
-    revision: latestRevision?.revisionNo || "0",
-    status: latestRevision?.status || "draft",
-    imageUrl: latestRevision?.fileUrl || "https://lh3.googleusercontent.com/aida-public/AB6AXuClkpxrlywCUB6FBFEpz1MqmUVNsaboO4lQx_daxG5RrVolhPaqKLc_1J3XzZcB9iSKMFSSOldOPQxZvgPKdFjc0-nJQBUa3aeoCD12S1uRft2fh59pBU-YiPmMdPdJdiMdRJjQzebBz4CsQDDxBNLK2i2iaSUbhoAjtgDTjg73Uvbut66h6QqemaISlluWiRUy2DTes7feeGkY0VE4QHA4TOXmuEHcrZiY8V26ujQANak4A_aOpFmjn_Z7W7r97w8jUOoFwCZmOOI",
+    revision: selectedRevision?.revisionNo || "0",
+    status: selectedRevision?.status || "draft",
+    imageUrl: selectedRevision?.fileUrl || "https://lh3.googleusercontent.com/aida-public/AB6AXuClkpxrlywCUB6FBFEpz1MqmUVNsaboO4lQx_daxG5RrVolhPaqKLc_1J3XzZcB9iSKMFSSOldOPQxZvgPKdFjc0-nJQBUa3aeoCD12S1uRft2fh59pBU-YiPmMdPdJdiMdRJjQzebBz4CsQDDxBNLK2i2iaSUbhoAjtgDTjg73Uvbut66h6QqemaISlluWiRUy2DTes7feeGkY0VE4QHA4TOXmuEHcrZiY8V26ujQANak4A_aOpFmjn_Z7W7r97w8jUOoFwCZmOOI",
   } : {
     id: id || "1",
     sheetNo: "Loading...",
@@ -178,7 +195,12 @@ export default function SheetViewer() {
 
   // Get current page data and display image
   const currentPageData = drawingPages.find(p => p.pageNumber === currentPage) || null;
-  const displayImageUrl = currentPageData?.imageUrl || latestRevision?.fileUrl || plan.imageUrl;
+  const displayImageUrl = currentPageData?.imageUrl || selectedRevision?.fileUrl || plan.imageUrl;
+  
+  // Determine display mode: PDF or Image
+  const displayMode = selectedRevision?.uploadMethod === 'manual' && 
+                      selectedRevision?.fileType === 'application/pdf' 
+                        ? 'pdf' : 'image';
 
   // Group layers by discipline
   const layersByDiscipline = layers.reduce((acc, layer) => {
@@ -707,25 +729,98 @@ export default function SheetViewer() {
         </div>
 
         {/* Canvas Area */}
-        <div className="flex-1 overflow-hidden bg-background/30 relative">
+        <div className="flex-1 overflow-hidden bg-background/30 relative flex flex-col">
+          {/* Warning Banner for Old Revisions */}
+          {!isLatestRevision && selectedRevision && latestRevision && (
+            <div className="px-4 pt-3" data-testid="banner-old-revision-warning">
+              <Alert className="bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800">
+                <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                <AlertDescription className="flex items-center justify-between">
+                  <span className="text-yellow-800 dark:text-yellow-200">
+                    ⚠️ تعرض إصدار قديم ({selectedRevision.revisionNo}) - للمراجعة فقط
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedRevisionId(latestRevision.id)}
+                    className="ml-4 border-yellow-300 dark:border-yellow-700 hover-elevate"
+                    data-testid="button-switch-to-latest"
+                  >
+                    عرض أحدث إصدار
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+          
+          {/* Floating Revision Selector Button */}
+          {revisions.length > 1 && (
+            <div className="absolute top-4 right-4 z-50">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="gap-2 shadow-lg hover-elevate"
+                    data-testid="button-revision-selector"
+                  >
+                    <span className="font-semibold">
+                      {selectedRevision?.revisionNo || 'N/A'}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {isLatestRevision ? 'أحدث إصدار' : 'إصدار قديم'}
+                    </span>
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  {revisions.map((revision) => (
+                    <DropdownMenuItem
+                      key={revision.id}
+                      onClick={() => setSelectedRevisionId(revision.id)}
+                      className="flex items-center justify-between hover-elevate"
+                      data-testid={`revision-item-${revision.id}`}
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium">{revision.revisionNo}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {revision.uploadedAt ? new Date(revision.uploadedAt).toLocaleString('ar-SA', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          }) : 'N/A'}
+                        </span>
+                      </div>
+                      {selectedRevision?.id === revision.id && (
+                        <Check className="h-4 w-4 text-primary" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
+          
           <div
             ref={canvasRef}
-            className="w-full h-full overflow-hidden flex items-center justify-center p-8"
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={(e) => {
+            className="flex-1 w-full overflow-hidden flex items-center justify-center p-8"
+            onMouseDown={displayMode === 'image' ? handleMouseDown : undefined}
+            onMouseMove={displayMode === 'image' ? handleMouseMove : undefined}
+            onMouseUp={displayMode === 'image' ? handleMouseUp : undefined}
+            onMouseLeave={displayMode === 'image' ? (e) => {
               handleMouseUp();
               handleMouseLeave();
-            }}
+            } : undefined}
             style={{ 
-              cursor: activeTool === "pan" ? (isPanning ? "grabbing" : "grab") : activeTool === "pin" ? "none" : "default",
+              cursor: displayMode === 'image' && activeTool === "pan" ? (isPanning ? "grabbing" : "grab") : displayMode === 'image' && activeTool === "pin" ? "none" : "default",
               userSelect: "none",
             }}
             data-testid="canvas-viewer"
           >
             {/* Crosshair cursor for pin tool */}
-            {activeTool === "pin" && showCrosshair && !tempPin && (
+            {displayMode === 'image' && activeTool === "pin" && showCrosshair && !tempPin && (
               <>
                 {/* Vertical line */}
                 <div
@@ -749,23 +844,61 @@ export default function SheetViewer() {
                 />
               </>
             )}
-            <div
-              ref={imageRef}
-              className="relative bg-white shadow-2xl"
-              onClick={handleCanvasClick}
-              style={{
-                transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoom / 100})`,
-                transformOrigin: "center",
-                transition: isPanning ? "none" : "transform 0.2s ease-out",
-              }}
-            >
-              <img
-                src={displayImageUrl}
-                alt={plan.title}
-                className="max-w-full h-auto pointer-events-none"
-                data-testid="img-plan-canvas"
-                draggable={false}
-              />
+            
+            {/* Conditional Rendering: PDF or Image Mode */}
+            {displayMode === 'pdf' && selectedRevision?.fileUrl ? (
+              <PDFViewerCanvas
+                pdfUrl={selectedRevision.fileUrl}
+                zoom={zoom}
+                panPosition={panPosition}
+                onPanChange={setPanPosition}
+                className="w-full h-full"
+              >
+                {/* SVG Overlay for pins and drawings */}
+                {/* Render temporary pin with confirm/cancel buttons */}
+                {tempPin && (
+                  <g>
+                    <circle
+                      cx={`${tempPin.x}%`}
+                      cy={`${tempPin.y}%`}
+                      r="6"
+                      className="fill-accent stroke-accent-foreground"
+                      strokeWidth="2"
+                    />
+                  </g>
+                )}
+                
+                {/* Render confirmed pins */}
+                {pins.map((pin) => (
+                  <g key={pin.id}>
+                    <circle
+                      cx={`${pin.x}%`}
+                      cy={`${pin.y}%`}
+                      r="6"
+                      className="fill-primary stroke-foreground"
+                      strokeWidth="1"
+                    />
+                  </g>
+                ))}
+              </PDFViewerCanvas>
+            ) : (
+              <div
+                ref={imageRef}
+                className="relative bg-white shadow-2xl"
+                onClick={handleCanvasClick}
+                style={{
+                  transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoom / 100})`,
+                  transformOrigin: "center",
+                  transition: isPanning ? "none" : "transform 0.2s ease-out",
+                }}
+              >
+                <img
+                  src={displayImageUrl}
+                  alt={plan.title}
+                  className="max-w-full h-auto pointer-events-none"
+                  data-testid="img-plan-canvas"
+                  draggable={false}
+                />
               
               {/* SVG Drawing Layer */}
               <svg
@@ -952,6 +1085,50 @@ export default function SheetViewer() {
                 </div>
               )}
               
+              {/* Render temporary pin with confirm/cancel buttons */}
+              {tempPin && (
+                <div
+                  className="absolute pointer-events-auto"
+                  style={{
+                    left: `${tempPin.x}%`,
+                    top: `${tempPin.y}%`,
+                  }}
+                  data-testid="temp-pin"
+                >
+                  <div className="relative -ml-3 -mt-6">
+                    <MapPin className="h-6 w-6 text-accent fill-accent/30" />
+                    <div className="absolute top-0 left-8 flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-6 px-2 gap-1 bg-accent hover:bg-accent/90 text-accent-foreground"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleConfirmPin();
+                        }}
+                        data-testid="button-confirm-pin"
+                      >
+                        <Check className="h-3 w-3" />
+                        <span className="text-xs">تأكيد</span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 px-2 gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCancelPin();
+                        }}
+                        data-testid="button-cancel-pin"
+                      >
+                        <X className="h-3 w-3" />
+                        <span className="text-xs">إلغاء</span>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {/* Render confirmed pins */}
               {pins.map((pin) => (
                 <div
@@ -969,7 +1146,8 @@ export default function SheetViewer() {
                   <MapPin className="h-6 w-6 text-primary fill-primary/20" />
                 </div>
               ))}
-            </div>
+              </div>
+            )}
           </div>
         </div>
 

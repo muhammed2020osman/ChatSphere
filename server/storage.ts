@@ -799,7 +799,7 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(users, eq(drawings.createdBy, users.id))
       .orderBy(desc(drawings.updatedAt));
 
-    // Get latest revision for each drawing
+    // Get latest revision and revision count for each drawing
     const drawingsWithRevisions = await Promise.all(
       results.map(async (row) => {
         const [latestRevision] = await db
@@ -813,11 +813,20 @@ export class DatabaseStorage implements IStorage {
           .orderBy(desc(drawingRevisions.uploadedAt))
           .limit(1);
 
+        // Get revision count for this drawing
+        const revisionCountResult = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(drawingRevisions)
+          .where(eq(drawingRevisions.drawingId, row.drawing.id));
+        
+        const revisionCount = Number(revisionCountResult[0]?.count || 0);
+
         return {
           ...row.drawing,
           discipline: row.discipline!,
           floor: row.floor || undefined,
           creator: row.creator!,
+          revisionCount,
           latestRevision: latestRevision ? {
             ...latestRevision.revision,
             uploader: latestRevision.uploader!,

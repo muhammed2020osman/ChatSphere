@@ -565,6 +565,7 @@ export type DrawingWithDetails = Drawing & {
   discipline: Discipline;
   floor?: Floor;
   creator: User;
+  revisionCount?: number;
   latestRevision?: DrawingRevisionWithUser;
   revisions?: DrawingRevisionWithUser[];
 };
