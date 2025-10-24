@@ -1619,8 +1619,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Tickets routes
   app.get('/api/tickets', isAuthenticated, async (req, res) => {
     try {
-      const tickets = await storage.getTickets();
-      res.json(tickets);
+      const filters: any = {};
+      
+      if (req.query.search) filters.search = req.query.search as string;
+      if (req.query.type) filters.type = Array.isArray(req.query.type) ? req.query.type : [req.query.type];
+      if (req.query.status) filters.status = Array.isArray(req.query.status) ? req.query.status : [req.query.status];
+      if (req.query.priority) filters.priority = Array.isArray(req.query.priority) ? req.query.priority : [req.query.priority];
+      if (req.query.assignedTo) filters.assignedTo = Array.isArray(req.query.assignedTo) ? req.query.assignedTo : [req.query.assignedTo];
+      if (req.query.drawingId) filters.drawingId = Array.isArray(req.query.drawingId) ? req.query.drawingId : [req.query.drawingId];
+      if (req.query.disciplineId) filters.disciplineId = Array.isArray(req.query.disciplineId) ? req.query.disciplineId : [req.query.disciplineId];
+      if (req.query.layerId) filters.layerId = Array.isArray(req.query.layerId) ? req.query.layerId : [req.query.layerId];
+      if (req.query.slaStatus) filters.slaStatus = req.query.slaStatus as 'overdue' | 'due_soon' | 'on_track';
+      if (req.query.tags) filters.tags = Array.isArray(req.query.tags) ? req.query.tags : [req.query.tags];
+      if (req.query.dateFrom) filters.dateFrom = req.query.dateFrom as string;
+      if (req.query.dateTo) filters.dateTo = req.query.dateTo as string;
+      if (req.query.page) filters.page = parseInt(req.query.page as string);
+      if (req.query.limit) filters.limit = parseInt(req.query.limit as string);
+      if (req.query.sortBy) filters.sortBy = req.query.sortBy as string;
+      if (req.query.sortOrder) filters.sortOrder = req.query.sortOrder as 'asc' | 'desc';
+      
+      const result = await storage.getTicketsFiltered(filters);
+      res.json(result);
     } catch (error) {
       console.error("Error fetching tickets:", error);
       res.status(500).json({ message: "Failed to fetch tickets" });
@@ -1696,6 +1715,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting ticket:", error);
       res.status(500).json({ message: "Failed to delete ticket" });
+    }
+  });
+
+  app.patch('/api/tickets/bulk', isAuthenticated, async (req, res) => {
+    try {
+      const { ticketIds, updates } = req.body;
+      
+      if (!ticketIds || !Array.isArray(ticketIds) || ticketIds.length === 0) {
+        return res.status(400).json({ message: "ticketIds array is required" });
+      }
+      
+      if (!updates || typeof updates !== 'object') {
+        return res.status(400).json({ message: "updates object is required" });
+      }
+      
+      const count = await storage.bulkUpdateTickets(ticketIds, updates);
+      res.json({ updated: count, message: `${count} ticket(s) updated successfully` });
+    } catch (error) {
+      console.error("Error bulk updating tickets:", error);
+      res.status(500).json({ message: "Failed to bulk update tickets" });
+    }
+  });
+
+  app.get('/api/pins/:id/timeline', isAuthenticated, async (req, res) => {
+    try {
+      const timeline = await storage.getPinTimeline(req.params.id);
+      res.json(timeline);
+    } catch (error) {
+      console.error("Error fetching pin timeline:", error);
+      res.status(500).json({ message: "Failed to fetch pin timeline" });
+    }
+  });
+
+  // Saved Views routes
+  app.get('/api/saved-views', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const views = await storage.getSavedViews(userId);
+      res.json(views);
+    } catch (error) {
+      console.error("Error fetching saved views:", error);
+      res.status(500).json({ message: "Failed to fetch saved views" });
+    }
+  });
+
+  app.get('/api/saved-views/:id', isAuthenticated, async (req, res) => {
+    try {
+      const view = await storage.getSavedView(req.params.id);
+      if (!view) {
+        return res.status(404).json({ message: "Saved view not found" });
+      }
+      res.json(view);
+    } catch (error) {
+      console.error("Error fetching saved view:", error);
+      res.status(500).json({ message: "Failed to fetch saved view" });
+    }
+  });
+
+  app.post('/api/saved-views', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const viewData = {
+        ...req.body,
+        userId,
+      };
+      const view = await storage.createSavedView(viewData);
+      res.json(view);
+    } catch (error) {
+      console.error("Error creating saved view:", error);
+      res.status(500).json({ message: "Failed to create saved view" });
+    }
+  });
+
+  app.put('/api/saved-views/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const existingView = await storage.getSavedView(req.params.id);
+      
+      if (!existingView) {
+        return res.status(404).json({ message: "Saved view not found" });
+      }
+      
+      if (existingView.userId !== userId) {
+        return res.status(403).json({ message: "Not authorized to update this view" });
+      }
+      
+      const view = await storage.updateSavedView(req.params.id, req.body);
+      res.json(view);
+    } catch (error) {
+      console.error("Error updating saved view:", error);
+      res.status(500).json({ message: "Failed to update saved view" });
+    }
+  });
+
+  app.delete('/api/saved-views/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const existingView = await storage.getSavedView(req.params.id);
+      
+      if (!existingView) {
+        return res.status(404).json({ message: "Saved view not found" });
+      }
+      
+      if (existingView.userId !== userId) {
+        return res.status(403).json({ message: "Not authorized to delete this view" });
+      }
+      
+      await storage.deleteSavedView(req.params.id);
+      res.sendStatus(204);
+    } catch (error) {
+      console.error("Error deleting saved view:", error);
+      res.status(500).json({ message: "Failed to delete saved view" });
     }
   });
 

@@ -15,6 +15,7 @@ import {
   layers,
   pins,
   tickets,
+  savedViews,
   type User,
   type UpsertUser,
   type Channel,
@@ -49,9 +50,11 @@ import {
   type InsertPin,
   type Ticket,
   type InsertTicket,
+  type SavedView,
+  type InsertSavedView,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, or, desc, asc, sql, inArray, ilike, gte, lte, arrayOverlaps } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 export interface IStorage {
@@ -138,12 +141,45 @@ export interface IStorage {
   
   // Tickets operations
   getTickets(): Promise<Ticket[]>;
+  getTicketsFiltered(filters: {
+    search?: string;
+    type?: string[];
+    status?: string[];
+    priority?: string[];
+    assignedTo?: string[];
+    drawingId?: string[];
+    disciplineId?: string[];
+    layerId?: string[];
+    slaStatus?: 'overdue' | 'due_soon' | 'on_track';
+    tags?: string[];
+    dateFrom?: string;
+    dateTo?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<{
+    tickets: Ticket[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }>;
   getDrawingTickets(drawingId: string): Promise<Ticket[]>;
   getTicket(id: string): Promise<Ticket | undefined>;
   createTicket(ticket: InsertTicket): Promise<Ticket>;
   updateTicketStatus(ticketId: string, status: string): Promise<Ticket>;
   updateTicket(ticketId: string, updates: Partial<InsertTicket>): Promise<Ticket>;
+  bulkUpdateTickets(ticketIds: string[], updates: Partial<InsertTicket>): Promise<number>;
   deleteTicket(ticketId: string): Promise<void>;
+  getPinTimeline(pinId: string): Promise<any[]>;
+  
+  // Saved Views operations
+  getSavedViews(userId: string): Promise<any[]>;
+  getSavedView(id: string): Promise<any | undefined>;
+  createSavedView(view: any): Promise<any>;
+  updateSavedView(id: string, updates: any): Promise<any>;
+  deleteSavedView(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1176,6 +1212,268 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTicket(ticketId: string): Promise<void> {
     await db.delete(tickets).where(eq(tickets.id, ticketId));
+  }
+
+  async getTicketsFiltered(filters: {
+    search?: string;
+    type?: string[];
+    status?: string[];
+    priority?: string[];
+    assignedTo?: string[];
+    drawingId?: string[];
+    disciplineId?: string[];
+    layerId?: string[];
+    slaStatus?: 'overdue' | 'due_soon' | 'on_track';
+    tags?: string[];
+    dateFrom?: string;
+    dateTo?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<{
+    tickets: Ticket[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const page = filters.page || 1;
+    const limit = filters.limit || 20;
+    const offset = (page - 1) * limit;
+    const sortOrder = filters.sortOrder === 'asc' ? asc : desc;
+    const sortColumn = filters.sortBy || 'createdAt';
+
+    const conditions: any[] = [];
+
+    if (filters.search) {
+      conditions.push(
+        or(
+          ilike(tickets.title, `%${filters.search}%`),
+          ilike(tickets.description, `%${filters.search}%`)
+        )
+      );
+    }
+
+    if (filters.type && filters.type.length > 0) {
+      conditions.push(inArray(tickets.type, filters.type));
+    }
+
+    if (filters.status && filters.status.length > 0) {
+      conditions.push(inArray(tickets.status, filters.status));
+    }
+
+    if (filters.priority && filters.priority.length > 0) {
+      conditions.push(inArray(tickets.priority, filters.priority));
+    }
+
+    if (filters.assignedTo && filters.assignedTo.length > 0) {
+      conditions.push(inArray(tickets.assignedTo, filters.assignedTo.filter(Boolean)));
+    }
+
+    if (filters.drawingId && filters.drawingId.length > 0) {
+      conditions.push(inArray(tickets.drawingId, filters.drawingId));
+    }
+
+    if (filters.disciplineId && filters.disciplineId.length > 0) {
+      conditions.push(inArray(tickets.disciplineId, filters.disciplineId));
+    }
+
+    if (filters.layerId && filters.layerId.length > 0) {
+      conditions.push(inArray(tickets.layerId, filters.layerId.filter(Boolean)));
+    }
+
+    if (filters.tags && filters.tags.length > 0) {
+      conditions.push(arrayOverlaps(tickets.tags, filters.tags));
+    }
+
+    if (filters.dateFrom) {
+      conditions.push(gte(tickets.createdAt, new Date(filters.dateFrom)));
+    }
+
+    if (filters.dateTo) {
+      conditions.push(lte(tickets.createdAt, new Date(filters.dateTo)));
+    }
+
+    if (filters.slaStatus) {
+      const now = new Date();
+      const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      
+      if (filters.slaStatus === 'overdue') {
+        conditions.push(
+          and(
+            sql`${tickets.dueDate} IS NOT NULL`,
+            sql`${tickets.dueDate} < ${now}`
+          )
+        );
+      } else if (filters.slaStatus === 'due_soon') {
+        conditions.push(
+          and(
+            sql`${tickets.dueDate} IS NOT NULL`,
+            sql`${tickets.dueDate} >= ${now}`,
+            sql`${tickets.dueDate} <= ${twentyFourHoursFromNow}`
+          )
+        );
+      } else if (filters.slaStatus === 'on_track') {
+        conditions.push(
+          and(
+            sql`${tickets.dueDate} IS NOT NULL`,
+            sql`${tickets.dueDate} > ${twentyFourHoursFromNow}`
+          )
+        );
+      }
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(tickets)
+      .where(whereClause);
+
+    const total = Number(countResult.count);
+    const totalPages = Math.ceil(total / limit);
+
+    const sortColumnRef = (tickets as any)[sortColumn] || tickets.createdAt;
+
+    const ticketsList = await db
+      .select()
+      .from(tickets)
+      .where(whereClause)
+      .orderBy(sortOrder(sortColumnRef))
+      .limit(limit)
+      .offset(offset);
+
+    return {
+      tickets: ticketsList,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
+  }
+
+  async bulkUpdateTickets(ticketIds: string[], updates: Partial<InsertTicket>): Promise<number> {
+    if (ticketIds.length === 0) {
+      return 0;
+    }
+
+    const result = await db
+      .update(tickets)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(inArray(tickets.id, ticketIds))
+      .returning({ id: tickets.id });
+
+    return result.length;
+  }
+
+  async getPinTimeline(pinId: string): Promise<any[]> {
+    const [pin] = await db
+      .select({
+        id: pins.id,
+        label: pins.label,
+        description: pins.description,
+        createdBy: pins.createdBy,
+        createdAt: pins.createdAt,
+      })
+      .from(pins)
+      .where(eq(pins.id, pinId));
+
+    if (!pin) {
+      return [];
+    }
+
+    const pinTickets = await db
+      .select()
+      .from(tickets)
+      .where(eq(tickets.pinId, pinId))
+      .orderBy(desc(tickets.createdAt));
+
+    const timeline: any[] = [];
+
+    timeline.push({
+      type: 'pin_created',
+      date: pin.createdAt,
+      data: {
+        pinId: pin.id,
+        label: pin.label,
+        description: pin.description,
+        createdBy: pin.createdBy,
+      },
+    });
+
+    for (const ticket of pinTickets) {
+      timeline.push({
+        type: 'ticket_created',
+        date: ticket.createdAt,
+        data: {
+          ticketId: ticket.id,
+          title: ticket.title,
+          type: ticket.type,
+          status: ticket.status,
+          priority: ticket.priority,
+          createdBy: ticket.createdBy,
+        },
+      });
+
+      if (ticket.status === 'resolved' || ticket.status === 'closed') {
+        timeline.push({
+          type: 'ticket_resolved',
+          date: ticket.updatedAt,
+          data: {
+            ticketId: ticket.id,
+            title: ticket.title,
+            status: ticket.status,
+          },
+        });
+      }
+    }
+
+    timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return timeline;
+  }
+
+  async getSavedViews(userId: string): Promise<any[]> {
+    return await db
+      .select()
+      .from(savedViews)
+      .where(
+        or(
+          eq(savedViews.userId, userId),
+          eq(savedViews.isShared, true)
+        )
+      )
+      .orderBy(desc(savedViews.createdAt));
+  }
+
+  async getSavedView(id: string): Promise<any | undefined> {
+    const [view] = await db
+      .select()
+      .from(savedViews)
+      .where(eq(savedViews.id, id));
+    return view;
+  }
+
+  async createSavedView(viewData: any): Promise<any> {
+    const [view] = await db
+      .insert(savedViews)
+      .values(viewData)
+      .returning();
+    return view;
+  }
+
+  async updateSavedView(id: string, updates: any): Promise<any> {
+    const [view] = await db
+      .update(savedViews)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(savedViews.id, id))
+      .returning();
+    return view;
+  }
+
+  async deleteSavedView(id: string): Promise<void> {
+    await db.delete(savedViews).where(eq(savedViews.id, id));
   }
 }
 
