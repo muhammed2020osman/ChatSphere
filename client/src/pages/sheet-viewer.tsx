@@ -217,7 +217,12 @@ export default function SheetViewer() {
   }, {} as Record<string, Layer[]>);
 
   // Filter pins based on visible layers
+  // Pins without a layer (layerId=null) are always visible
   const visiblePins = pins.filter((pin) => {
+    // If pin has no layer, it's always visible
+    if (!pin.layerId) return true;
+    
+    // Otherwise, check if layer is visible
     const layer = layers.find(l => l.id === pin.layerId);
     return layer && layer.visible;
   });
