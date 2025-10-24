@@ -546,6 +546,11 @@ export function IngestPlansModal() {
                       <Button 
                         className="w-full mt-4"
                         data-testid="button-select-ai"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setUploadMode('ai');
+                          setCurrentStep('upload');
+                        }}
                       >
                         اختيار هذه الطريقة
                       </Button>
@@ -577,6 +582,11 @@ export function IngestPlansModal() {
                         variant="secondary"
                         className="w-full mt-4"
                         data-testid="button-select-manual"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setUploadMode('manual');
+                          setCurrentStep('manual_form');
+                        }}
                       >
                         اختيار هذه الطريقة
                       </Button>
