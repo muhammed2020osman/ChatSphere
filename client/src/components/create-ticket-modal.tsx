@@ -38,7 +38,7 @@ const ticketFormSchema = insertTicketSchema.extend({
   disciplineId: z.string().min(1, "يجب اختيار الـ Discipline"),
   priority: z.enum(["low", "medium", "high"]),
   assignedTo: z.string().optional(),
-  layerId: z.string().min(1, "يجب اختيار الـ Layer"),
+  layerId: z.string().optional(), // Layer is optional - some drawings don't have layers
 });
 
 type TicketFormValues = z.infer<typeof ticketFormSchema>;
@@ -48,6 +48,7 @@ interface CreateTicketModalProps {
   onOpenChange: (open: boolean) => void;
   pinPosition: { x: number; y: number };
   drawingId: string;
+  drawingDisciplineId?: string; // Auto-populate discipline from drawing
   layers: Layer[];
   onSubmit: (ticket: TicketFormValues) => void;
 }
@@ -57,6 +58,7 @@ export function CreateTicketModal({
   onOpenChange,
   pinPosition,
   drawingId,
+  drawingDisciplineId,
   layers,
   onSubmit,
 }: CreateTicketModalProps) {
@@ -77,7 +79,7 @@ export function CreateTicketModal({
       title: "",
       description: "",
       type: "issue",
-      disciplineId: "",
+      disciplineId: drawingDisciplineId || "", // Auto-populate from drawing
       priority: "medium",
       assignedTo: "",
       drawingId,
@@ -112,46 +114,7 @@ export function CreateTicketModal({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-            {/* Title */}
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>عنوان التذكرة *</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      placeholder="مثال: تعارض في الجدران"
-                      data-testid="input-ticket-title"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Description */}
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>الوصف</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      {...field}
-                      placeholder="وصف تفصيلي للمشكلة أو الملاحظة..."
-                      rows={4}
-                      data-testid="textarea-ticket-description"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Ticket Type */}
+            {/* Ticket Type - FIRST as requested */}
             <FormField
               control={form.control}
               name="type"
@@ -197,13 +160,52 @@ export function CreateTicketModal({
               )}
             />
 
-            {/* Layer */}
+            {/* Title - SECOND */}
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>عنوان التذكرة *</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      placeholder="مثال: تعارض في الجدران"
+                      data-testid="input-ticket-title"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Description - THIRD */}
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>الوصف</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      {...field}
+                      placeholder="وصف تفصيلي للمشكلة أو الملاحظة..."
+                      rows={4}
+                      data-testid="textarea-ticket-description"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Layer - FOURTH (OPTIONAL - No asterisk) */}
             <FormField
               control={form.control}
               name="layerId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>الطبقة (Layer) *</FormLabel>
+                  <FormLabel>الطبقة (Layer)</FormLabel>
                   <Select
                     onValueChange={field.onChange}
                     defaultValue={field.value}
@@ -211,22 +213,28 @@ export function CreateTicketModal({
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="اختر الطبقة" />
+                        <SelectValue placeholder="اختياري - اختر الطبقة" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {layers.map((layer) => {
-                        const discipline = disciplines.find(d => d.id === layer.disciplineId);
-                        return (
-                          <SelectItem
-                            key={layer.id}
-                            value={layer.id}
-                            data-testid={`option-layer-${layer.id}`}
-                          >
-                            {layer.name} ({discipline?.name || 'Unknown'})
-                          </SelectItem>
-                        );
-                      })}
+                      {layers.length === 0 ? (
+                        <div className="p-2 text-sm text-muted-foreground text-center">
+                          لا توجد طبقات متاحة
+                        </div>
+                      ) : (
+                        layers.map((layer) => {
+                          const discipline = disciplines.find(d => d.id === layer.disciplineId);
+                          return (
+                            <SelectItem
+                              key={layer.id}
+                              value={layer.id}
+                              data-testid={`option-layer-${layer.id}`}
+                            >
+                              {layer.name} ({discipline?.name || 'Unknown'})
+                            </SelectItem>
+                          );
+                        })
+                      )}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -234,7 +242,7 @@ export function CreateTicketModal({
               )}
             />
 
-            {/* Discipline */}
+            {/* Discipline - FIFTH (auto-filled from drawing) */}
             <FormField
               control={form.control}
               name="disciplineId"
@@ -243,7 +251,7 @@ export function CreateTicketModal({
                   <FormLabel>التخصص (Discipline) *</FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    value={field.value}
                     data-testid="select-discipline"
                   >
                     <FormControl>

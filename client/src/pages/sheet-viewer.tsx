@@ -1550,6 +1550,7 @@ export default function SheetViewer() {
           onOpenChange={setShowTicketModal}
           pinPosition={tempPin}
           drawingId={plan.id}
+          drawingDisciplineId={drawing?.disciplineId}
           layers={layers}
           onSubmit={handleTicketSubmit}
         />
