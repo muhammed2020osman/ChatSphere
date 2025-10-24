@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { PDFViewerCanvas } from "@/components/pdf-viewer-canvas";
 import type { Layer, Pin, Discipline, DrawingRevision, DrawingWithDetails, Floor, Ticket } from "@shared/schema";
+import mapLocationIcon from "@assets/map-location_1761314621260.png";
 
 // Extend Pin type to include tickets
 type PinWithTickets = Pin & {
@@ -996,12 +997,13 @@ export default function SheetViewer() {
                 {/* Render temporary pin with confirm/cancel buttons */}
                 {tempPin && (
                   <g>
-                    <circle
-                      cx={`${tempPin.x}%`}
-                      cy={`${tempPin.y}%`}
-                      r="6"
-                      className="fill-accent stroke-accent-foreground"
-                      strokeWidth="2"
+                    <image
+                      href={mapLocationIcon}
+                      x={`calc(${tempPin.x}% - 16px)`}
+                      y={`calc(${tempPin.y}% - 32px)`}
+                      width="32"
+                      height="32"
+                      className="pointer-events-none"
                     />
                   </g>
                 )}
@@ -1009,12 +1011,13 @@ export default function SheetViewer() {
                 {/* Render confirmed pins (only visible layers) */}
                 {visiblePins.map((pin) => (
                   <g key={pin.id}>
-                    <circle
-                      cx={`${pin.x}%`}
-                      cy={`${pin.y}%`}
-                      r="6"
-                      className="fill-primary stroke-foreground"
-                      strokeWidth="1"
+                    <image
+                      href={mapLocationIcon}
+                      x={`calc(${pin.x}% - 16px)`}
+                      y={`calc(${pin.y}% - 32px)`}
+                      width="32"
+                      height="32"
+                      className="cursor-pointer"
                     />
                   </g>
                 ))}
@@ -1235,9 +1238,9 @@ export default function SheetViewer() {
                   }}
                   data-testid="temp-pin"
                 >
-                  <div className="relative -ml-3 -mt-6">
-                    <MapPin className="h-6 w-6 text-accent fill-accent/30" />
-                    <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-1">
+                  <div className="relative -ml-4 -mt-8">
+                    <img src={mapLocationIcon} alt="Pin" className="w-8 h-8" />
+                    <div className="absolute top-8 left-1/2 -translate-x-1/2 flex items-center gap-1">
                       <Button
                         size="sm"
                         variant="default"
@@ -1273,7 +1276,7 @@ export default function SheetViewer() {
               {visiblePins.map((pin) => (
                 <div
                   key={pin.id}
-                  className="absolute w-6 h-6 -ml-3 -mt-6 cursor-pointer pointer-events-auto"
+                  className="absolute w-8 h-8 -ml-4 -mt-8 cursor-pointer pointer-events-auto"
                   style={{
                     left: `${pin.x}%`,
                     top: `${pin.y}%`,
@@ -1283,7 +1286,7 @@ export default function SheetViewer() {
                     e.stopPropagation();
                   }}
                 >
-                  <MapPin className="h-6 w-6 text-primary fill-primary/20" />
+                  <img src={mapLocationIcon} alt="Pin" className="w-8 h-8" />
                 </div>
               ))}
               </div>
