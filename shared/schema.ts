@@ -647,6 +647,7 @@ export const insertTicketSchema = createInsertSchema(tickets).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  createdBy: true, // Set by API from session
 }).extend({
   layerId: z.string().optional(),
   reporter: z.string().optional(),

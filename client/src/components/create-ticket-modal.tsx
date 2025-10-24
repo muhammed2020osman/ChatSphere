@@ -31,15 +31,18 @@ import { Button } from "@/components/ui/button";
 import { insertTicketSchema, type Discipline, type User, type Layer } from "@shared/schema";
 
 // Extend ticket schema for form validation
-const ticketFormSchema = insertTicketSchema.extend({
-  title: z.string().min(3, "العنوان يجب أن يكون 3 أحرف على الأقل"),
-  description: z.string().optional(),
-  type: z.enum(["rfi", "issue", "clash", "change_request", "observation", "safety", "quality"]),
-  disciplineId: z.string().min(1, "يجب اختيار الـ Discipline"),
-  priority: z.enum(["low", "medium", "high"]),
-  assignedTo: z.string().optional(),
-  layerId: z.string().optional(), // Layer is optional - some drawings don't have layers
-});
+// Remove pinId - set by the parent component after pin creation
+const ticketFormSchema = insertTicketSchema
+  .omit({ pinId: true })
+  .extend({
+    title: z.string().min(3, "العنوان يجب أن يكون 3 أحرف على الأقل"),
+    description: z.string().optional(),
+    type: z.enum(["rfi", "issue", "clash", "change_request", "observation", "safety", "quality"]),
+    disciplineId: z.string().min(1, "يجب اختيار الـ Discipline"),
+    priority: z.enum(["low", "medium", "high"]),
+    assignedTo: z.string().optional(),
+    layerId: z.string().optional(), // Layer is optional - some drawings don't have layers
+  });
 
 type TicketFormValues = z.infer<typeof ticketFormSchema>;
 
@@ -83,8 +86,6 @@ export function CreateTicketModal({
       priority: "medium",
       assignedTo: "",
       drawingId,
-      pinId: "", // Will be set after pin is created
-      createdBy: "", // Will be set from current user
       layerId: "",
     },
   });
