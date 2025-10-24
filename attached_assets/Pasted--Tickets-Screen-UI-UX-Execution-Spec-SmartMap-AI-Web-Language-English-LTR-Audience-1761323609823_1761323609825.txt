@@ -1,0 +1,291 @@
+# Tickets Screen – UI/UX Execution Spec (SmartMap AI Web)
+
+**Language:** English (LTR)
+**Audience:** Product, Design, Frontend, Backend, QA
+**Scope:** A single, end‑to‑end spec for the **Tickets** area covering: Hub (Table/Kanban/Calendar/Map), Right Preview, Left Pin Timeline Drawer, creation/edit flows, filters & saved views, Slack/Channels links, performance, accessibility, analytics, and API contracts.
+
+---
+
+## 1) Purpose & Goals
+
+* Provide one place to **find, triage, act on, and track** tickets linked to sheet pins.
+* Support two work modes: **Map‑centric** (spatial focus) and **Channel‑centric** (conversation focus) without data drift.
+* Reduce MTTR, improve SLA compliance, and keep a complete **spatio‑temporal record** per pin.
+
+**Primary personas**: PM (oversight), Engineer (execution), Reviewer/Consultant (responses), QA/Inspector (evidence).
+
+---
+
+## 2) Information Architecture
+
+**Route:** `/tickets` → Hub with four views: **Table | Kanban | Calendar | Map** (tabs).
+**Shared header**: search, facets (filters), quick actions, saved views.
+**Right Preview panel**: contextual details for the selected ticket.
+**Left Drawer (Pin Timeline)**: opens on pin click in Map.
+
+---
+
+## 3) Global Header (within `/tickets`)
+
+* **Primary search (string):** matches Title, ID, Type, Assignee, Tags, Sheet name, Channel name. Debounced 300–400ms.
+* **Facets (chips/comboboxes):**
+
+  * Project, Discipline, Level/Zone
+  * **Sheet (multi‑select, required for Map)**
+  * **Layer (ARCH/STR/MEP/FIRE/Annotations, multi)**
+  * Type (NCR/RFI/Clash/Completion/Change/Safety/…)
+  * Status (Open, In Review, Awaiting Info, In Progress, Resolved, Closed)
+  * Priority (Low/Medium/High/Blocker)
+  * Assignee / Team, Reporter
+  * SLA (Overdue / At‑Risk / Within)
+  * Revision (Rev/Issue), Affected by new Rev (Yes/No)
+  * Tags (multi)
+  * Date (Created / Updated / Due) range
+  * Channel, Attachment (Yes/No)
+* **Saved Views:**
+
+  * Save current configuration (filters + columns + sort + view type) with name & description.
+  * Share as permalink; set as default for user/team (RBAC aware).
+* **Quick actions:** Export CSV/PDF of current results; Bulk actions (activates when ≥1 selected).
+
+**Acceptance:** Applying any filter returns first page ≤ **700ms**.
+
+---
+
+## 4) Table View
+
+* **Layout:** Virtualized DataTable with sticky header; server‑side pagination + sort.
+* **Default columns:**
+
+  * Select (checkbox), ID, Title, Type, Status, Priority, Assignee (avatar+name), Project, Sheet/Rev, SLA Due (countdown badge), Last Activity (ago), Messages (#), Attachments (#), Channel, Tags.
+* **Column behaviors:** reorder, resize, show/hide; per‑user persistence.
+* **Row interactions:** click → opens **Right Preview**; double‑click → opens Ticket Detail page.
+* **Inline quick edits:** status dropdown, assign, add tag (with permissions).
+* **Bulk bar:** when selected → Change status, Assign/Reassign, Change priority, Add/Remove tags, Export.
+
+**Empty/Loading/Error:** skeleton rows; “No results — widen filters.”
+
+---
+
+## 5) Kanban View
+
+* **Columns = Statuses** (configurable order). Each card shows: ID, Title, Type, Priority chip, SLA badge (time left / Overdue), Assignee avatar(s), Sheet icon.
+* **Drag & drop:**
+
+  * Move across columns changes **Status** (confirm if implies closure).
+  * Optional WIP limits per column (visual meter).
+* **Card quick menu:** Assign, Change priority, Open in Channel, Open on Sheet.
+
+**Acceptance:** DnD updates reflect instantly in Table/Preview and Channels.
+
+---
+
+## 6) Calendar View
+
+* **Modes:** Month / Week / Day. Data based on **SLA Due** (default) or **Target Date**.
+* **Event chip:** Title + ID + color by Type or Priority; tooltip: status, assignee, sheet.
+* **Interactions:** drag to change due date; click to open Right Preview.
+
+---
+
+## 7) Map View (Sheet‑aware)
+
+* **Requirement:** **Sheet selector** in header (multi allowed, but one active canvas at a time). If none selected → show instruction overlay: “Select a sheet to view pins.”
+* **Layer toggles:** ARCH/STR/MEP/FIRE/Annotations (reflect on canvas).
+* **Switch:** **Show All Pins** (includes pins without tickets).
+* **Canvas:** blueprint raster/vector; zoom/pan; clusters; snap to grid.
+* **Pins:** color/shape by Status/Type; consistent legend.
+* **Pin click:**
+
+  * Highlight pin; show small tooltip (Title/ID/Status).
+  * Open **Left Drawer – Pin Timeline** (overlays canvas; width 360–420px).
+* **Right Preview:** remains available for the currently selected **ticket** (if any), independent of the pin drawer.
+
+**Acceptance:** Panning/zooming never blocks UI; pin tooltip < 100ms; drawer opens ≤ 400ms.
+
+---
+
+## 8) Right Preview Panel (contextual)
+
+* **Header:** Title + ticket ID; status dropdown; priority chip; assignee picker; SLA badge with countdown.
+* **Meta:** Project, Sheet/Rev, Channel; tags; created/updated timestamps.
+* **Last activity:** last 3 messages (author, time, snippet) with “Open Thread in Channel”.
+* **MiniMap:** small view to center on pin; button **Open on Sheet**.
+* **Actions:** Change status, Reassign, Add tag, New message (opens Thread tab in detail), Generate PDF (report), Close ticket.
+* **Close behavior:** ESC or click outside collapses panel.
+
+---
+
+## 9) Left Drawer – Pin Activity Timeline
+
+* **Opens when:** clicking a pin (Map view) or “View Pin History” action elsewhere.
+* **Sections:**
+
+  1. **Pin summary:** Sheet/Rev/Level/Grid, overall pin state, linked tickets count.
+  2. **Linked tickets:** compact list (Title/Type/Status/Priority/Assignee/SLA).
+  3. **Timeline (grouped by date):**
+
+     * Created Ticket, Status Changed, Priority Changed, SLA Updated, Message Posted (Channel/Slack), Pin Moved (Revision Remap), Attachment Added.
+     * Each event shows user, timestamp (absolute + relative), and entity link.
+  4. **MiniMap:** current & historical positions (if remapped across revisions).
+* **Actions:** New Ticket on this Pin, Open Ticket, Open Channel, Export History (CSV/PDF).
+
+**Performance:** first 50 events loaded ≤ 400ms; live updates via WebSocket ≤ 1s.
+
+---
+
+## 10) Create / Edit Ticket
+
+* **Entry points:** + New (header), from Table row menu, from Kanban column (Add), from Map pin (New on this Pin), from Channel (Pin‑from‑Channel Wizard).
+* **Form fields:** Type, Title (required), Description (rich text), Priority, Assignee, SLA Due (with working calendar), Channel (optional), Attachments, Tags. If created from pin: **pin_id** prefilled.
+* **AI assists (optional):** suggest title/description/assignee based on sheet context.
+* **Validation:** required fields; SLA Due must be in future unless status = Closed.
+
+**Save states:** save → toast success + remain; save & open; cancel → confirm if dirty.
+
+---
+
+## 11) Slack / Channels Links
+
+* **Open in Channel:** deep link to the thread; posting there mirrors back to **Thread** tab in Ticket Detail.
+* **Mentions:** show count of new messages since last visit.
+* **Slash commands (if Slack connected):** `/ticket TCK-123 status=In Progress` etc. (outside UI but referenced in microcopy).
+
+---
+
+## 12) States (Empty / Loading / Errors)
+
+* **Empty:** Explain how to add tickets (create or import) with CTA.
+* **Loading:** skeleton for table, cards, and map pins.
+* **Errors:** inline messaging with retry; reference error ID in toast.
+
+---
+
+## 13) Permissions (RBAC)
+
+* **Admin/PM:** full control incl. bulk, SLA overrides.
+* **Engineer:** create/update, change status up to Resolved, upload files, post messages.
+* **Viewer:** read‑only (+ comments if allowed).
+* **Channel Owner/Moderator:** manage tickets within channel scope.
+
+UI hides or disables actions not allowed; tooltips explain restrictions.
+
+---
+
+## 14) Accessibility & Responsiveness
+
+* **A11y:** Contrast ≥ 4.5:1; ARIA for badges and timelines; keyboard nav across tabs, table rows, and map pins (focus rings + tooltip on focus).
+* **Shortcuts:** `\` focus search, `V` switch view, `A` bulk actions, `S` save view, `P` place pin (in Viewer), `T` new ticket, `Esc` close preview/drawer.
+* **Responsive:**
+
+  * ≥1280px: table + right preview side‑by‑side.
+  * 1024–1279px: preview becomes overlay drawer.
+  * <1024px: single‑pane; tabs stick at top; map canvas is full‑bleed; actions in bottom sheet.
+
+---
+
+## 15) Performance & Data
+
+* **Budgets:** filter query ≤ 700ms; DnD in Kanban immediate; map panning at 60fps; drawer open ≤ 400ms.
+* **Virtualization:** rows & cards; map **clustering** and **bbox** queries.
+* **Caching:** ETag/Last‑Modified; memoize frequent filter combos; debounce 300–400ms.
+* **Pagination:** cursor‑based; default page size 50 (table) / 100 (map pins).
+
+---
+
+## 16) Analytics & Telemetry
+
+* **Events:** `tickets_filter_apply`, `saved_view_create`, `kanban_drag`, `calendar_due_change`, `map_pin_click`, `pin_drawer_open`, `ticket_update_status`, `assign_change`, `bulk_apply`, `open_in_channel`, `open_on_sheet`.
+* **KPIs:** SLA Compliance, MTTR, Overdue Count, Creation Rate, Close Rate, Threads per Channel/day, Time‑to‑first‑response.
+
+---
+
+## 17) API Contracts (samples)
+
+```http
+# List tickets (server‑side filters)
+GET /tickets?project_id=&discipline=&level=&sheet_id=&type=&status=&priority=&assignee=&reporter=&sla=overdue|at_risk|within&rev=&tags=&date_field=created|updated|due&date_from=&date_to=&channel_id=&has_attachment=&page=&cursor=&sort=
+
+# Get single ticket
+GET /tickets/{id}
+
+# Create / Update / Bulk
+POST   /tickets { pin_id|sheet_id+geometry, type, title, description?, priority, assignee?, sla_due?, channel_id?, tags? }
+PATCH  /tickets/{id} { status?, assignee?, priority?, title?, description?, tags?, sla_due? }
+DELETE /tickets/{id}
+POST   /tickets/bulk { ids:[], action: { set_status?, set_assignee?, set_priority?, add_tag?, remove_tag? } }
+
+# Saved views
+GET  /tickets/saved-views
+POST /tickets/saved-views { name, filters, columns, sort, view }
+
+# Sheets & pins for Map
+GET /sheets?project_id=&search=
+GET /sheets/{sheet_id}/pins?status=&type=&assignee=&reporter=&created_by=&layers=ARCH,MEP&bbox=&limit=&cursor=
+GET /pins/{pin_id}/history
+
+# Live updates
+WS /ws/tickets  # ticket_changed, message_posted, sla_updated
+WS /ws/pins     # pin_created, pin_updated, pin_moved, ticket_linked
+```
+
+**Statuses (enum):** Open, In Review, Awaiting Info, In Progress, Resolved, Closed.
+**Allowed transitions:** configurable; default: Open→In Review→In Progress→Resolved→Closed (reopen allowed up to In Progress).
+
+---
+
+## 18) Data Dictionary (Ticket fields)
+
+* `ticket_id` (ID), `pin_id` (nullable), `project_id`, `sheet_id`, `rev_id`, `type`, `title`, `description`, `status`, `priority`, `assignee`, `reporter`, `channel_id` (nullable), `sla_due` (ISO), `tags[]`, `counters` (messages, attachments), `created_at`, `updated_at`.
+
+---
+
+## 19) Acceptance Criteria (QA‑ready)
+
+1. **Filters:** Combining Project+Type+Assignee narrows results to matching tickets ≤700ms.
+2. **Saved View:** Saving and sharing restores exact state (filters/columns/sort/view).
+3. **Kanban DnD:** Moving a card updates status in Table and in the ticket’s Channel thread.
+4. **Calendar drag:** Reschedules SLA Due and logs an event in the ticket Timeline.
+5. **Map view:** Without a selected Sheet, an instructional overlay appears; with a Sheet, pins render and **Show All Pins** reveals pins without tickets.
+6. **Pin click:** Opens **Left Drawer** with the last 50 events, linked tickets list, and MiniMap.
+7. **Preview:** Selecting a row shows Right Preview with last messages and quick actions.
+8. **Bulk:** Selecting 5 tickets and “Assign → @Sara” updates assignee for all and emits a success toast.
+9. **Permissions:** A Viewer cannot change status; UI shows disabled controls with tooltip.
+10. **Live:** A new Slack reply appears in the ticket Thread and increments “Messages” count within ≤1s.
+
+---
+
+## 20) Edge Cases
+
+* Ticket without pin → visible in Table; not plotted in Map unless **Show All Pins** is off; CTA to link to a pin.
+* Sheet without scale/grid → measurements and snap disabled; show notice.
+* Revision change → affected tickets get a badge; pin remap events added to Pin Timeline.
+* Lost permissions on sheet/channel → hide previews; show reason with “Request access”.
+
+---
+
+## 21) Non‑functional & Security
+
+* RBAC enforced server‑side; audit all actions (status/assignee/priority/SLA changes, bulk ops).
+* Tokens and webhooks (Slack) verified & rotated; signed URLs for previews; PII minimized in logs.
+
+---
+
+## 22) Microcopy (examples)
+
+* Empty: “No tickets match your filters — try clearing one or two filters.”
+* Toast success: “Ticket updated.” / Error: “Couldn’t save changes (Ref: {{id}}).”
+* Hint: “Drag a card to change its status.” / “Click a pin to see full history.”
+
+---
+
+## 23) Deliverables & Handoff
+
+* **Design:** Hi‑Fi screens for Table/Kanban/Calendar/Map, Right Preview, Left Pin Drawer; components from system tokens above.
+* **Frontend:** React+Tailwind; virtualized table; map canvas; drawers; websockets wiring.
+* **Backend:** Filter endpoints, saved views, pin history, websockets.
+* **QA:** Test cases from section 19 + accessibility audit.
+
+---
+
+**Ready for agency execution.**
