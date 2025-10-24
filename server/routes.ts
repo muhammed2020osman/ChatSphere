@@ -1369,9 +1369,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         aiAnalysis: aiAnalysis,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error uploading drawing:", error);
-      res.status(500).json({ message: "Failed to upload drawing" });
+      
+      // Check for duplicate sheet number error
+      if (error?.code === '23505' && error?.constraint === 'drawings_sheet_no_unique') {
+        return res.status(409).json({ 
+          message: "رقم المخطط موجود بالفعل. الرجاء استخدام رقم مختلف أو تحديث المخطط الموجود.",
+          code: "DUPLICATE_SHEET_NUMBER"
+        });
+      }
+      
+      res.status(500).json({ message: "فشل رفع المخطط. الرجاء المحاولة مرة أخرى." });
     }
   });
 
@@ -1501,9 +1510,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         extractedText: null,
         aiAnalysis: null,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error uploading drawing manually:", error);
-      res.status(500).json({ message: "Failed to upload drawing" });
+      
+      // Check for duplicate sheet number error
+      if (error?.code === '23505' && error?.constraint === 'drawings_sheet_no_unique') {
+        return res.status(409).json({ 
+          message: "رقم المخطط موجود بالفعل. الرجاء استخدام رقم مختلف أو تحديث المخطط الموجود.",
+          code: "DUPLICATE_SHEET_NUMBER"
+        });
+      }
+      
+      res.status(500).json({ message: "فشل رفع المخطط. الرجاء المحاولة مرة أخرى." });
     }
   });
 

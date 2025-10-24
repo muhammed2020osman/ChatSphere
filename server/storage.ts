@@ -1358,7 +1358,7 @@ export class DatabaseStorage implements IStorage {
         ticket_createdAt: tickets.createdAt,
         ticket_updatedAt: tickets.updatedAt,
         drawing_id: drawings.id,
-        drawing_sheetNumber: drawings.sheetNumber,
+        drawing_sheetNo: drawings.sheetNo,
         drawing_title: drawings.title,
         drawing_disciplineId: drawings.disciplineId,
         discipline_id: disciplines.id,
@@ -1372,12 +1372,11 @@ export class DatabaseStorage implements IStorage {
         pin_y: pins.y,
         layer_id: layers.id,
         layer_name: layers.name,
-        layer_color: layers.color,
         assignee_id: users.id,
         assignee_email: users.email,
         assignee_firstName: users.firstName,
         assignee_lastName: users.lastName,
-        assignee_avatarUrl: users.avatarUrl,
+        assignee_profileImageUrl: users.profileImageUrl,
       })
       .from(tickets)
       .leftJoin(drawings, eq(tickets.drawingId, drawings.id))
@@ -1413,7 +1412,7 @@ export class DatabaseStorage implements IStorage {
       updatedAt: row.ticket_updatedAt,
       drawing: row.drawing_id ? {
         id: row.drawing_id,
-        sheetNumber: row.drawing_sheetNumber!,
+        sheetNumber: row.drawing_sheetNo!,
         title: row.drawing_title,
         disciplineId: row.drawing_disciplineId!,
       } : undefined,
@@ -1433,14 +1432,13 @@ export class DatabaseStorage implements IStorage {
       layer: row.layer_id ? {
         id: row.layer_id,
         name: row.layer_name!,
-        color: row.layer_color,
       } : undefined,
       assignee: row.assignee_id ? {
         id: row.assignee_id,
         email: row.assignee_email!,
         firstName: row.assignee_firstName,
         lastName: row.assignee_lastName,
-        avatarUrl: row.assignee_avatarUrl,
+        profileImageUrl: row.assignee_profileImageUrl,
       } : undefined,
     }));
 
