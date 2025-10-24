@@ -211,8 +211,14 @@ export default function SheetViewer() {
     return acc;
   }, {} as Record<string, Layer[]>);
 
-  // Count pins by discipline (via layers)
-  const pinsByDiscipline = pins.reduce((acc, pin) => {
+  // Filter pins based on visible layers
+  const visiblePins = pins.filter((pin) => {
+    const layer = layers.find(l => l.id === pin.layerId);
+    return layer && layer.visible;
+  });
+
+  // Count visible pins by discipline (via layers)
+  const pinsByDiscipline = visiblePins.reduce((acc, pin) => {
     const layer = layers.find(l => l.id === pin.layerId);
     if (layer) {
       acc[layer.disciplineId] = (acc[layer.disciplineId] || 0) + 1;
@@ -367,7 +373,37 @@ export default function SheetViewer() {
   }, []);
 
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (activeTool === "pin" && imageRef.current && !tempPin) {
+    if (activeTool !== "pin" || tempPin) return;
+
+    if (displayMode === 'pdf' && canvasRef.current) {
+      // PDF mode: Calculate position based on the actual PDF canvas
+      const canvas = canvasRef.current.querySelector('canvas[data-testid="pdf-canvas"]') as HTMLCanvasElement;
+      if (!canvas) {
+        console.error('[Pin] PDF canvas not found');
+        return;
+      }
+
+      // Get canvas bounds (this includes the panPosition transform)
+      const canvasRect = canvas.getBoundingClientRect();
+      
+      // Get click position relative to the displayed canvas
+      const clickX = e.clientX - canvasRect.left;
+      const clickY = e.clientY - canvasRect.top;
+      
+      // Calculate position as percentage of the displayed canvas size
+      // The SVG overlay has the same dimensions and transform, so percentages will match
+      const x = (clickX / canvasRect.width) * 100;
+      const y = (clickY / canvasRect.height) * 100;
+      
+      // Clamp to 0-100% range
+      const clampedX = Math.max(0, Math.min(100, x));
+      const clampedY = Math.max(0, Math.min(100, y));
+      
+      console.log('[Pin] PDF mode - Canvas rect:', { width: canvasRect.width, height: canvasRect.height });
+      console.log('[Pin] PDF mode - Click:', { clickX, clickY, x: clampedX, y: clampedY });
+      setTempPin({ x: clampedX, y: clampedY });
+    } else if (displayMode === 'image' && imageRef.current) {
+      // Image mode: Original logic
       const rect = imageRef.current.getBoundingClientRect();
       const img = imageRef.current.querySelector('img');
       if (!img) return;
@@ -405,10 +441,10 @@ export default function SheetViewer() {
       const clampedX = Math.max(0, Math.min(100, x));
       const clampedY = Math.max(0, Math.min(100, y));
       
-      // Create temporary pin instead of adding directly
+      console.log('[Pin] Image mode - Creating pin at:', { x: clampedX, y: clampedY });
       setTempPin({ x: clampedX, y: clampedY });
     }
-  }, [activeTool, tempPin, zoom]);
+  }, [activeTool, tempPin, zoom, displayMode]);
   
   const handleConfirmPin = useCallback(() => {
     if (tempPin) {
@@ -434,6 +470,32 @@ export default function SheetViewer() {
       });
     }
   }, [tempPin]);
+
+  // Mutation to toggle layer visibility
+  const toggleLayerMutation = useMutation({
+    mutationFn: async ({ layerId, visible }: { layerId: string; visible: boolean }) => {
+      return await apiRequest(`/api/layers/${layerId}/visibility`, {
+        method: 'PATCH',
+        body: { visible },
+      });
+    },
+    onSuccess: () => {
+      // Invalidate layers query to refresh
+      queryClient.invalidateQueries({ queryKey: ['/api/drawings', id, 'layers'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to toggle layer visibility",
+        variant: "destructive",
+      });
+      console.error("Error toggling layer:", error);
+    },
+  });
+
+  const handleToggleLayer = useCallback((layerId: string, currentVisibility: boolean) => {
+    toggleLayerMutation.mutate({ layerId, visible: !currentVisibility });
+  }, [toggleLayerMutation]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -806,6 +868,7 @@ export default function SheetViewer() {
           <div
             ref={canvasRef}
             className="flex-1 w-full overflow-hidden flex items-center justify-center p-8"
+            onClick={handleCanvasClick}
             onMouseDown={displayMode === 'image' ? handleMouseDown : undefined}
             onMouseMove={displayMode === 'image' ? handleMouseMove : undefined}
             onMouseUp={displayMode === 'image' ? handleMouseUp : undefined}
@@ -814,7 +877,7 @@ export default function SheetViewer() {
               handleMouseLeave();
             } : undefined}
             style={{ 
-              cursor: displayMode === 'image' && activeTool === "pan" ? (isPanning ? "grabbing" : "grab") : displayMode === 'image' && activeTool === "pin" ? "none" : "default",
+              cursor: displayMode === 'image' && activeTool === "pan" ? (isPanning ? "grabbing" : "grab") : displayMode === 'image' && activeTool === "pin" ? "none" : activeTool === "pin" ? "crosshair" : "default",
               userSelect: "none",
             }}
             data-testid="canvas-viewer"
@@ -868,8 +931,8 @@ export default function SheetViewer() {
                   </g>
                 )}
                 
-                {/* Render confirmed pins */}
-                {pins.map((pin) => (
+                {/* Render confirmed pins (only visible layers) */}
+                {visiblePins.map((pin) => (
                   <g key={pin.id}>
                     <circle
                       cx={`${pin.x}%`}
@@ -881,7 +944,53 @@ export default function SheetViewer() {
                   </g>
                 ))}
               </PDFViewerCanvas>
-            ) : (
+            ) : null}
+            
+            {/* Render temporary pin buttons (for both PDF and Image modes) */}
+            {tempPin && displayMode === 'pdf' && (
+              <div
+                className="absolute pointer-events-auto z-50"
+                style={{
+                  left: `${tempPin.x}%`,
+                  top: `${tempPin.y}%`,
+                }}
+                data-testid="temp-pin-pdf"
+              >
+                <div className="relative -ml-3 -mt-6">
+                  <MapPin className="h-6 w-6 text-accent fill-accent/30" />
+                  <div className="absolute top-0 left-8 flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="h-6 px-2 gap-1 bg-accent hover:bg-accent/90 text-accent-foreground"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleConfirmPin();
+                      }}
+                      data-testid="button-confirm-pin"
+                    >
+                      <Check className="h-3 w-3" />
+                      <span className="text-xs">تأكيد</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 px-2 gap-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCancelPin();
+                      }}
+                      data-testid="button-cancel-pin"
+                    >
+                      <X className="h-3 w-3" />
+                      <span className="text-xs">إلغاء</span>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {displayMode === 'image' && (
               <div
                 ref={imageRef}
                 className="relative bg-white shadow-2xl"
@@ -1129,8 +1238,8 @@ export default function SheetViewer() {
                 </div>
               )}
               
-              {/* Render confirmed pins */}
-              {pins.map((pin) => (
+              {/* Render confirmed pins (only visible layers) */}
+              {visiblePins.map((pin) => (
                 <div
                   key={pin.id}
                   className="absolute w-6 h-6 -ml-3 -mt-6 cursor-pointer pointer-events-auto"
@@ -1171,7 +1280,7 @@ export default function SheetViewer() {
               onClick={() => setActiveTab("pins")}
               data-testid="tab-pins"
             >
-              Pins ({pins.length})
+              Pins ({visiblePins.length})
             </button>
             <button
               className={`flex-1 px-4 py-3 text-sm font-medium ${
@@ -1236,9 +1345,7 @@ export default function SheetViewer() {
                               </div>
                               <button
                                 className="p-1 hover-elevate rounded"
-                                onClick={() => {
-                                  // TODO: Toggle layer visibility
-                                }}
+                                onClick={() => handleToggleLayer(layer.id, layer.visible)}
                                 data-testid={`toggle-layer-${layer.id}`}
                               >
                                 {layer.visible ? (
@@ -1278,16 +1385,16 @@ export default function SheetViewer() {
                   <div className="text-center py-8">
                     <p className="text-sm text-muted-foreground">Loading pins...</p>
                   </div>
-                ) : pins.length === 0 ? (
+                ) : visiblePins.length === 0 ? (
                   <div className="text-center py-8">
                     <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">No pins yet</p>
+                    <p className="text-sm text-muted-foreground">No visible pins</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Click the pin tool and click on the plan to add pins
+                      {pins.length > 0 ? 'All pins are hidden - toggle layer visibility' : 'Click the pin tool and click on the plan to add pins'}
                     </p>
                   </div>
                 ) : (
-                  pins.map((pin) => (
+                  visiblePins.map((pin) => (
                     <Card
                       key={pin.id}
                       className="p-3 cursor-pointer hover:shadow-md transition-shadow"

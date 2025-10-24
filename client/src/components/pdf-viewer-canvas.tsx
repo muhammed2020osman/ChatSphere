@@ -36,7 +36,11 @@ export function PDFViewerCanvas({
   const [retrying, setRetrying] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
+  const currentPageRef = useRef<pdfjsLib.PDFPageProxy | null>(null);
+  const renderTaskRef = useRef<any>(null);
+  const [rendering, setRendering] = useState(false);
 
+  // Effect 1: Load PDF document (only when URL changes)
   useEffect(() => {
     let isMounted = true;
     let timeoutId: NodeJS.Timeout;
@@ -116,66 +120,10 @@ export function PDFViewerCanvas({
           return;
         }
 
-        // Wait for canvas to be ready in DOM using requestAnimationFrame
-        const renderOnCanvas = () => {
-          return new Promise<void>((resolve, reject) => {
-            requestAnimationFrame(() => {
-              const canvas = canvasRef.current;
-              
-              if (!canvas) {
-                console.error('[PDF Viewer] Canvas element not found in DOM');
-                console.error('[PDF Viewer] canvasRef.current:', canvasRef.current);
-                reject(new Error('Canvas element not found'));
-                return;
-              }
-
-              console.log('[PDF Viewer] Canvas element found, dimensions:', {
-                offsetWidth: canvas.offsetWidth,
-                offsetHeight: canvas.offsetHeight,
-                clientWidth: canvas.clientWidth,
-                clientHeight: canvas.clientHeight,
-              });
-
-              const context = canvas.getContext('2d');
-              if (!context) {
-                console.error('[PDF Viewer] Canvas 2D context not available');
-                reject(new Error('Canvas 2D context not available'));
-                return;
-              }
-
-              const scale = zoom / 100;
-              const viewport = page.getViewport({ scale });
-
-              canvas.width = viewport.width;
-              canvas.height = viewport.height;
-              setCanvasDimensions({ width: viewport.width, height: viewport.height });
-
-              console.log('[PDF Viewer] Rendering page with dimensions:', { width: viewport.width, height: viewport.height });
-
-              const renderContext = {
-                canvasContext: context,
-                viewport: viewport,
-              };
-
-              page.render(renderContext as any).promise
-                .then(() => {
-                  if (isMounted) {
-                    console.log('[PDF Viewer] Page rendered successfully');
-                    setRetrying(false);
-                    setRetryCount(0);
-                    setLoading(false);
-                  }
-                  resolve();
-                })
-                .catch((renderErr) => {
-                  console.error('[PDF Viewer] Error rendering page:', renderErr);
-                  reject(renderErr);
-                });
-            });
-          });
-        };
-
-        await renderOnCanvas();
+        currentPageRef.current = page;
+        setRetrying(false);
+        setRetryCount(0);
+        setLoading(false);
       } catch (err) {
         if (isMounted) {
           console.error('[PDF Viewer] Error loading PDF:', err);
@@ -236,7 +184,96 @@ export function PDFViewerCanvas({
         pdfDocRef.current = null;
       }
     };
-  }, [pdfUrl, zoom]);
+  }, [pdfUrl]);
+
+  // Effect 2: Re-render page when zoom changes (without reloading PDF)
+  useEffect(() => {
+    if (!currentPageRef.current || loading || error) {
+      return;
+    }
+
+    const renderPage = async () => {
+      const page = currentPageRef.current;
+      if (!page) return;
+
+      // Cancel any in-flight render task
+      if (renderTaskRef.current) {
+        console.log('[PDF Viewer] Cancelling previous render task');
+        try {
+          renderTaskRef.current.cancel();
+        } catch (cancelErr) {
+          console.warn('[PDF Viewer] Error cancelling render task:', cancelErr);
+        }
+        renderTaskRef.current = null;
+      }
+
+      setRendering(true);
+      
+      try {
+        await new Promise<void>((resolve, reject) => {
+          requestAnimationFrame(() => {
+            const canvas = canvasRef.current;
+            
+            if (!canvas) {
+              console.error('[PDF Viewer] Canvas element not found for re-render');
+              reject(new Error('Canvas element not found'));
+              return;
+            }
+
+            const context = canvas.getContext('2d');
+            if (!context) {
+              console.error('[PDF Viewer] Canvas 2D context not available for re-render');
+              reject(new Error('Canvas 2D context not available'));
+              return;
+            }
+
+            const scale = zoom / 100;
+            const viewport = page.getViewport({ scale });
+
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            setCanvasDimensions({ width: viewport.width, height: viewport.height });
+
+            console.log('[PDF Viewer] Re-rendering with zoom:', zoom, 'dimensions:', { width: viewport.width, height: viewport.height });
+
+            const renderContext = {
+              canvasContext: context,
+              viewport: viewport,
+            };
+
+            const renderTask = page.render(renderContext as any);
+            renderTaskRef.current = renderTask;
+
+            renderTask.promise
+              .then(() => {
+                console.log('[PDF Viewer] Page re-rendered successfully');
+                renderTaskRef.current = null;
+                setRendering(false);
+                resolve();
+              })
+              .catch((renderErr) => {
+                renderTaskRef.current = null;
+                setRendering(false);
+                
+                // Treat cancellation as success (not an error)
+                if (renderErr.name === 'RenderingCancelledException') {
+                  console.log('[PDF Viewer] Render cancelled (zoom changed)');
+                  resolve(); // Resolve, not reject
+                } else {
+                  console.error('[PDF Viewer] Error re-rendering page:', renderErr);
+                  reject(renderErr);
+                }
+              });
+          });
+        });
+      } catch (err) {
+        console.error('[PDF Viewer] Re-render failed:', err);
+        setRendering(false);
+      }
+    };
+
+    renderPage();
+  }, [zoom, loading, error]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
