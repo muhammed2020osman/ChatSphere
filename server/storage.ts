@@ -1337,15 +1337,71 @@ export class DatabaseStorage implements IStorage {
     const sortColumnRef = (tickets as any)[sortColumn] || tickets.createdAt;
 
     const ticketsList = await db
-      .select()
+      .select({
+        id: tickets.id,
+        title: tickets.title,
+        description: tickets.description,
+        type: tickets.type,
+        status: tickets.status,
+        priority: tickets.priority,
+        drawingId: tickets.drawingId,
+        disciplineId: tickets.disciplineId,
+        pinId: tickets.pinId,
+        layerId: tickets.layerId,
+        assignedTo: tickets.assignedTo,
+        createdBy: tickets.createdBy,
+        reporter: tickets.reporter,
+        channelId: tickets.channelId,
+        slaHours: tickets.slaHours,
+        dueDate: tickets.dueDate,
+        tags: tickets.tags,
+        createdAt: tickets.createdAt,
+        updatedAt: tickets.updatedAt,
+        drawing: {
+          id: drawings.id,
+          sheetNumber: drawings.sheetNumber,
+          title: drawings.title,
+          disciplineId: drawings.disciplineId,
+        },
+        discipline: {
+          id: disciplines.id,
+          name: disciplines.name,
+          code: disciplines.code,
+          color: disciplines.color,
+        },
+        pin: pins ? {
+          id: pins.id,
+          label: pins.label,
+          drawingId: pins.drawingId,
+          x: pins.x,
+          y: pins.y,
+        } : null,
+        layer: layers ? {
+          id: layers.id,
+          name: layers.name,
+          color: layers.color,
+        } : null,
+        assignee: users ? {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          avatarUrl: users.avatarUrl,
+        } : null,
+      })
       .from(tickets)
+      .leftJoin(drawings, eq(tickets.drawingId, drawings.id))
+      .leftJoin(disciplines, eq(tickets.disciplineId, disciplines.id))
+      .leftJoin(pins, eq(tickets.pinId, pins.id))
+      .leftJoin(layers, eq(tickets.layerId, layers.id))
+      .leftJoin(users, eq(tickets.assignedTo, users.id))
       .where(whereClause)
       .orderBy(sortOrder(sortColumnRef))
       .limit(limit)
       .offset(offset);
 
     return {
-      tickets: ticketsList,
+      tickets: ticketsList as any[],
       total,
       page,
       limit,
