@@ -44,9 +44,14 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
 - **Pins/Tickets System & Drawing Tools**: Database schemas and APIs for `pins`, `tickets`, `layers`. Includes pin placement, ticket creation (RFI, Issue, Clash, etc.), and drawing tools (Pen, Line, Rectangle, Circle, Text, Eraser).
 
 ### System Design Choices
-- **Authentication**: Replit Auth for user login, internal session management for API and WebSocket interactions.
+- **Authentication**: Replit Auth for user login, internal session management for API and WebSocket interactions. Reference data endpoints (`/api/disciplines`, `/api/floors`) are public (no auth required) for better accessibility.
 - **Security**: Comprehensive access control, message ownership validation, server-side channel validation, role-based access, and secure object storage access. WebSocket connections are session-authenticated.
-- **Performance**: Frontend optimizations (`useCallback`/`useEffect`), efficient database queries with Drizzle ORM, and client-side PDF rendering.
+- **Performance**: 
+  - Frontend optimizations: React.memo for components, useCallback/useMemo for functions and data, lazy loading for images
+  - Plans Management page optimized with memoization to prevent unnecessary re-renders
+  - Efficient database queries with Drizzle ORM
+  - Client-side PDF rendering with pdfjs-dist
+- **Error Handling**: Global ErrorBoundary component wraps the entire app, loading states for all data fetches, proper error messages for failed API calls
 - **Scalability**: PostgreSQL for data storage, WebSockets for real-time communication, and Replit Object Storage for file handling.
 
 ## External Dependencies

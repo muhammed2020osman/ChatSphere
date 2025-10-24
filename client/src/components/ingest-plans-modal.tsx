@@ -840,11 +840,20 @@ export function IngestPlansModal() {
                   </p>
                 </div>
 
+                {/* Loading state - show while disciplines/floors are loading */}
+                {(isDisciplinesLoading || isFloorsLoading) && (
+                  <div className="p-4 rounded-lg border border-primary/20 bg-primary/10">
+                    <p className="text-sm text-primary">
+                      جاري تحميل البيانات...
+                    </p>
+                  </div>
+                )}
+
                 {/* Error state - if disciplines or floors failed to load */}
                 {(disciplinesError || floorsError) && (
                   <div className="p-4 rounded-lg border border-destructive/20 bg-destructive/10">
                     <p className="text-sm text-destructive">
-                      حدث خطأ في تحميل البيانات المطلوبة. يرجى تسجيل الدخول أولاً أو إعادة المحاولة.
+                      حدث خطأ في تحميل البيانات المطلوبة. يرجى إعادة المحاولة.
                     </p>
                   </div>
                 )}
@@ -984,19 +993,18 @@ export function IngestPlansModal() {
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {disciplines.length > 0 ? (
-                                    disciplines.map((discipline) => (
-                                      <SelectItem
-                                        key={discipline.id}
-                                        value={discipline.id}
-                                      >
-                                        {discipline.name}
-                                      </SelectItem>
-                                    ))
-                                  ) : (
-                                    <SelectItem value="" disabled>
-                                      لا توجد تخصصات متاحة
+                                  {disciplines.map((discipline) => (
+                                    <SelectItem
+                                      key={discipline.id}
+                                      value={discipline.id}
+                                    >
+                                      {discipline.name}
                                     </SelectItem>
+                                  ))}
+                                  {disciplines.length === 0 && !isDisciplinesLoading && (
+                                    <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                                      لا توجد تخصصات متاحة
+                                    </div>
                                   )}
                                 </SelectContent>
                               </Select>
@@ -1023,16 +1031,15 @@ export function IngestPlansModal() {
                                 </FormControl>
                                 <SelectContent>
                                   <SelectItem value="">لا يوجد</SelectItem>
-                                  {floors.length > 0 ? (
-                                    floors.map((floor) => (
-                                      <SelectItem key={floor.id} value={floor.id}>
-                                        {floor.name}
-                                      </SelectItem>
-                                    ))
-                                  ) : (
-                                    <SelectItem value="none" disabled>
-                                      لا توجد طوابق متاحة
+                                  {floors.map((floor) => (
+                                    <SelectItem key={floor.id} value={floor.id}>
+                                      {floor.name}
                                     </SelectItem>
+                                  ))}
+                                  {floors.length === 0 && !isFloorsLoading && (
+                                    <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                                      لا توجد طوابق متاحة
+                                    </div>
                                   )}
                                 </SelectContent>
                               </Select>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback, memo } from "react";
 import { FileText, Download, History, MoreVertical, Grid3x3, List, Upload, Bot, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,8 @@ import type { DrawingWithDetails } from "@shared/schema";
 
 type ViewMode = "grid" | "list";
 
-function UploadMethodBadge({ method, planId }: { method?: string; planId: string }) {
+// Memoized badge components for performance
+const UploadMethodBadge = memo(({ method, planId }: { method?: string; planId: string }) => {
   if (!method) return null;
   
   return method === 'ai' ? (
@@ -38,9 +39,10 @@ function UploadMethodBadge({ method, planId }: { method?: string; planId: string
       <span>يدوي</span>
     </Badge>
   );
-}
+});
+UploadMethodBadge.displayName = "UploadMethodBadge";
 
-function RevisionCountBadge({ count, planId }: { count?: number; planId: string }) {
+const RevisionCountBadge = memo(({ count, planId }: { count?: number; planId: string }) => {
   if (!count || count <= 1) return null;
   
   return (
@@ -49,7 +51,8 @@ function RevisionCountBadge({ count, planId }: { count?: number; planId: string 
       <span>{count} إصدارات</span>
     </Badge>
   );
-}
+});
+RevisionCountBadge.displayName = "RevisionCountBadge";
 
 export default function PlansManagement() {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -63,7 +66,8 @@ export default function PlansManagement() {
     queryKey: ['/api/drawings'],
   });
 
-  const getStatusColor = (status: string) => {
+  // Memoized utility functions for performance
+  const getStatusColor = useCallback((status: string) => {
     switch (status) {
       case "approved":
         return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
@@ -76,9 +80,9 @@ export default function PlansManagement() {
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300";
     }
-  };
+  }, []);
 
-  const getRelativeTime = (dateInput: string | Date) => {
+  const getRelativeTime = useCallback((dateInput: string | Date) => {
     const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
     const now = new Date();
     const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
@@ -88,9 +92,9 @@ export default function PlansManagement() {
     if (diffInDays < 7) return `${diffInDays} days ago`;
     if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} weeks ago`;
     return `${Math.floor(diffInDays / 30)} months ago`;
-  };
+  }, []);
 
-  const getStatusLabel = (status: string) => {
+  const getStatusLabel = useCallback((status: string) => {
     switch (status) {
       case "approved": return "Approved";
       case "under_review": return "Under Review";
@@ -99,7 +103,7 @@ export default function PlansManagement() {
       case "superseded": return "Superseded";
       default: return "Unknown";
     }
-  };
+  }, []);
 
   if (isLoading) {
     return (
@@ -278,6 +282,7 @@ export default function PlansManagement() {
                         src={plan.latestRevision.thumbnailUrl}
                         alt={plan.title}
                         className="w-full h-full object-cover"
+                        loading="lazy"
                         data-testid={`img-plan-${plan.id}`}
                       />
                     ) : (
@@ -377,6 +382,7 @@ export default function PlansManagement() {
                         src={plan.latestRevision.thumbnailUrl}
                         alt={plan.title}
                         className="w-full h-full object-cover rounded"
+                        loading="lazy"
                       />
                     ) : (
                       <FileText className="h-8 w-8 text-muted-foreground" />
