@@ -116,6 +116,23 @@ export const starredMessages = pgTable("starred_messages", {
   uniqueUserMessage: uniqueIndex("unique_user_message").on(table.messageId, table.userId),
 }));
 
+// Saved Views table - User-defined views for tickets
+export const savedViews = pgTable("saved_views", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  filters: jsonb("filters").notNull(), // JSON object with all filter values
+  columns: text("columns").array(), // Array of column names to show
+  sortBy: varchar("sort_by", { length: 50 }), // Column to sort by
+  sortOrder: varchar("sort_order", { length: 10 }), // "asc" or "desc"
+  viewType: varchar("view_type", { length: 20 }).notNull().default("table"), // "table" or "map"
+  isDefault: boolean("is_default").default(false).notNull(), // Is this the user's default view?
+  isShared: boolean("is_shared").default(false).notNull(), // Can other users see this view?
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Disciplines table - Engineering disciplines (ARCH, STR, MEP, GEN)
 export const disciplines = pgTable("disciplines", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -360,17 +377,29 @@ export const tickets = pgTable("tickets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
-  type: varchar("type", { length: 50 }).notNull().default("issue"), // "rfi", "issue", "clash", "change_request", "observation", "safety", "quality"
+  type: varchar("type", { length: 50 }).notNull().default("issue"), // "rfi", "issue", "clash", "change_request", "observation", "safety", "quality", "submittal", "material_request", "ncr", "inspection_request", "punch", "site_instruction"
   pinId: varchar("pin_id").references(() => pins.id, { onDelete: "set null" }), // Nullable - ticket can exist without pin
   drawingId: varchar("drawing_id").notNull().references(() => drawings.id),
   disciplineId: varchar("discipline_id").notNull().references(() => disciplines.id),
-  priority: varchar("priority", { length: 20 }).notNull().default("medium"), // "low", "medium", "high"
-  status: varchar("status", { length: 50 }).notNull().default("open"), // "open", "in_progress", "resolved", "closed"
+  layerId: varchar("layer_id").references(() => layers.id, { onDelete: "set null" }), // Optional layer reference
+  priority: varchar("priority", { length: 20 }).notNull().default("medium"), // "low", "medium", "high", "blocker"
+  status: varchar("status", { length: 50 }).notNull().default("open"), // "open", "in_review", "awaiting_info", "in_progress", "resolved", "closed"
   assignedTo: varchar("assigned_to").references(() => users.id),
+  reporter: varchar("reporter").references(() => users.id), // Who reported/raised the ticket (can be different from createdBy)
   createdBy: varchar("created_by").notNull().references(() => users.id),
+  slaHours: varchar("sla_hours", { length: 10 }), // SLA in hours (e.g., "24", "48", "72")
+  dueDate: timestamp("due_date"), // Calculated due date based on SLA
+  channelId: varchar("channel_id").references(() => channels.id, { onDelete: "set null" }), // Optional link to channel
+  tags: text("tags").array(), // Tags for categorization
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_tickets_status").on(table.status),
+  index("idx_tickets_priority").on(table.priority),
+  index("idx_tickets_assigned_to").on(table.assignedTo),
+  index("idx_tickets_due_date").on(table.dueDate),
+  index("idx_tickets_drawing_id").on(table.drawingId),
+]);
 
 // Layer relations
 export const layersRelations = relations(layers, ({ one, many }) => ({
@@ -420,15 +449,28 @@ export const ticketsRelations = relations(tickets, ({ one }) => ({
     fields: [tickets.disciplineId],
     references: [disciplines.id],
   }),
+  layer: one(layers, {
+    fields: [tickets.layerId],
+    references: [layers.id],
+  }),
   assignee: one(users, {
     fields: [tickets.assignedTo],
     references: [users.id],
     relationName: "ticketAssignee",
   }),
+  reporter: one(users, {
+    fields: [tickets.reporter],
+    references: [users.id],
+    relationName: "ticketReporter",
+  }),
   creator: one(users, {
     fields: [tickets.createdBy],
     references: [users.id],
     relationName: "ticketCreator",
+  }),
+  channel: one(channels, {
+    fields: [tickets.channelId],
+    references: [channels.id],
   }),
 }));
 
@@ -605,9 +647,25 @@ export const insertTicketSchema = createInsertSchema(tickets).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  layerId: z.string().optional(),
+  reporter: z.string().optional(),
+  assignedTo: z.string().optional(),
+  channelId: z.string().optional(),
+  slaHours: z.string().optional(),
+  tags: z.array(z.string()).optional(),
 });
 export type InsertTicket = z.infer<typeof insertTicketSchema>;
 export type Ticket = typeof tickets.$inferSelect;
+
+// Saved Views schemas
+export const insertSavedViewSchema = createInsertSchema(savedViews).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertSavedView = z.infer<typeof insertSavedViewSchema>;
+export type SavedView = typeof savedViews.$inferSelect;
 
 // Extended types for frontend use
 export type LayerWithDetails = Layer & {
@@ -617,7 +675,7 @@ export type LayerWithDetails = Layer & {
 };
 
 export type PinWithDetails = Pin & {
-  layer: Layer;
+  layer?: Layer;
   creator: User;
   tickets?: TicketWithDetails[];
 };
@@ -626,6 +684,9 @@ export type TicketWithDetails = Ticket & {
   pin?: Pin;
   drawing: Drawing;
   discipline: Discipline;
+  layer?: Layer;
   assignee?: User;
+  reporter?: User;
   creator: User;
+  channel?: { id: string; name: string };
 };
