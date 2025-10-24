@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
@@ -88,6 +88,13 @@ export function CreateTicketModal({
       layerId: "",
     },
   });
+
+  // Auto-populate discipline when drawingDisciplineId changes
+  useEffect(() => {
+    if (drawingDisciplineId) {
+      form.setValue("disciplineId", drawingDisciplineId);
+    }
+  }, [drawingDisciplineId, form]);
 
   const handleSubmit = async (values: TicketFormValues) => {
     setIsSubmitting(true);
