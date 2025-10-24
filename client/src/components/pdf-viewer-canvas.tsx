@@ -38,12 +38,14 @@ export function PDFViewerCanvas({
   const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
   const currentPageRef = useRef<pdfjsLib.PDFPageProxy | null>(null);
   const renderTaskRef = useRef<any>(null);
+  const initialRenderCompleteRef = useRef(false);
   const [rendering, setRendering] = useState(false);
 
   // Effect 1: Load PDF document (only when URL changes)
   useEffect(() => {
     let isMounted = true;
     let timeoutId: NodeJS.Timeout;
+    initialRenderCompleteRef.current = false; // Reset on URL change
 
     const loadPDF = async (attemptNumber = 0): Promise<void> => {
       if (!pdfUrl) {
@@ -123,7 +125,55 @@ export function PDFViewerCanvas({
         currentPageRef.current = page;
         setRetrying(false);
         setRetryCount(0);
-        setLoading(false);
+        
+        // Perform initial render after loading task is destroyed
+        // Wait for next tick to ensure cleanup is complete
+        await new Promise(resolve => setTimeout(resolve, 0));
+        
+        if (!isMounted) {
+          return;
+        }
+        
+        // Render the first page to canvas
+        const canvas = canvasRef.current;
+        if (!canvas) {
+          setError('Canvas element not found');
+          setLoading(false);
+          return;
+        }
+        
+        const context = canvas.getContext('2d');
+        if (!context) {
+          setError('Canvas 2D context not available');
+          setLoading(false);
+          return;
+        }
+        
+        const scale = zoom / 100;
+        const viewport = page.getViewport({ scale });
+        
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        setCanvasDimensions({ width: viewport.width, height: viewport.height });
+        
+        console.log('[PDF Viewer] Performing initial render with zoom:', zoom);
+        
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport,
+        };
+        
+        try {
+          const renderTask = page.render(renderContext as any);
+          await renderTask.promise;
+          console.log('[PDF Viewer] Initial render complete');
+          initialRenderCompleteRef.current = true;
+          setLoading(false);
+        } catch (renderErr) {
+          console.error('[PDF Viewer] Error during initial render:', renderErr);
+          setError('Failed to render PDF page');
+          setLoading(false);
+        }
       } catch (err) {
         if (isMounted) {
           console.error('[PDF Viewer] Error loading PDF:', err);
@@ -188,7 +238,8 @@ export function PDFViewerCanvas({
 
   // Effect 2: Re-render page when zoom changes (without reloading PDF)
   useEffect(() => {
-    if (!currentPageRef.current || loading || error) {
+    // Only re-render if initial render is complete
+    if (!initialRenderCompleteRef.current || !currentPageRef.current || loading || error) {
       return;
     }
 
