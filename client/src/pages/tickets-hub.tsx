@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TicketsFiltersPanel, type TicketFilters } from "@/components/tickets-filters-panel";
 import { TicketsTableView } from "@/components/tickets-table-view";
+import { TicketsMapView } from "@/components/tickets-map-view";
 
 type TabValue = "table" | "map";
 
@@ -36,6 +37,7 @@ export default function TicketsHub() {
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [selectedTickets, setSelectedTickets] = useState<string[]>([]);
   const [filters, setFilters] = useState<TicketFilters>({});
+  const [selectedDrawingId, setSelectedDrawingId] = useState<string | undefined>(undefined);
 
   // Persist tab selection in query params
   useEffect(() => {
@@ -75,6 +77,18 @@ export default function TicketsHub() {
   // Handle selection change
   const handleSelectionChange = (ticketIds: string[]) => {
     setSelectedTickets(ticketIds);
+  };
+
+  // Handle drawing change (for map view)
+  const handleDrawingChange = (drawingId: string) => {
+    setSelectedDrawingId(drawingId);
+  };
+
+  // Handle pin click (for map view)
+  const handlePinClick = (pinId: string, ticketId: string) => {
+    // TODO: Open ticket detail panel
+    console.log("Pin clicked:", pinId, "Ticket:", ticketId);
+    handleTicketClick(ticketId);
   };
 
   return (
@@ -223,19 +237,16 @@ export default function TicketsHub() {
         {/* Map View Content */}
         <TabsContent
           value="map"
-          className="flex-1 overflow-y-auto p-6 bg-background/30 m-0"
+          className="flex-1 overflow-hidden m-0"
           data-testid="tab-content-map"
         >
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <h2 className="text-xl font-semibold text-foreground mb-2">
-                Map View
-              </h2>
-              <p className="text-muted-foreground">
-                Map view content will be implemented here
-              </p>
-            </div>
-          </div>
+          <TicketsMapView
+            filters={filters}
+            searchQuery={searchQuery}
+            selectedDrawingId={selectedDrawingId}
+            onDrawingChange={handleDrawingChange}
+            onPinClick={handlePinClick}
+          />
         </TabsContent>
       </Tabs>
     </div>
