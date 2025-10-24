@@ -167,12 +167,20 @@ export function PDFViewerCanvas({
           const renderTask = page.render(renderContext as any);
           await renderTask.promise;
           console.log('[PDF Viewer] Initial render complete');
+          
+          if (!isMounted) {
+            return;
+          }
+          
           initialRenderCompleteRef.current = true;
           setLoading(false);
+          console.log('[PDF Viewer] Loading state set to false, canvas should be visible now');
         } catch (renderErr) {
           console.error('[PDF Viewer] Error during initial render:', renderErr);
-          setError('Failed to render PDF page');
-          setLoading(false);
+          if (isMounted) {
+            setError('Failed to render PDF page');
+            setLoading(false);
+          }
         }
       } catch (err) {
         if (isMounted) {
