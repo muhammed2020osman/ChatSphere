@@ -124,7 +124,7 @@ export default function SheetViewer() {
 
   // Fetch all revisions for this drawing (sorted by uploadedAt descending)
   const { data: revisions = [] } = useQuery<DrawingRevision[]>({
-    queryKey: ['/api/drawings', id, 'revisions'],
+    queryKey: [`/api/drawings/${id}/revisions`],
     enabled: !!id,
   });
 
@@ -139,13 +139,13 @@ export default function SheetViewer() {
 
   // Fetch layers for this drawing
   const { data: layers = [], isLoading: layersLoading } = useQuery<Layer[]>({
-    queryKey: ['/api/drawings', id, 'layers'],
+    queryKey: [`/api/drawings/${id}/layers`],
     enabled: !!id,
   });
 
   // Fetch pins for this drawing
   const { data: pins = [], isLoading: pinsLoading } = useQuery<PinWithTickets[]>({
-    queryKey: ['/api/drawings', id, 'pins'],
+    queryKey: [`/api/drawings/${id}/pins`],
     enabled: !!id,
   });
 
@@ -161,7 +161,7 @@ export default function SheetViewer() {
 
   // Fetch drawing pages for the selected revision
   const { data: drawingPages = [], isLoading: pagesLoading } = useQuery<DrawingPage[]>({
-    queryKey: ['/api/revisions', selectedRevision?.id, 'pages'],
+    queryKey: [`/api/revisions/${selectedRevision?.id}/pages`],
     enabled: !!selectedRevision?.id,
   });
 
@@ -477,7 +477,7 @@ export default function SheetViewer() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/drawings', id, 'pins'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/drawings/${id}/pins`] });
     },
     onError: (error) => {
       toast({
@@ -555,7 +555,7 @@ export default function SheetViewer() {
     },
     onSuccess: () => {
       // Invalidate layers query to refresh
-      queryClient.invalidateQueries({ queryKey: ['/api/drawings', id, 'layers'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/drawings/${id}/layers`] });
     },
     onError: (error) => {
       toast({
@@ -643,7 +643,7 @@ export default function SheetViewer() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/drawings', id, 'layers'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/drawings/${id}/layers`] });
       toast({
         title: "Layer saved successfully",
         description: `Saved ${drawings.length} drawing${drawings.length === 1 ? '' : 's'}`,
