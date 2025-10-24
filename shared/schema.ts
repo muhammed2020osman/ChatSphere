@@ -346,7 +346,7 @@ export const layers = pgTable("layers", {
 export const pins = pgTable("pins", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   drawingId: varchar("drawing_id").notNull().references(() => drawings.id, { onDelete: "cascade" }),
-  layerId: varchar("layer_id").notNull().references(() => layers.id, { onDelete: "cascade" }),
+  layerId: varchar("layer_id").references(() => layers.id, { onDelete: "cascade" }), // Optional - some drawings don't have layers
   x: varchar("x", { length: 20 }).notNull(), // Percentage position (0-100)
   y: varchar("y", { length: 20 }).notNull(), // Percentage position (0-100)
   label: varchar("label", { length: 100 }), // Optional label for the pin
@@ -594,6 +594,8 @@ export type Layer = typeof layers.$inferSelect;
 export const insertPinSchema = createInsertSchema(pins).omit({
   id: true,
   createdAt: true,
+}).extend({
+  layerId: z.string().optional(), // Layer is optional - some drawings don't have layers
 });
 export type InsertPin = z.infer<typeof insertPinSchema>;
 export type Pin = typeof pins.$inferSelect;
