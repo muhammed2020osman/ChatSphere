@@ -157,6 +157,7 @@ export const drawingRevisions = pgTable("drawing_revisions", {
   fileName: varchar("file_name").notNull(),
   fileType: varchar("file_type", { length: 50 }), // e.g., "application/pdf"
   fileSize: varchar("file_size"), // In bytes
+  uploadMethod: varchar("upload_method", { length: 20 }).notNull().default("ai"), // 'ai' or 'manual' - distinguishes AI-assisted vs manual upload
   aiExtractedData: jsonb("ai_extracted_data"), // AI-extracted metadata from Gemini (layers, dimensions, elements)
   uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
   reviewedBy: varchar("reviewed_by").references(() => users.id),
