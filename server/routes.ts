@@ -1003,8 +1003,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/drawings', isAuthenticated, async (req, res) => {
     try {
-      const drawings = await storage.getDrawings();
-      res.json(drawings);
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 30;
+      
+      const result = await storage.getDrawings(page, limit);
+      res.json(result);
     } catch (error) {
       console.error("Error fetching drawings:", error);
       res.status(500).json({ message: "Failed to fetch drawings" });

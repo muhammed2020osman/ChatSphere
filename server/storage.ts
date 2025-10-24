@@ -107,7 +107,13 @@ export interface IStorage {
   // Drawings operations
   getDisciplines(): Promise<Discipline[]>;
   getFloors(): Promise<Floor[]>;
-  getDrawings(): Promise<DrawingWithDetails[]>;
+  getDrawings(page?: number, limit?: number): Promise<{
+    drawings: DrawingWithDetails[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }>;
   getDrawing(id: string): Promise<DrawingWithDetails | undefined>;
   createDrawing(drawing: InsertDrawing): Promise<Drawing>;
   createDrawingRevision(revision: InsertDrawingRevision): Promise<DrawingRevision>;
@@ -785,7 +791,23 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(floors).orderBy(floors.sortOrder);
   }
 
-  async getDrawings(): Promise<DrawingWithDetails[]> {
+  async getDrawings(page: number = 1, limit: number = 30): Promise<{
+    drawings: DrawingWithDetails[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    // Get total count
+    const [{ count: totalCount }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(drawings);
+    
+    const total = totalCount || 0;
+    const totalPages = Math.ceil(total / limit);
+    const offset = (page - 1) * limit;
+
+    // First, get paginated drawings with their basic relationships
     const results = await db
       .select({
         drawing: drawings,
@@ -797,45 +819,78 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(disciplines, eq(drawings.disciplineId, disciplines.id))
       .leftJoin(floors, eq(drawings.floorId, floors.id))
       .leftJoin(users, eq(drawings.createdBy, users.id))
-      .orderBy(desc(drawings.updatedAt));
+      .orderBy(desc(drawings.updatedAt))
+      .limit(limit)
+      .offset(offset);
 
-    // Get latest revision and revision count for each drawing
-    const drawingsWithRevisions = await Promise.all(
-      results.map(async (row) => {
-        const [latestRevision] = await db
-          .select({
-            revision: drawingRevisions,
-            uploader: users,
-          })
-          .from(drawingRevisions)
-          .leftJoin(users, eq(drawingRevisions.uploadedBy, users.id))
-          .where(eq(drawingRevisions.drawingId, row.drawing.id))
-          .orderBy(desc(drawingRevisions.uploadedAt))
-          .limit(1);
+    if (results.length === 0) {
+      return {
+        drawings: [],
+        total,
+        page,
+        limit,
+        totalPages,
+      };
+    }
 
-        // Get revision count for this drawing
-        const revisionCountResult = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(drawingRevisions)
-          .where(eq(drawingRevisions.drawingId, row.drawing.id));
-        
-        const revisionCount = Number(revisionCountResult[0]?.count || 0);
+    // Get all drawing IDs
+    const drawingIds = results.map((r) => r.drawing.id);
 
-        return {
-          ...row.drawing,
-          discipline: row.discipline!,
-          floor: row.floor || undefined,
-          creator: row.creator!,
-          revisionCount,
-          latestRevision: latestRevision ? {
-            ...latestRevision.revision,
-            uploader: latestRevision.uploader!,
-          } : undefined,
-        };
+    // Get revision counts for all drawings in one query
+    const revisionCounts = await db
+      .select({
+        drawingId: drawingRevisions.drawingId,
+        count: sql<number>`count(*)::int`,
       })
+      .from(drawingRevisions)
+      .where(sql`${drawingRevisions.drawingId} IN (${sql.join(drawingIds.map(id => sql`${id}`), sql`, `)})`)
+      .groupBy(drawingRevisions.drawingId);
+
+    const revisionCountMap = new Map(
+      revisionCounts.map((rc) => [rc.drawingId, rc.count])
     );
 
-    return drawingsWithRevisions;
+    // Get latest revision for each drawing using a subquery with ROW_NUMBER()
+    const uploaderUser = alias(users, 'uploader_user');
+    
+    const latestRevisions = await db
+      .select({
+        drawingId: sql<string>`dr.drawing_id`,
+        revision: sql<any>`dr.*`,
+        uploader: uploaderUser,
+      })
+      .from(sql`(
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY drawing_id ORDER BY uploaded_at DESC) as rn
+        FROM drawing_revisions
+        WHERE drawing_id IN (${sql.join(drawingIds.map(id => sql`${id}`), sql`, `)})
+      ) dr`)
+      .leftJoin(uploaderUser, sql`dr.uploaded_by = ${uploaderUser.id}`)
+      .where(sql`dr.rn = 1`);
+
+    const latestRevisionMap = new Map(
+      latestRevisions.map((lr) => [lr.drawingId, {
+        ...lr.revision,
+        uploader: lr.uploader!,
+      }])
+    );
+
+    // Combine all data
+    const drawingsWithDetails = results.map((row) => ({
+      ...row.drawing,
+      discipline: row.discipline!,
+      floor: row.floor || undefined,
+      creator: row.creator!,
+      revisionCount: revisionCountMap.get(row.drawing.id) || 0,
+      latestRevision: latestRevisionMap.get(row.drawing.id),
+    }));
+
+    return {
+      drawings: drawingsWithDetails,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
   }
 
   async getDrawing(id: string): Promise<DrawingWithDetails | undefined> {

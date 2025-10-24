@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, memo } from "react";
-import { FileText, Download, History, MoreVertical, Grid3x3, List, Upload, Bot, Edit } from "lucide-react";
+import { FileText, Download, History, MoreVertical, Grid3x3, List, Upload, Bot, Edit, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -61,10 +61,26 @@ export default function PlansManagement() {
   const [floorFilter, setFloorFilter] = useState<string>("all");
   const [disciplineFilter, setDisciplineFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const { data: plans, isLoading } = useQuery<DrawingWithDetails[]>({
-    queryKey: ['/api/drawings'],
+  const { data: paginatedData, isLoading } = useQuery<{
+    drawings: DrawingWithDetails[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }>({
+    queryKey: ['/api/drawings', currentPage],
+    queryFn: async () => {
+      const res = await fetch(`/api/drawings?page=${currentPage}&limit=30`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to fetch drawings");
+      return await res.json();
+    },
   });
+
+  const plans = paginatedData?.drawings || [];
 
   // Memoized utility functions for performance
   const getStatusColor = useCallback((status: string) => {
@@ -440,6 +456,87 @@ export default function PlansManagement() {
                 </div>
               </Card>
             ))}
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {paginatedData && paginatedData.totalPages > 1 && (
+          <div className="mt-6 flex items-center justify-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              data-testid="button-prev-page"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            
+            <div className="flex items-center gap-1">
+              {/* Always show first page */}
+              {paginatedData.totalPages > 5 && currentPage > 3 && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCurrentPage(1)}
+                    data-testid="button-page-1"
+                  >
+                    1
+                  </Button>
+                  <span className="px-2">...</span>
+                </>
+              )}
+              
+              {/* Show pages around current page */}
+              {Array.from({ length: paginatedData.totalPages }, (_, i) => i + 1)
+                .filter(pageNum => {
+                  // Show pages near current page
+                  if (paginatedData.totalPages <= 5) return true;
+                  if (pageNum === 1 || pageNum === paginatedData.totalPages) return false;
+                  return Math.abs(pageNum - currentPage) <= 1;
+                })
+                .map(pageNum => (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="icon"
+                    onClick={() => setCurrentPage(pageNum)}
+                    data-testid={`button-page-${pageNum}`}
+                  >
+                    {pageNum}
+                  </Button>
+                ))}
+              
+              {/* Always show last page */}
+              {paginatedData.totalPages > 5 && currentPage < paginatedData.totalPages - 2 && (
+                <>
+                  <span className="px-2">...</span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCurrentPage(paginatedData.totalPages)}
+                    data-testid={`button-page-${paginatedData.totalPages}`}
+                  >
+                    {paginatedData.totalPages}
+                  </Button>
+                </>
+              )}
+            </div>
+
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setCurrentPage(p => Math.min(paginatedData.totalPages, p + 1))}
+              disabled={currentPage === paginatedData.totalPages}
+              data-testid="button-next-page"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            
+            <div className="ml-4 text-sm text-muted-foreground">
+              Page {currentPage} of {paginatedData.totalPages} • {paginatedData.total} total plans
+            </div>
           </div>
         )}
       </div>

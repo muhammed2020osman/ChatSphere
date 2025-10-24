@@ -136,11 +136,26 @@ export function IngestPlansModal() {
     queryKey: ["/api/floors"],
   });
 
-  // Fetch drawings (for update mode)
-  const { data: existingDrawings = [], isLoading: isDrawingsLoading } = useQuery<DrawingWithDetails[]>({
-    queryKey: ["/api/drawings"],
+  // Fetch drawings (for update mode) - with pagination
+  const { data: drawingsData, isLoading: isDrawingsLoading } = useQuery<{
+    drawings: DrawingWithDetails[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }>({
+    queryKey: ["/api/drawings", 1, 100],
+    queryFn: async () => {
+      const res = await fetch(`/api/drawings?page=1&limit=100`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to fetch drawings");
+      return await res.json();
+    },
     enabled: watchedVersionType === "update",
   });
+
+  const existingDrawings = drawingsData?.drawings || [];
 
   // Filter drawings by discipline if selected
   const filteredDrawings = existingDrawings.filter(
@@ -1030,7 +1045,6 @@ export function IngestPlansModal() {
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  <SelectItem value="">لا يوجد</SelectItem>
                                   {floors.map((floor) => (
                                     <SelectItem key={floor.id} value={floor.id}>
                                       {floor.name}

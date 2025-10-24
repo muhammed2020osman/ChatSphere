@@ -144,7 +144,11 @@ export const drawings = pgTable("drawings", {
   createdBy: varchar("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  updatedAtIdx: index("drawings_updated_at_idx").on(table.updatedAt),
+  disciplineIdx: index("drawings_discipline_id_idx").on(table.disciplineId),
+  floorIdx: index("drawings_floor_id_idx").on(table.floorId),
+}));
 
 // Drawing Revisions table - Version history for each drawing
 export const drawingRevisions = pgTable("drawing_revisions", {
@@ -167,6 +171,9 @@ export const drawingRevisions = pgTable("drawing_revisions", {
 }, (table) => ({
   // Ensure unique revision number per drawing
   uniqueDrawingRevision: uniqueIndex("unique_drawing_revision").on(table.drawingId, table.revisionNo),
+  // Performance indexes
+  drawingIdIdx: index("revisions_drawing_id_idx").on(table.drawingId),
+  uploadedAtIdx: index("revisions_uploaded_at_idx").on(table.uploadedAt),
 }));
 
 // Drawing Pages table - Individual pages within multi-page PDF revisions
