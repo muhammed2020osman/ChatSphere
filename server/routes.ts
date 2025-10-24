@@ -1594,6 +1594,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const pinData = {
         ...req.body,
+        // Convert empty string to null for layerId (optional field)
+        layerId: req.body.layerId && req.body.layerId.trim() !== '' ? req.body.layerId : null,
         createdBy: userId,
       };
       const pin = await storage.createPin(pinData);
@@ -1653,6 +1655,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const ticketData = {
         ...req.body,
+        // Convert empty strings to null for optional fields
+        layerId: req.body.layerId && req.body.layerId.trim() !== '' ? req.body.layerId : null,
+        assignedTo: req.body.assignedTo && req.body.assignedTo.trim() !== '' ? req.body.assignedTo : null,
         createdBy: userId,
       };
       const ticket = await storage.createTicket(ticketData);

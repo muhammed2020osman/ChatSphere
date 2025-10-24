@@ -938,20 +938,22 @@ export default function SheetViewer() {
             className="flex-1 w-full overflow-hidden flex items-center justify-center p-8"
             onClick={handleCanvasClick}
             onMouseDown={displayMode === 'image' ? handleMouseDown : undefined}
-            onMouseMove={displayMode === 'image' ? handleMouseMove : undefined}
+            onMouseMove={handleMouseMove}
             onMouseUp={displayMode === 'image' ? handleMouseUp : undefined}
-            onMouseLeave={displayMode === 'image' ? (e) => {
-              handleMouseUp();
+            onMouseLeave={(e) => {
+              if (displayMode === 'image') {
+                handleMouseUp();
+              }
               handleMouseLeave();
-            } : undefined}
+            }}
             style={{ 
               cursor: displayMode === 'image' && activeTool === "pan" ? (isPanning ? "grabbing" : "grab") : displayMode === 'image' && activeTool === "pin" ? "none" : activeTool === "pin" ? "crosshair" : "default",
               userSelect: "none",
             }}
             data-testid="canvas-viewer"
           >
-            {/* Crosshair cursor for pin tool */}
-            {displayMode === 'image' && activeTool === "pin" && showCrosshair && !tempPin && (
+            {/* Crosshair cursor for pin tool (both PDF and Image modes) */}
+            {activeTool === "pin" && showCrosshair && !tempPin && (
               <>
                 {/* Vertical line */}
                 <div
@@ -1026,7 +1028,7 @@ export default function SheetViewer() {
               >
                 <div className="relative -ml-3 -mt-6">
                   <MapPin className="h-6 w-6 text-accent fill-accent/30" />
-                  <div className="absolute top-0 left-8 flex items-center gap-1">
+                  <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-1">
                     <Button
                       size="sm"
                       variant="default"
@@ -1230,51 +1232,7 @@ export default function SheetViewer() {
                 >
                   <div className="relative -ml-3 -mt-6">
                     <MapPin className="h-6 w-6 text-accent fill-accent/30" />
-                    <div className="absolute top-0 left-8 flex items-center gap-1">
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="h-6 px-2 gap-1 bg-accent hover:bg-accent/90 text-accent-foreground"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleConfirmPin();
-                        }}
-                        data-testid="button-confirm-pin"
-                      >
-                        <Check className="h-3 w-3" />
-                        <span className="text-xs">تأكيد</span>
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-6 px-2 gap-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCancelPin();
-                        }}
-                        data-testid="button-cancel-pin"
-                      >
-                        <X className="h-3 w-3" />
-                        <span className="text-xs">إلغاء</span>
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Render temporary pin with confirm/cancel buttons */}
-              {tempPin && (
-                <div
-                  className="absolute pointer-events-auto"
-                  style={{
-                    left: `${tempPin.x}%`,
-                    top: `${tempPin.y}%`,
-                  }}
-                  data-testid="temp-pin"
-                >
-                  <div className="relative -ml-3 -mt-6">
-                    <MapPin className="h-6 w-6 text-accent fill-accent/30" />
-                    <div className="absolute top-0 left-8 flex items-center gap-1">
+                    <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-1">
                       <Button
                         size="sm"
                         variant="default"
