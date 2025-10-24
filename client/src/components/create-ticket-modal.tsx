@@ -28,7 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { insertTicketSchema, type Discipline, type User } from "@shared/schema";
+import { insertTicketSchema, type Discipline, type User, type Layer } from "@shared/schema";
 
 // Extend ticket schema for form validation
 const ticketFormSchema = insertTicketSchema.extend({
@@ -38,6 +38,7 @@ const ticketFormSchema = insertTicketSchema.extend({
   disciplineId: z.string().min(1, "يجب اختيار الـ Discipline"),
   priority: z.enum(["low", "medium", "high"]),
   assignedTo: z.string().optional(),
+  layerId: z.string().min(1, "يجب اختيار الـ Layer"),
 });
 
 type TicketFormValues = z.infer<typeof ticketFormSchema>;
@@ -47,6 +48,7 @@ interface CreateTicketModalProps {
   onOpenChange: (open: boolean) => void;
   pinPosition: { x: number; y: number };
   drawingId: string;
+  layers: Layer[];
   onSubmit: (ticket: TicketFormValues) => void;
 }
 
@@ -55,6 +57,7 @@ export function CreateTicketModal({
   onOpenChange,
   pinPosition,
   drawingId,
+  layers,
   onSubmit,
 }: CreateTicketModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -80,6 +83,7 @@ export function CreateTicketModal({
       drawingId,
       pinId: "", // Will be set after pin is created
       createdBy: "", // Will be set from current user
+      layerId: "",
     },
   });
 
@@ -186,6 +190,43 @@ export function CreateTicketModal({
                       <SelectItem value="quality" data-testid="option-type-quality">
                         جودة (Quality)
                       </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Layer */}
+            <FormField
+              control={form.control}
+              name="layerId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>الطبقة (Layer) *</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                    data-testid="select-layer"
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر الطبقة" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {layers.map((layer) => {
+                        const discipline = disciplines.find(d => d.id === layer.disciplineId);
+                        return (
+                          <SelectItem
+                            key={layer.id}
+                            value={layer.id}
+                            data-testid={`option-layer-${layer.id}`}
+                          >
+                            {layer.name} ({discipline?.name || 'Unknown'})
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                   <FormMessage />
