@@ -457,19 +457,82 @@ export default function SheetViewer() {
     setTempPin(null);
   }, []);
   
-  const handleTicketSubmit = useCallback((ticketData: any) => {
-    if (tempPin) {
-      // TODO: Create pin and ticket via API mutations
-      // For now, just close modal and reset tempPin
+  // Mutation to create a pin
+  const createPinMutation = useMutation({
+    mutationFn: async (pinData: { drawingId: string; layerId: string; x: string; y: string; label?: string; description?: string }) => {
+      return await apiRequest(`/api/pins`, {
+        method: 'POST',
+        body: pinData,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/drawings', id, 'pins'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "خطأ",
+        description: "فشل في إنشاء الدبوس",
+        variant: "destructive",
+      });
+      console.error("Error creating pin:", error);
+    },
+  });
+
+  // Mutation to create a ticket
+  const createTicketMutation = useMutation({
+    mutationFn: async (ticketData: any) => {
+      return await apiRequest(`/api/tickets`, {
+        method: 'POST',
+        body: ticketData,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tickets'] });
+      toast({
+        title: "تم!",
+        description: "تم إنشاء الدبوس والتذكرة بنجاح",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "خطأ",
+        description: "فشل في إنشاء التذكرة",
+        variant: "destructive",
+      });
+      console.error("Error creating ticket:", error);
+    },
+  });
+
+  const handleTicketSubmit = useCallback(async (ticketData: any) => {
+    if (!tempPin) return;
+    
+    try {
+      // Extract layerId from ticket data
+      const { layerId, ...ticketWithoutLayer } = ticketData;
+      
+      // Create pin first
+      const pinResponse = await createPinMutation.mutateAsync({
+        drawingId: id!,
+        layerId: layerId,
+        x: tempPin.x.toString(),
+        y: tempPin.y.toString(),
+        label: ticketData.title,
+        description: ticketData.description,
+      });
+      
+      // Create ticket with the pin ID
+      await createTicketMutation.mutateAsync({
+        ...ticketWithoutLayer,
+        pinId: (pinResponse as any).id,
+      });
+      
+      // Close modal and reset tempPin
       setTempPin(null);
       setShowTicketModal(false);
-      
-      console.log("Creating pin and ticket:", { 
-        pin: { x: tempPin.x, y: tempPin.y }, 
-        ticket: ticketData 
-      });
+    } catch (error) {
+      console.error("Error in handleTicketSubmit:", error);
     }
-  }, [tempPin]);
+  }, [tempPin, id, createPinMutation, createTicketMutation]);
 
   // Mutation to toggle layer visibility
   const toggleLayerMutation = useMutation({
@@ -1487,6 +1550,7 @@ export default function SheetViewer() {
           onOpenChange={setShowTicketModal}
           pinPosition={tempPin}
           drawingId={plan.id}
+          layers={layers}
           onSubmit={handleTicketSubmit}
         />
       )}
