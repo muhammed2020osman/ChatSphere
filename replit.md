@@ -42,6 +42,16 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
     - **Database Schema**: `disciplines`, `floors`, `drawings`, `drawing_revisions` tables with fields for `uploadMethod` and `parentDrawingId`.
     - **API Endpoints**: CRUD for drawings and revisions, status updates, metadata.
 - **Pins/Tickets System & Drawing Tools**: Database schemas and APIs for `pins`, `tickets`, `layers`. Includes pin placement, ticket creation (RFI, Issue, Clash, etc.), and drawing tools (Pen, Line, Rectangle, Circle, Text, Eraser).
+- **Tickets Hub Module**: Centralized ticket management system with comprehensive features:
+    - **Table View**: Sortable, paginated table with columns for ID, Title, Type, Status, Priority, Assignee, Drawing, and SLA tracking. Bulk selection and actions support.
+    - **Map View**: Interactive sheet viewer showing filtered tickets as pins on engineering drawings. Sheet selector with filtering capabilities.
+    - **Advanced Filtering**: Multi-select filters for Discipline, Floor, Drawing, Type, Status, Priority, Assignee, Layer, SLA Status, Tags, and Date Range.
+    - **Right Preview Panel**: Detailed ticket view with quick actions, mini-map, recent activity, and tags.
+    - **Left Pin Timeline Drawer**: Pin-focused view showing all linked tickets and chronological timeline of events.
+    - **Saved Views**: User-defined filter configurations with save/load/edit/delete functionality. Set default views.
+    - **Bulk Actions**: Mass update status, priority, assignee, and tags for multiple tickets simultaneously.
+    - **Enhanced Schema**: Tickets now support SLA hours, due dates, reporter field, channel linking, layer reference, and tags array.
+    - **API Endpoints**: GET /api/tickets (advanced filtering), PATCH /api/tickets/bulk, GET /api/pins/:id/timeline, saved views CRUD.
 
 ### System Design Choices
 - **Authentication**: Replit Auth for user login, internal session management for API and WebSocket interactions. Reference data endpoints (`/api/disciplines`, `/api/floors`) are public (no auth required) for better accessibility.

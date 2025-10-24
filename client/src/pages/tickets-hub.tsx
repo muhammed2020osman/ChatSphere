@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Search, Filter, ChevronDown, MoreHorizontal } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Search, Filter, ChevronDown, MoreHorizontal, Star, Settings2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,11 +14,18 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TicketsFiltersPanel, type TicketFilters } from "@/components/tickets-filters-panel";
 import { TicketsTableView } from "@/components/tickets-table-view";
 import { TicketsMapView } from "@/components/tickets-map-view";
+import { TicketPreviewPanel } from "@/components/ticket-preview-panel";
+import { PinTimelineDrawer } from "@/components/pin-timeline-drawer";
+import { SavedViewsDialog } from "@/components/saved-views-dialog";
+import { BulkActionsDialog } from "@/components/bulk-actions-dialog";
+import { queryClient } from "@/lib/queryClient";
+import type { SavedView } from "@shared/schema";
 
 type TabValue = "table" | "map";
 
@@ -38,6 +46,28 @@ export default function TicketsHub() {
   const [selectedTickets, setSelectedTickets] = useState<string[]>([]);
   const [filters, setFilters] = useState<TicketFilters>({});
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | undefined>(undefined);
+  const [sortBy, setSortBy] = useState<string>("createdAt");
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>("desc");
+
+  // Saved views state
+  const [isSavedViewsDialogOpen, setIsSavedViewsDialogOpen] = useState(false);
+  const [currentViewId, setCurrentViewId] = useState<string | null>(null);
+
+  // Bulk actions state
+  const [isBulkActionsDialogOpen, setIsBulkActionsDialogOpen] = useState(false);
+
+  // Preview panel state
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  // Pin timeline drawer state
+  const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
+  const [isPinTimelineOpen, setIsPinTimelineOpen] = useState(false);
+
+  // Fetch saved views
+  const { data: savedViews } = useQuery<SavedView[]>({
+    queryKey: ['/api/saved-views'],
+  });
 
   // Persist tab selection in query params
   useEffect(() => {
@@ -70,8 +100,10 @@ export default function TicketsHub() {
 
   // Handle ticket click
   const handleTicketClick = (ticketId: string) => {
-    // TODO: Open ticket detail panel
-    console.log("Opening ticket:", ticketId);
+    setSelectedTicketId(ticketId);
+    setIsPreviewOpen(true);
+    // Close pin timeline if open
+    setIsPinTimelineOpen(false);
   };
 
   // Handle selection change
@@ -86,10 +118,57 @@ export default function TicketsHub() {
 
   // Handle pin click (for map view)
   const handlePinClick = (pinId: string, ticketId: string) => {
-    // TODO: Open ticket detail panel
-    console.log("Pin clicked:", pinId, "Ticket:", ticketId);
-    handleTicketClick(ticketId);
+    setSelectedPinId(pinId);
+    setIsPinTimelineOpen(true);
+    // Close preview panel if open
+    setIsPreviewOpen(false);
   };
+
+  // Handle edit ticket
+  const handleEditTicket = (ticketId: string) => {
+    // TODO: Open edit ticket modal
+    console.log("Editing ticket:", ticketId);
+  };
+
+  // Handle view pin from preview panel
+  const handleViewPin = (pinId: string) => {
+    setSelectedPinId(pinId);
+    setIsPinTimelineOpen(true);
+    // Keep preview panel open - user can have both open
+  };
+
+  // Handle ticket click from pin timeline
+  const handleTicketClickFromTimeline = (ticketId: string) => {
+    setSelectedTicketId(ticketId);
+    setIsPreviewOpen(true);
+    // Keep timeline drawer open - user can have both open
+  };
+
+  // Handle load saved view
+  const handleLoadView = (view: SavedView) => {
+    setFilters(view.filters as TicketFilters);
+    setSortBy(view.sortBy || "createdAt");
+    setSortOrder((view.sortOrder as 'asc' | 'desc') || "desc");
+    setCurrentViewId(view.id);
+  };
+
+  // Handle bulk actions success
+  const handleBulkActionsSuccess = () => {
+    // Clear selection
+    setSelectedTickets([]);
+    // Refetch tickets
+    queryClient.invalidateQueries({ queryKey: ['/api/tickets'] });
+  };
+
+  // Load default view on mount
+  useEffect(() => {
+    if (savedViews && savedViews.length > 0) {
+      const defaultView = savedViews.find((v) => v.isDefault);
+      if (defaultView && !currentViewId) {
+        handleLoadView(defaultView);
+      }
+    }
+  }, [savedViews]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -111,6 +190,7 @@ export default function TicketsHub() {
             <Button
               variant="outline"
               disabled={selectedTickets.length === 0}
+              onClick={() => setIsBulkActionsDialogOpen(true)}
               className="gap-2"
               data-testid="button-bulk-actions"
             >
@@ -161,22 +241,47 @@ export default function TicketsHub() {
                   className="gap-2"
                   data-testid="button-view-selector"
                 >
-                  <span>Views</span>
+                  <span>
+                    {currentViewId 
+                      ? savedViews?.find((v) => v.id === currentViewId)?.name || "Views"
+                      : "Views"
+                    }
+                  </span>
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem data-testid="menu-item-all-tickets">
-                  All Tickets
-                </DropdownMenuItem>
-                <DropdownMenuItem data-testid="menu-item-my-tickets">
-                  My Tickets
-                </DropdownMenuItem>
-                <DropdownMenuItem data-testid="menu-item-unassigned">
-                  Unassigned
-                </DropdownMenuItem>
-                <DropdownMenuItem data-testid="menu-item-overdue">
-                  Overdue
+              <DropdownMenuContent align="end" className="w-56">
+                {/* Saved Views */}
+                {savedViews && savedViews.length > 0 && (
+                  <>
+                    {savedViews.map((view) => (
+                      <DropdownMenuItem
+                        key={view.id}
+                        onClick={() => handleLoadView(view)}
+                        className="flex items-center justify-between gap-2"
+                        data-testid={`menu-item-view-${view.id}`}
+                      >
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          {view.isDefault && <Star className="h-3 w-3 shrink-0" />}
+                          <span className="truncate">{view.name}</span>
+                        </div>
+                        {currentViewId === view.id && (
+                          <Check className="h-4 w-4 shrink-0" />
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                
+                {/* Manage Views Button */}
+                <DropdownMenuItem
+                  onClick={() => setIsSavedViewsDialogOpen(true)}
+                  className="flex items-center gap-2"
+                  data-testid="menu-item-manage-views"
+                >
+                  <Settings2 className="h-4 w-4" />
+                  <span>Manage Views</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -249,6 +354,45 @@ export default function TicketsHub() {
           />
         </TabsContent>
       </Tabs>
+
+      {/* Preview Panels */}
+      <TicketPreviewPanel
+        ticketId={selectedTicketId}
+        isOpen={isPreviewOpen}
+        onClose={() => {
+          setIsPreviewOpen(false);
+          setSelectedTicketId(null);
+        }}
+        onEdit={handleEditTicket}
+        onViewPin={handleViewPin}
+      />
+
+      <PinTimelineDrawer
+        pinId={selectedPinId}
+        isOpen={isPinTimelineOpen}
+        onClose={() => {
+          setIsPinTimelineOpen(false);
+          setSelectedPinId(null);
+        }}
+        onTicketClick={handleTicketClickFromTimeline}
+      />
+
+      {/* Saved Views Dialog */}
+      <SavedViewsDialog
+        isOpen={isSavedViewsDialogOpen}
+        onClose={() => setIsSavedViewsDialogOpen(false)}
+        currentFilters={filters}
+        currentSort={{ sortBy, sortOrder }}
+        onLoadView={handleLoadView}
+      />
+
+      {/* Bulk Actions Dialog */}
+      <BulkActionsDialog
+        isOpen={isBulkActionsDialogOpen}
+        onClose={() => setIsBulkActionsDialogOpen(false)}
+        selectedTicketIds={selectedTickets}
+        onSuccess={handleBulkActionsSuccess}
+      />
     </div>
   );
 }

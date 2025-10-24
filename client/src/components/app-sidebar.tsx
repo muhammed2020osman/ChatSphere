@@ -1,4 +1,4 @@
-import { Hash, Lock, Plus, ChevronDown, MessageSquare, Settings, AtSign, Star, MessagesSquare, FileText, Upload, Layers } from "lucide-react";
+import { Hash, Lock, Plus, ChevronDown, MessageSquare, Settings, AtSign, Star, MessagesSquare, FileText, Upload, Layers, CheckSquare } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -146,6 +146,19 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
                   <Link href="/plans">
                     <Layers className="w-4 h-4" />
                     <span>Plans</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === '/tickets'}
+                  data-testid="link-tickets"
+                  tooltip="Tickets Hub"
+                >
+                  <Link href="/tickets">
+                    <CheckSquare className="w-4 h-4" />
+                    <span>Tickets</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
