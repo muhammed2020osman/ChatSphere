@@ -116,40 +116,66 @@ export function PDFViewerCanvas({
           return;
         }
 
-        const canvas = canvasRef.current;
-        if (!canvas) {
-          console.error('[PDF Viewer] Canvas element not found');
-          return;
-        }
+        // Wait for canvas to be ready in DOM using requestAnimationFrame
+        const renderOnCanvas = () => {
+          return new Promise<void>((resolve, reject) => {
+            requestAnimationFrame(() => {
+              const canvas = canvasRef.current;
+              
+              if (!canvas) {
+                console.error('[PDF Viewer] Canvas element not found in DOM');
+                console.error('[PDF Viewer] canvasRef.current:', canvasRef.current);
+                reject(new Error('Canvas element not found'));
+                return;
+              }
 
-        const context = canvas.getContext('2d');
-        if (!context) {
-          console.error('[PDF Viewer] Canvas 2D context not available');
-          return;
-        }
+              console.log('[PDF Viewer] Canvas element found, dimensions:', {
+                offsetWidth: canvas.offsetWidth,
+                offsetHeight: canvas.offsetHeight,
+                clientWidth: canvas.clientWidth,
+                clientHeight: canvas.clientHeight,
+              });
 
-        const scale = zoom / 100;
-        const viewport = page.getViewport({ scale });
+              const context = canvas.getContext('2d');
+              if (!context) {
+                console.error('[PDF Viewer] Canvas 2D context not available');
+                reject(new Error('Canvas 2D context not available'));
+                return;
+              }
 
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        setCanvasDimensions({ width: viewport.width, height: viewport.height });
+              const scale = zoom / 100;
+              const viewport = page.getViewport({ scale });
 
-        console.log('[PDF Viewer] Rendering page with dimensions:', { width: viewport.width, height: viewport.height });
+              canvas.width = viewport.width;
+              canvas.height = viewport.height;
+              setCanvasDimensions({ width: viewport.width, height: viewport.height });
 
-        const renderContext = {
-          canvasContext: context,
-          viewport: viewport,
+              console.log('[PDF Viewer] Rendering page with dimensions:', { width: viewport.width, height: viewport.height });
+
+              const renderContext = {
+                canvasContext: context,
+                viewport: viewport,
+              };
+
+              page.render(renderContext as any).promise
+                .then(() => {
+                  if (isMounted) {
+                    console.log('[PDF Viewer] Page rendered successfully');
+                    setRetrying(false);
+                    setRetryCount(0);
+                    setLoading(false);
+                  }
+                  resolve();
+                })
+                .catch((renderErr) => {
+                  console.error('[PDF Viewer] Error rendering page:', renderErr);
+                  reject(renderErr);
+                });
+            });
+          });
         };
 
-        await page.render(renderContext as any).promise;
-
-        if (isMounted) {
-          console.log('[PDF Viewer] Page rendered successfully');
-          setRetrying(false);
-          setRetryCount(0);
-          setLoading(false);
-        }
+        await renderOnCanvas();
       } catch (err) {
         if (isMounted) {
           console.error('[PDF Viewer] Error loading PDF:', err);
@@ -266,47 +292,6 @@ export function PDFViewerCanvas({
     setIsPanning(false);
   };
 
-  if (loading) {
-    return (
-      <div
-        className={`flex items-center justify-center min-h-[400px] ${className}`}
-        data-testid="pdf-viewer-loading"
-      >
-        <div className="flex flex-col items-center gap-3 w-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground text-center">
-            {retrying ? `Retrying... (Attempt ${retryCount}/2)` : 'Loading PDF...'}
-          </p>
-          {loadProgress > 0 && (
-            <div className="w-full">
-              <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-primary h-full transition-all duration-300"
-                  style={{ width: `${loadProgress}%` }}
-                  data-testid="pdf-load-progress"
-                />
-              </div>
-              <p className="text-xs text-muted-foreground text-center mt-1">{loadProgress}%</p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={`flex items-center justify-center min-h-[400px] p-6 ${className}`} data-testid="pdf-viewer-error">
-        <Alert variant="destructive" className="max-w-md">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            <strong>Error loading PDF:</strong> {error}
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-
   return (
     <div
       ref={containerRef}
@@ -326,6 +311,7 @@ export function PDFViewerCanvas({
         className="absolute top-0 left-0"
         style={{
           transform: `translate(${panPosition.x}px, ${panPosition.y}px)`,
+          opacity: loading || error ? 0 : 1,
         }}
         data-testid="pdf-canvas"
       />
@@ -336,6 +322,7 @@ export function PDFViewerCanvas({
         height={canvasDimensions.height}
         style={{
           transform: `translate(${panPosition.x}px, ${panPosition.y}px)`,
+          opacity: loading || error ? 0 : 1,
         }}
         data-testid="pdf-svg-overlay"
       >
@@ -343,6 +330,46 @@ export function PDFViewerCanvas({
           {children}
         </g>
       </svg>
+
+      {loading && (
+        <div
+          className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+          data-testid="pdf-viewer-loading"
+        >
+          <div className="flex flex-col items-center gap-3 w-64">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground text-center">
+              {retrying ? `Retrying... (Attempt ${retryCount}/2)` : 'Loading PDF...'}
+            </p>
+            {loadProgress > 0 && (
+              <div className="w-full">
+                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-primary h-full transition-all duration-300"
+                    style={{ width: `${loadProgress}%` }}
+                    data-testid="pdf-load-progress"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground text-center mt-1">{loadProgress}%</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div
+          className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm p-6"
+          data-testid="pdf-viewer-error"
+        >
+          <Alert variant="destructive" className="max-w-md">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Error loading PDF:</strong> {error}
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
     </div>
   );
 }
