@@ -85,12 +85,13 @@ export async function setupAuth(app: Express) {
 
   for (const domain of process.env
     .REPLIT_DOMAINS!.split(",")) {
+    const cleanDomain = domain.trim();
     const strategy = new Strategy(
       {
-        name: `replitauth:${domain}`,
+        name: `replitauth:${cleanDomain}`,
         config,
         scope: "openid email profile offline_access",
-        callbackURL: `https://${domain}/api/callback`,
+        callbackURL: `http://${cleanDomain}/api/callback`,
       },
       verify,
     );
@@ -100,11 +101,50 @@ export async function setupAuth(app: Express) {
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
-  app.get("/api/login", (req, res, next) => {
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      prompt: "login consent",
-      scope: ["openid", "email", "profile", "offline_access"],
-    })(req, res, next);
+  app.get("/api/login", async (req, res, next) => {
+    // For local development, create a mock user
+    if (process.env.NODE_ENV === 'development' && req.hostname === 'localhost') {
+      try {
+        // Create or get the development user
+        const devUser = await storage.upsertUser({
+          id: 'dev-user-123',
+          email: 'dev@localhost.com',
+          firstName: 'Development',
+          lastName: 'User',
+          profileImageUrl: null,
+          status: 'active',
+          role: 'admin'
+        });
+        
+        const mockUser = {
+          claims: {
+            sub: devUser.id,
+            email: devUser.email,
+            name: `${devUser.firstName} ${devUser.lastName}`,
+            profile_image_url: devUser.profileImageUrl
+          },
+          expires_at: Math.floor(Date.now() / 1000) + (24 * 60 * 60), // 24 hours
+          refresh_token: 'dev-refresh-token'
+        };
+        
+        req.login(mockUser, (err) => {
+          if (err) {
+            console.error('Login error:', err);
+            return res.status(500).json({ message: 'Login failed' });
+          }
+          // Redirect to the main app instead of landing page
+          res.redirect('/');
+        });
+      } catch (error) {
+        console.error('Error creating dev user:', error);
+        res.status(500).json({ message: 'Login failed' });
+      }
+    } else {
+      passport.authenticate(`replitauth:${req.hostname}`, {
+        prompt: "login consent",
+        scope: ["openid", "email", "profile", "offline_access"],
+      })(req, res, next);
+    }
   });
 
   app.get("/api/callback", (req, res, next) => {

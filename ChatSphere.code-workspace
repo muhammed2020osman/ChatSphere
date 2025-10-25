@@ -1,0 +1,36 @@
+{
+	"folders": [
+		{
+			"path": "."
+		} 
+	],
+	"settings": {
+		"files.exclude": {
+			"**/.vscode": true,
+			"**/.idea": true,
+			"**/node_modules": true,
+			"**/vendor": true,
+		
+			"**/.svn": true,
+			"**/.hg": true,
+			"**/CVS": true,
+			"**/.DS_Store": true,
+			"**/Thumbs.db": true,
+			 "**/.next": true,
+			"**/dist": true,
+			"**/build": true,
+			"**/out": true,
+			"**/target": true,
+			"**/tmp": true,
+			 
+			"**/cache": true,
+			"**/temp": true,
+			"**/backup": true,
+			"**/old": true,
+		 
+	},
+	"workbench.editor.enablePreview": false,
+	"notebook.diff.enablePreview": false,
+	"editor.rename.enablePreview": false,
+	"workbench.editor.enablePreviewFromQuickOpen": false
+}}
