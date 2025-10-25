@@ -80,3 +80,30 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
 - **Google Gemini 2.5 Pro**: AI analysis for extracting metadata from engineering drawings.
 - **pdf-parse**: PDF text extraction.
 - **pdfjs-dist**: Client-side PDF rendering library. Worker bundled via Vite using `?url` import to avoid CDN dependencies.
+
+## Deployment Configuration
+
+### Build Path Fix (Critical)
+**Problem:** Vite builds to `dist/public` but Express server looks for `server/public` in production, causing blank screen on deployment.
+
+**Solution:** Use `build.sh` script that creates symlink after building:
+```bash
+./build.sh
+```
+
+**Manual Deployment Fix:**
+To fix deployment on Replit, manually edit `.replit` file:
+1. Open `.replit` file
+2. Find the `[deployment]` section
+3. Change `build = ["npm", "run", "build"]` to:
+   ```toml
+   build = ["sh", "build.sh"]
+   ```
+4. Save and redeploy
+
+The `build.sh` script:
+- Runs `vite build` (frontend → `dist/public`)
+- Runs `esbuild` (backend → `dist/index.js`)
+- Creates symlink: `server/public` → `../dist/public`
+
+This ensures production server finds the built frontend assets correctly.
