@@ -13,6 +13,8 @@ export function useWebSocket() {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.hostname === 'localhost' ? 'localhost:5000' : window.location.host;
     const wsUrl = `${protocol}//${host}/ws`;
+    
+    console.log('WebSocket URL:', wsUrl);
 
     const socket = new WebSocket(wsUrl);
 

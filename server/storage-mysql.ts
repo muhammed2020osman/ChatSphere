@@ -40,12 +40,6 @@ export class DatabaseStorage {
     const existingUsers = await db.select().from(users);
     const isFirstUser = existingUsers.length === 0;
     
-    // Check if user already exists
-    const existingUser = await this.getUserById(userData.id);
-    if (existingUser) {
-      return existingUser;
-    }
-    
     // Insert new user
     await db
       .insert(users)
@@ -66,10 +60,6 @@ export class DatabaseStorage {
   async getUserById(id: string): Promise<User | null> {
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
     return result[0] || null;
-  }
-
-  async getUser(id: string): Promise<User | null> {
-    return this.getUserById(id);
   }
 
   async getUserByEmail(email: string): Promise<User | null> {
