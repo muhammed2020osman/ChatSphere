@@ -86,24 +86,30 @@ A modern Slack clone built as a Progressive Web App (PWA) with real-time messagi
 ### Build Path Fix (Critical)
 **Problem:** Vite builds to `dist/public` but Express server looks for `server/public` in production, causing blank screen on deployment.
 
-**Solution:** Use `build.sh` script that creates symlink after building:
-```bash
-./build.sh
-```
+**Solution:** Use custom deployment scripts that handle symlink creation automatically.
 
-**Manual Deployment Fix:**
-To fix deployment on Replit, manually edit `.replit` file:
-1. Open `.replit` file
+**Deployment Fix Steps:**
+1. Open `.replit` file (enable "Show hidden files" in Files panel if needed)
 2. Find the `[deployment]` section
-3. Change `build = ["npm", "run", "build"]` to:
+3. Update both `build` and `run` commands:
    ```toml
+   [deployment]
+   deploymentTarget = "autoscale"
    build = ["sh", "build.sh"]
+   run = ["sh", "start.sh"]
    ```
 4. Save and redeploy
 
-The `build.sh` script:
+**How it works:**
+
+`build.sh` script:
 - Runs `vite build` (frontend → `dist/public`)
 - Runs `esbuild` (backend → `dist/index.js`)
 - Creates symlink: `server/public` → `../dist/public`
 
-This ensures production server finds the built frontend assets correctly.
+`start.sh` script:
+- Checks if symlink exists (creates it if missing)
+- Verifies `dist/public` directory exists
+- Starts production server with `NODE_ENV=production node dist/index.js`
+
+This ensures production server always finds the built frontend assets correctly, even after rebuilds.
