@@ -1439,7 +1439,7 @@ export class DatabaseStorage implements IStorage {
       updatedAt: row.ticket_updatedAt,
       drawing: row.drawing_id ? {
         id: row.drawing_id,
-        sheetNumber: row.drawing_sheetNo!,
+        sheetNo: row.drawing_sheetNo!,
         title: row.drawing_title,
         disciplineId: row.drawing_disciplineId!,
       } : undefined,
