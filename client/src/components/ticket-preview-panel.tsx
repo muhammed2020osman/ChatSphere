@@ -348,15 +348,17 @@ export function TicketPreviewPanel({
                       )}
 
                       {/* Drawing */}
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <div className="flex-1">
-                          <p className="text-xs text-muted-foreground">Drawing</p>
-                          <p className="text-sm" data-testid="text-drawing">
-                            {ticket.drawing.sheetNo} - {ticket.drawing.title}
-                          </p>
+                      {ticket.drawing && (
+                        <div className="flex items-center gap-3">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          <div className="flex-1">
+                            <p className="text-xs text-muted-foreground">Drawing</p>
+                            <p className="text-sm" data-testid="text-drawing">
+                              {ticket.drawing.sheetNo} - {ticket.drawing.title}
+                            </p>
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       {/* Layer */}
                       {ticket.layer && (

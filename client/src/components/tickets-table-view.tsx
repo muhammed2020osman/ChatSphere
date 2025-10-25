@@ -631,7 +631,7 @@ export function TicketsTableView({
                     className="text-sm"
                     data-testid={`text-ticket-drawing-${ticket.id}`}
                   >
-                    {ticket.drawing.sheetNo}
+                    {ticket.drawing?.sheetNo || 'N/A'}
                   </TableCell>
                   <TableCell onClick={() => onTicketClick(ticket.id)}>
                     {getSLABadge(ticket)}
