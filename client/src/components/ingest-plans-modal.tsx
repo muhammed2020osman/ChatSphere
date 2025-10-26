@@ -129,11 +129,13 @@ export function IngestPlansModal() {
   // Fetch disciplines (public reference data - no auth required)
   const { data: disciplines = [], isLoading: isDisciplinesLoading, error: disciplinesError } = useQuery<Discipline[]>({
     queryKey: ["/api/disciplines"],
+    queryFn: () => apiRequest("/api/disciplines"),
   });
 
   // Fetch floors (public reference data - no auth required)
   const { data: floors = [], isLoading: isFloorsLoading, error: floorsError } = useQuery<Floor[]>({
     queryKey: ["/api/floors"],
+    queryFn: () => apiRequest("/api/floors"),
   });
 
   // Fetch drawings (for update mode) - with pagination

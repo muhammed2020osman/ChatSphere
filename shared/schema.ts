@@ -54,7 +54,13 @@ export const messages = mysqlTable("messages", {
   content: text("content").notNull(),
   channelId: varchar("channel_id", { length: 191 }).references(() => channels.id),
   userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
-  replyToId: varchar("reply_to_id", { length: 191 }).references(() => messages.id),
+  replyToId: varchar("reply_to_id", { length: 191 }),
+  attachmentUrl: text("attachment_url"),
+  attachmentType: varchar("attachment_type", { length: 100 }),
+  attachmentName: varchar("attachment_name", { length: 255 }),
+  threadParentId: varchar("thread_parent_id", { length: 191 }),
+  mentions: json("mentions").default([]),
+  editedAt: timestamp("edited_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
@@ -65,6 +71,8 @@ export const drawings = mysqlTable("drawings", {
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   data: json("data").notNull(),
+  disciplineId: varchar("discipline_id", { length: 191 }).references(() => disciplines.id),
+  floorId: varchar("floor_id", { length: 191 }).references(() => floors.id),
   createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
@@ -75,10 +83,20 @@ export const tickets = mysqlTable("tickets", {
   id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
+  type: varchar("type", { length: 50 }).default("issue").notNull(),
   status: varchar("status", { length: 50 }).default("open").notNull(),
   priority: varchar("priority", { length: 50 }).default("medium").notNull(),
+  drawingId: varchar("drawing_id", { length: 191 }).references(() => drawings.id),
+  disciplineId: varchar("discipline_id", { length: 191 }).references(() => disciplines.id),
+  pinId: varchar("pin_id", { length: 191 }).references(() => pins.id),
+  layerId: varchar("layer_id", { length: 191 }).references(() => layers.id),
   assignedTo: varchar("assigned_to", { length: 191 }).references(() => users.id),
   createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
+  reporter: varchar("reporter", { length: 191 }).references(() => users.id),
+  channelId: varchar("channel_id", { length: 191 }).references(() => channels.id),
+  slaHours: varchar("sla_hours", { length: 10 }),
+  dueDate: timestamp("due_date"),
+  tags: json("tags").default([]),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
@@ -87,9 +105,12 @@ export const tickets = mysqlTable("tickets", {
 export const directMessages = mysqlTable("direct_messages", {
   id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
   content: text("content").notNull(),
-  senderId: varchar("sender_id", { length: 191 }).notNull().references(() => users.id),
-  receiverId: varchar("receiver_id", { length: 191 }).notNull().references(() => users.id),
-  replyToId: varchar("reply_to_id", { length: 191 }).references(() => directMessages.id),
+  fromUserId: varchar("from_user_id", { length: 191 }).notNull().references(() => users.id),
+  toUserId: varchar("to_user_id", { length: 191 }).notNull().references(() => users.id),
+  replyToId: varchar("reply_to_id", { length: 191 }),
+  attachmentUrl: text("attachment_url"),
+  attachmentType: varchar("attachment_type", { length: 100 }),
+  attachmentName: varchar("attachment_name", { length: 255 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
@@ -107,7 +128,7 @@ export const reactions = mysqlTable("reactions", {
   id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
   messageId: varchar("message_id", { length: 191 }).notNull().references(() => messages.id),
   userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
-  emoji: varchar("emoji", { length: 10 }).notNull(),
+  icon: varchar("icon", { length: 10 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -116,8 +137,10 @@ export const notifications = mysqlTable("notifications", {
   id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
   userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
   type: varchar("type", { length: 50 }).notNull(),
-  title: varchar("title", { length: 255 }).notNull(),
-  message: text("message").notNull(),
+  messageId: varchar("message_id", { length: 191 }).references(() => messages.id),
+  channelId: varchar("channel_id", { length: 191 }).references(() => channels.id),
+  fromUserId: varchar("from_user_id", { length: 191 }).references(() => users.id),
+  content: text("content").notNull(),
   isRead: boolean("is_read").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -148,6 +171,8 @@ export const disciplines = mysqlTable("disciplines", {
   id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
+  code: varchar("code", { length: 20 }),
+  color: varchar("color", { length: 20 }),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -174,9 +199,15 @@ export const projectMembers = mysqlTable("project_members", {
 // Drawing pages table
 export const drawingPages = mysqlTable("drawing_pages", {
   id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
-  drawingId: varchar("drawing_id", { length: 191 }).notNull().references(() => drawings.id),
+  revisionId: varchar("revision_id", { length: 191 }).notNull().references(() => drawingRevisions.id),
   pageNumber: varchar("page_number", { length: 10 }).notNull(),
-  data: json("data").notNull(),
+  imageUrl: text("image_url").notNull(),
+  thumbnailUrl: text("thumbnail_url"),
+  extractedText: text("extracted_text"),
+  extractedMetadata: json("extracted_metadata"),
+  aiExtractedData: json("ai_extracted_data"),
+  width: varchar("width", { length: 20 }),
+  height: varchar("height", { length: 20 }),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -197,6 +228,18 @@ export const drawingRevisions = mysqlTable("drawing_revisions", {
   drawingId: varchar("drawing_id", { length: 191 }).notNull().references(() => drawings.id),
   version: varchar("version", { length: 20 }).notNull(),
   changes: json("changes").notNull(),
+  status: varchar("status", { length: 50 }).default("draft").notNull(),
+  fileUrl: text("file_url"),
+  thumbnailUrl: text("thumbnail_url"),
+  fileName: varchar("file_name", { length: 255 }),
+  fileType: varchar("file_type", { length: 100 }),
+  fileSize: varchar("file_size", { length: 20 }),
+  aiExtractedData: json("ai_extracted_data"),
+  uploadedBy: varchar("uploaded_by", { length: 191 }).references(() => users.id),
+  reviewedBy: varchar("reviewed_by", { length: 191 }).references(() => users.id),
+  reviewNotes: text("review_notes"),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+  reviewedAt: timestamp("reviewed_at"),
   createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -219,6 +262,7 @@ export const floors = mysqlTable("floors", {
   level: varchar("level", { length: 20 }).notNull(),
   description: text("description"),
   projectId: varchar("project_id", { length: 191 }).references(() => projects.id),
+  sortOrder: varchar("sort_order", { length: 10 }).default("0"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -239,6 +283,7 @@ export const layers = mysqlTable("layers", {
   type: varchar("type", { length: 50 }).notNull(),
   data: json("data").notNull(),
   drawingId: varchar("drawing_id", { length: 191 }).notNull().references(() => drawings.id),
+  visible: boolean("visible").default(true),
   createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -262,6 +307,7 @@ export const pins = mysqlTable("pins", {
   type: varchar("type", { length: 50 }).notNull(),
   data: json("data"),
   drawingId: varchar("drawing_id", { length: 191 }).notNull().references(() => drawings.id),
+  layerId: varchar("layer_id", { length: 191 }).references(() => layers.id),
   createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -283,7 +329,9 @@ export const savedViews = mysqlTable("saved_views", {
   type: varchar("type", { length: 50 }).notNull(),
   data: json("data").notNull(),
   userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
+  isShared: boolean("is_shared").default(false),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
 
 
@@ -378,14 +426,47 @@ export const insertDrawingLayerSchema = createInsertSchema(drawingLayers);
 export const insertDrawingPinSchema = createInsertSchema(drawingPins);
 
 export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
+export type UpsertUser = typeof users.$inferInsert;
 export type Channel = typeof channels.$inferSelect;
-export type NewChannel = typeof channels.$inferInsert;
+export type InsertChannel = typeof channels.$inferInsert;
 export type Message = typeof messages.$inferSelect;
-export type NewMessage = typeof messages.$inferInsert;
+export type InsertMessage = typeof messages.$inferInsert;
+export type DirectMessage = typeof directMessages.$inferSelect;
+export type InsertDirectMessage = typeof directMessages.$inferInsert;
+export type InsertChannelMember = typeof channelMembers.$inferInsert;
+export type MessageWithUser = Message & { user: User };
+export type DirectMessageWithUser = DirectMessage & { sender: User };
+export type Reaction = typeof reactions.$inferSelect;
+export type InsertReaction = typeof reactions.$inferInsert;
+export type ReactionWithUser = Reaction & { user: User };
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;
+export type NotificationWithUsers = Notification & { fromUser: User; channel?: Channel };
+export type StarredMessage = typeof starredMessages.$inferSelect;
+export type InsertStarredMessage = typeof starredMessages.$inferInsert;
 export type Drawing = typeof drawings.$inferSelect;
-export type NewDrawing = typeof drawings.$inferInsert;
+export type InsertDrawing = typeof drawings.$inferInsert;
+export type DrawingRevision = typeof drawingRevisions.$inferSelect;
+export type InsertDrawingRevision = typeof drawingRevisions.$inferInsert;
+export type DrawingPage = typeof drawingPages.$inferSelect;
+export type InsertDrawingPage = typeof drawingPages.$inferInsert;
+export type DrawingWithDetails = Drawing & { 
+  discipline: Discipline; 
+  floor?: Floor; 
+  creator: User; 
+  revisionCount: number;
+  latestRevision?: DrawingRevision & { uploader: User; reviewer?: User };
+  revisions?: (DrawingRevision & { uploader: User; reviewer?: User })[];
+};
+export type Discipline = typeof disciplines.$inferSelect;
+export type Floor = typeof floors.$inferSelect;
+export type Layer = typeof layers.$inferSelect;
+export type InsertLayer = typeof layers.$inferInsert;
+export type Pin = typeof pins.$inferSelect;
+export type InsertPin = typeof pins.$inferInsert;
 export type Ticket = typeof tickets.$inferSelect;
-export type NewTicket = typeof tickets.$inferInsert;
+export type InsertTicket = typeof tickets.$inferInsert;
+export type SavedView = typeof savedViews.$inferSelect;
+export type InsertSavedView = typeof savedViews.$inferInsert;
 export type Attachment = typeof attachments.$inferSelect;
-export type NewAttachment = typeof attachments.$inferInsert;
+export type InsertAttachment = typeof attachments.$inferInsert;

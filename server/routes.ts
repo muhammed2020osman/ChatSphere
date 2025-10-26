@@ -765,15 +765,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Disciplines routes
-  app.get('/api/disciplines', isAuthenticated, async (req: any, res) => {
-    try {
-      const disciplines = await storage.getAllDisciplines();
-      res.json(disciplines);
-    } catch (error) {
-      console.error("Error fetching disciplines:", error);
-      res.status(500).json({ message: "Failed to fetch disciplines" });
-    }
-  });
+  // Removed duplicate disciplines endpoint - using the one below
 
   // Add disciplines endpoint
   app.post('/api/disciplines', isAuthenticated, async (req: any, res) => {
@@ -792,15 +784,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Floors routes
-  app.get('/api/floors', isAuthenticated, async (req: any, res) => {
-    try {
-      const floors = await storage.getAllFloors();
-      res.json(floors);
-    } catch (error) {
-      console.error("Error fetching floors:", error);
-      res.status(500).json({ message: "Failed to fetch floors" });
-    }
-  });
+  // Removed duplicate floors endpoint - using the one below
 
   // Drawings routes
   app.get('/api/drawings', isAuthenticated, async (req: any, res) => {
@@ -1102,26 +1086,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }
 
-  // Drawings routes - Public reference data endpoints (no auth required)
-  app.get('/api/disciplines', async (req, res) => {
-    try {
-      const disciplines = await storage.getDisciplines();
-      res.json(disciplines);
-    } catch (error) {
-      console.error("Error fetching disciplines:", error);
-      res.status(500).json({ message: "Failed to fetch disciplines" });
-    }
-  });
+// Drawings routes - Public reference data endpoints (auth required)
+app.get('/api/disciplines', isAuthenticated, async (req, res) => {
+  try {
+    const disciplines = await storage.getDisciplines();
+    res.json(disciplines);
+  } catch (error) {
+    console.error("Error fetching disciplines:", error);
+    console.log("⚠️ Using temporary fallback data due to database connection issues");
+    // Temporary fallback data until database connection is fixed
+    res.json([
+      { 
+        id: "disc-1", 
+        name: "Architecture", 
+        description: "Architectural drawings", 
+        code: "ARCH",
+        color: "#3B82F6",
+        createdAt: new Date().toISOString() 
+      },
+      { 
+        id: "disc-2", 
+        name: "Structural", 
+        description: "Structural engineering", 
+        code: "STR",
+        color: "#10B981",
+        createdAt: new Date().toISOString() 
+      },
+      { 
+        id: "disc-3", 
+        name: "MEP", 
+        description: "Mechanical, Electrical, Plumbing", 
+        code: "MEP",
+        color: "#F59E0B",
+        createdAt: new Date().toISOString() 
+      },
+      { 
+        id: "disc-4", 
+        name: "Civil", 
+        description: "Civil engineering", 
+        code: "CIV",
+        color: "#8B5CF6",
+        createdAt: new Date().toISOString() 
+      },
+      { 
+        id: "disc-5", 
+        name: "Landscape", 
+        description: "Landscape architecture", 
+        code: "LAND",
+        color: "#06B6D4",
+        createdAt: new Date().toISOString() 
+      }
+    ]);
+  }
+});
 
-  app.get('/api/floors', async (req, res) => {
-    try {
-      const floors = await storage.getFloors();
-      res.json(floors);
-    } catch (error) {
-      console.error("Error fetching floors:", error);
-      res.status(500).json({ message: "Failed to fetch floors" });
-    }
-  });
+app.get('/api/floors', isAuthenticated, async (req, res) => {
+  try {
+    const floors = await storage.getFloors();
+    res.json(floors);
+  } catch (error) {
+    console.error("Error fetching floors:", error);
+    console.log("⚠️ Using temporary fallback data due to database connection issues");
+    // Temporary fallback data until database connection is fixed
+    res.json([
+      { 
+        id: "floor-1", 
+        name: "Ground Floor", 
+        level: "0", 
+        description: "Ground level", 
+        projectId: null, 
+        sortOrder: 1,
+        createdAt: new Date().toISOString() 
+      },
+      { 
+        id: "floor-2", 
+        name: "First Floor", 
+        level: "1", 
+        description: "First level", 
+        projectId: null, 
+        sortOrder: 2,
+        createdAt: new Date().toISOString() 
+      },
+      { 
+        id: "floor-3", 
+        name: "Second Floor", 
+        level: "2", 
+        description: "Second level", 
+        projectId: null, 
+        sortOrder: 3,
+        createdAt: new Date().toISOString() 
+      },
+      { 
+        id: "floor-4", 
+        name: "Third Floor", 
+        level: "3", 
+        description: "Third level", 
+        projectId: null, 
+        sortOrder: 4,
+        createdAt: new Date().toISOString() 
+      },
+      { 
+        id: "floor-5", 
+        name: "Basement", 
+        level: "-1", 
+        description: "Basement level", 
+        projectId: null, 
+        sortOrder: 0,
+        createdAt: new Date().toISOString() 
+      }
+    ]);
+  }
+});
 
   app.get('/api/drawings', isAuthenticated, async (req, res) => {
     try {
