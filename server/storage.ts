@@ -185,6 +185,14 @@ export class DatabaseStorage {
     return await db.select().from(disciplines);
   }
 
+  async createDiscipline(disciplineData: any): Promise<any> {
+    const result = await db.insert(disciplines).values(disciplineData);
+    // For MySQL with UUID primary keys, insertId is 0
+    // We need to query the last inserted record
+    const lastInserted = await db.select().from(disciplines).where(eq(disciplines.name, disciplineData.name)).orderBy(desc(disciplines.createdAt)).limit(1);
+    return lastInserted[0];
+  }
+
   async getAllFloors(): Promise<any[]> {
     return await db.select().from(floors);
   }

@@ -775,6 +775,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add disciplines endpoint
+  app.post('/api/disciplines', isAuthenticated, async (req: any, res) => {
+    try {
+      const { name, description } = req.body;
+      if (!name) {
+        return res.status(400).json({ message: "Name is required" });
+      }
+      
+      const discipline = await storage.createDiscipline({ name, description });
+      res.json(discipline);
+    } catch (error) {
+      console.error("Error creating discipline:", error);
+      res.status(500).json({ message: "Failed to create discipline" });
+    }
+  });
+
   // Floors routes
   app.get('/api/floors', isAuthenticated, async (req: any, res) => {
     try {
