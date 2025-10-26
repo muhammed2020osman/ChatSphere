@@ -99,6 +99,9 @@ scripts/
 init.sql
 drizzle.config.ts
 
+# Old deployment files
+app.js
+
 # Development scripts
 build.sh
 start.sh

@@ -1,9 +1,7 @@
-// Vercel Express App Entry Point
-// This file exports the Express app for Vercel deployment
+// Vercel API Handler
+// This file handles API requests for Vercel deployment
 
 import express from 'express';
-import { registerRoutes } from './server/routes.js';
-import { initializeDatabase } from './server/db.js';
 
 const app = express();
 
@@ -24,13 +22,13 @@ app.use((req, res, next) => {
   }
 });
 
-// Initialize database and routes
+// Register all API routes
 (async () => {
   try {
-    await initializeDatabase();
+    const { registerRoutes } = await import('../server/routes.ts');
     await registerRoutes(app);
   } catch (error) {
-    console.error('Failed to initialize:', error);
+    console.error('Failed to register routes:', error);
   }
 })();
 
@@ -39,6 +37,7 @@ app.use((err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
   const message = err.message || "Internal Server Error";
   
+  console.error('API error:', err);
   res.status(status).json({ message });
 });
 
