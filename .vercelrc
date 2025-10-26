@@ -1,0 +1,21 @@
+# Vercel Configuration
+# This file contains additional Vercel-specific settings
+
+# Build settings
+BUILD_COMMAND=npm run build:vercel
+OUTPUT_DIRECTORY=dist/public
+INSTALL_COMMAND=npm install
+
+# Framework detection
+FRAMEWORK=vite
+
+# Node.js version
+NODE_VERSION=20.x
+
+# Build optimization
+ENABLE_BUILD_CACHE=true
+SKIP_BUILD_CACHE=false
+
+# Static file serving
+STATIC_FILES=true
+SPA_ROUTING=true
