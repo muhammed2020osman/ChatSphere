@@ -317,7 +317,7 @@ export function TicketPreviewPanel({
                                 </AvatarFallback>
                               </Avatar>
                               <span className="text-sm" data-testid="text-assignee-name">
-                                {ticket.assignee.firstName} {ticket.assignee.lastName}
+                                {ticket.assignee?.firstName || ''} {ticket.assignee?.lastName || ''}
                               </span>
                             </div>
                           ) : (

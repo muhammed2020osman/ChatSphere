@@ -271,7 +271,7 @@ export function CreateTicketModal({
                         <SelectItem
                           key={discipline.id}
                           value={discipline.id}
-                          data-testid={`option-discipline-${discipline.code}`}
+                          data-testid={`option-discipline-${discipline.name || 'N/A'}`}
                         >
                           {discipline.name}
                         </SelectItem>

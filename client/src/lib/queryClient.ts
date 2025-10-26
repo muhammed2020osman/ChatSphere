@@ -17,10 +17,16 @@ export async function apiRequest<T = any>(
 ): Promise<T> {
   const { method = "GET", body, headers = {} } = options || {};
   
+  // Don't set Content-Type for FormData, let the browser set it with boundary
+  const isFormData = body instanceof FormData;
+  const requestHeaders = isFormData 
+    ? headers 
+    : body ? { "Content-Type": "application/json", ...headers } : headers;
+  
   const res = await fetch(url, {
     method,
-    headers: body ? { "Content-Type": "application/json", ...headers } : headers,
-    body: body ? JSON.stringify(body) : undefined,
+    headers: requestHeaders,
+    body: isFormData ? body : (body ? JSON.stringify(body) : undefined),
     credentials: "include",
   });
 
@@ -34,7 +40,14 @@ export async function apiRequest<T = any>(
   // Check if response has content
   const contentType = res.headers.get("content-type");
   if (contentType && contentType.includes("application/json")) {
-    return await res.json();
+    try {
+      return await res.json();
+    } catch (error) {
+      console.error("JSON parsing error:", error);
+      const text = await res.text();
+      console.error("Response text:", text);
+      throw new Error(`Invalid JSON response: ${text}`);
+    }
   }
   
   // For other content types or empty body, return undefined

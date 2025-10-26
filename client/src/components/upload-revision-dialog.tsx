@@ -56,41 +56,36 @@ export function UploadRevisionDialog({ drawingId, open, onOpenChange }: UploadRe
       setIsUploading(true);
 
       try {
-        // Get upload URL
-        const uploadResponse = await apiRequest<{ uploadURL: string }>("/api/objects/upload", {
-          method: "POST",
-        });
+        // Create FormData for file upload
+        const formData = new FormData();
+        formData.append('file', data.file);
 
-        // Upload file to object storage
-        await fetch(uploadResponse.uploadURL, {
+        // Upload file directly to the server
+        const uploadResponse = await apiRequest<{ 
+          success: boolean; 
+          fileUrl: string; 
+          fileName: string; 
+          fileSize: number; 
+          mimeType: string 
+        }>("/api/upload", {
           method: "PUT",
-          body: data.file,
-          headers: {
-            "Content-Type": data.file.type || "application/pdf",
-          },
+          body: formData,
         });
 
-        // Set ACL policy
-        const aclResponse = await apiRequest<{ objectPath: string }>("/api/attachments", {
-          method: "PUT",
-          body: {
-            attachmentURL: uploadResponse.uploadURL,
-            fileName: data.file.name,
-          },
-        });
-
-        const fileUrl = aclResponse.objectPath;
+        const fileUrl = uploadResponse.fileUrl;
 
         // Create revision
         await apiRequest(`/api/drawings/${drawingId}/revisions`, {
           method: "POST",
           body: {
-            revisionNo: data.revisionNo,
-            status: "draft",
-            fileUrl,
-            fileName: data.file.name,
-            fileType: data.file.type,
-            fileSize: data.file.size.toString(),
+            version: data.revisionNo,
+            changes: {
+              fileUrl,
+              fileName: data.file.name,
+              fileType: data.file.type,
+              fileSize: data.file.size.toString(),
+              status: "draft",
+            },
           },
         });
       } finally {

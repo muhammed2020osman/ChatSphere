@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Download, FileText, X, Check, XCircle } from "lucide-react";
@@ -14,7 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import type { DrawingWithDetails } from "@shared/schema";
+// import type { DrawingWithDetails } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { UploadRevisionDialog } from "./upload-revision-dialog";
@@ -31,10 +31,22 @@ export function DrawingViewerDialog({ drawingId, open, onOpenChange }: DrawingVi
   const [reviewNotes, setReviewNotes] = useState("");
   const { toast } = useToast();
 
-  const { data: drawing, isLoading } = useQuery<DrawingWithDetails>({
+  const { data: drawing, isLoading } = useQuery<any>({
     queryKey: [`/api/drawings/${drawingId}`],
     enabled: !!drawingId && open,
   });
+
+  const { data: revisions = [], refetch: refetchRevisions } = useQuery<any[]>({
+    queryKey: [`/api/drawings/${drawingId}/revisions`],
+    enabled: !!drawingId && open,
+  });
+
+  // Refetch revisions when revision dialog closes (after upload)
+  useEffect(() => {
+    if (!revisionDialogOpen && drawingId) {
+      refetchRevisions();
+    }
+  }, [revisionDialogOpen, drawingId, refetchRevisions]);
 
   const reviewMutation = useMutation({
     mutationFn: async ({ revisionId, status, notes }: { revisionId: string; status: string; notes?: string }) => {
@@ -127,7 +139,7 @@ export function DrawingViewerDialog({ drawingId, open, onOpenChange }: DrawingVi
                   <div>
                     <p className="text-sm text-muted-foreground">Discipline</p>
                     <Badge variant="secondary" className="mt-1" data-testid="badge-drawing-discipline">
-                      {drawing.discipline.code} - {drawing.discipline.name}
+                      {drawing.discipline?.name || 'N/A'}
                     </Badge>
                   </div>
                   <div>
@@ -147,11 +159,113 @@ export function DrawingViewerDialog({ drawingId, open, onOpenChange }: DrawingVi
                 <div>
                   <p className="text-sm text-muted-foreground">Created By</p>
                   <p className="mt-1" data-testid="text-drawing-creator">
-                    {drawing.creator.firstName && drawing.creator.lastName
+                    {drawing.creator?.firstName && drawing.creator?.lastName
                       ? `${drawing.creator.firstName} ${drawing.creator.lastName}`
-                      : drawing.creator.email}
+                      : drawing.creator?.email || 'Unknown'}
                   </p>
                 </div>
+              </div>
+
+              <Separator />
+
+              {/* Drawing Preview */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-lg">Drawing Preview</h3>
+                {revisions && revisions.length > 0 ? (
+                  <div className="border rounded-lg p-4 bg-gray-50">
+                    {(() => {
+                      try {
+                        const latestRevision = revisions[0]; // First revision is latest
+                        const changes = typeof latestRevision.changes === 'string' 
+                          ? JSON.parse(latestRevision.changes) 
+                          : latestRevision.changes || {};
+                        const fileUrl = changes.fileUrl;
+                        const fileName = changes.fileName;
+                        const fileType = changes.fileType;
+                        
+                        if (fileUrl && fileName) {
+                          if (fileType === 'application/pdf') {
+                            return (
+                              <div className="space-y-2">
+                                <p className="text-sm text-muted-foreground">
+                                  Latest revision: {latestRevision.version || 'N/A'} - {fileName}
+                                </p>
+                                <div className="border rounded bg-white p-4">
+                                  <iframe
+                                    src={`http://localhost:5000${fileUrl}`}
+                                    width="100%"
+                                    height="600"
+                                    className="border-0"
+                                    title={`Drawing: ${fileName}`}
+                                  />
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      window.open(`http://localhost:5000${fileUrl}`, '_blank');
+                                    }}
+                                  >
+                                    <Download className="w-4 h-4 mr-2" />
+                                    Open in New Tab
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <div className="space-y-2">
+                                <p className="text-sm text-muted-foreground">
+                                  Latest revision: {latestRevision.version || 'N/A'} - {fileName}
+                                </p>
+                                <div className="border rounded bg-white p-4">
+                                  <img
+                                    src={`http://localhost:5000${fileUrl}`}
+                                    alt={`Drawing: ${fileName}`}
+                                    className="max-w-full h-auto"
+                                    style={{ maxHeight: '600px' }}
+                                  />
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      window.open(`http://localhost:5000${fileUrl}`, '_blank');
+                                    }}
+                                  >
+                                    <Download className="w-4 h-4 mr-2" />
+                                    Open in New Tab
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          }
+                        } else {
+                          return (
+                            <div className="text-center py-8 text-muted-foreground">
+                              <FileText className="w-12 h-12 mx-auto mb-2" />
+                              <p>No drawing file available</p>
+                            </div>
+                          );
+                        }
+                      } catch (error) {
+                        return (
+                          <div className="text-center py-8 text-muted-foreground">
+                            <FileText className="w-12 h-12 mx-auto mb-2" />
+                            <p>Error loading drawing preview</p>
+                          </div>
+                        );
+                      }
+                    })()}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FileText className="w-12 h-12 mx-auto mb-2" />
+                    <p>No revisions available</p>
+                  </div>
+                )}
               </div>
 
               <Separator />
@@ -169,9 +283,9 @@ export function DrawingViewerDialog({ drawingId, open, onOpenChange }: DrawingVi
                   </Button>
                 </div>
 
-                {drawing.revisions && drawing.revisions.length > 0 ? (
+                {revisions && revisions.length > 0 ? (
                   <div className="space-y-3">
-                    {drawing.revisions.map((revision) => (
+                    {revisions.map((revision: any) => (
                       <div
                         key={revision.id}
                         className="border rounded-md p-4 space-y-2"
@@ -181,23 +295,30 @@ export function DrawingViewerDialog({ drawingId, open, onOpenChange }: DrawingVi
                           <div className="space-y-1 flex-1">
                             <div className="flex items-center gap-3">
                               <p className="font-mono font-semibold" data-testid={`text-revision-no-${revision.id}`}>
-                                Revision {revision.revisionNo}
+                                Revision {revision.version || revision.revisionNo || 'N/A'}
                               </p>
-                              {getStatusBadge(revision.status)}
+                              {getStatusBadge(revision.status || (() => {
+                                try {
+                                  const changes = typeof revision.changes === 'string' ? JSON.parse(revision.changes) : revision.changes || {};
+                                  return changes.status || 'draft';
+                                } catch {
+                                  return 'draft';
+                                }
+                              })())}
                             </div>
                             <p className="text-sm text-muted-foreground">
                               Uploaded by{" "}
-                              {revision.uploader.firstName && revision.uploader.lastName
+                              {revision.uploader?.firstName && revision.uploader?.lastName
                                 ? `${revision.uploader.firstName} ${revision.uploader.lastName}`
-                                : revision.uploader.email}{" "}
-                              {revision.uploadedAt && `on ${format(new Date(revision.uploadedAt), "MMM d, yyyy 'at' h:mm a")}`}
+                                : revision.uploader?.email || 'Unknown'}{" "}
+                              {(revision.uploadedAt || revision.createdAt) && `on ${format(new Date(revision.uploadedAt || revision.createdAt), "MMM d, yyyy 'at' h:mm a")}`}
                             </p>
                             {revision.reviewedBy && revision.reviewedAt && (
                               <p className="text-sm text-muted-foreground">
                                 Reviewed by{" "}
                                 {revision.reviewer?.firstName && revision.reviewer?.lastName
                                   ? `${revision.reviewer.firstName} ${revision.reviewer.lastName}`
-                                  : revision.reviewer?.email}{" "}
+                                  : revision.reviewer?.email || 'Unknown'}{" "}
                                 on {format(new Date(revision.reviewedAt), "MMM d, yyyy 'at' h:mm a")}
                               </p>
                             )}
@@ -211,7 +332,14 @@ export function DrawingViewerDialog({ drawingId, open, onOpenChange }: DrawingVi
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleDownload(revision.fileUrl, revision.fileName)}
+                              onClick={() => {
+                                try {
+                                  const changes = typeof revision.changes === 'string' ? JSON.parse(revision.changes) : revision.changes || {};
+                                  handleDownload(changes.fileUrl, changes.fileName);
+                                } catch {
+                                  console.error('Error parsing revision changes');
+                                }
+                              }}
                               data-testid={`button-download-revision-${revision.id}`}
                             >
                               <Download className="w-4 h-4 mr-2" />
@@ -220,14 +348,33 @@ export function DrawingViewerDialog({ drawingId, open, onOpenChange }: DrawingVi
                           </div>
                         </div>
                         <div className="flex gap-4 text-xs text-muted-foreground">
-                          <span>File: {revision.fileName}</span>
-                          {revision.fileSize && (
-                            <span>Size: {(parseInt(revision.fileSize) / 1024 / 1024).toFixed(2)} MB</span>
-                          )}
+                          {(() => {
+                            try {
+                              const changes = typeof revision.changes === 'string' ? JSON.parse(revision.changes) : revision.changes || {};
+                              return (
+                                <>
+                                  <span>File: {changes.fileName || 'Unknown'}</span>
+                                  {changes.fileSize && (
+                                    <span>Size: {(parseInt(changes.fileSize) / 1024 / 1024).toFixed(2)} MB</span>
+                                  )}
+                                </>
+                              );
+                            } catch {
+                              return <span>File: Unknown</span>;
+                            }
+                          })()}
                         </div>
 
                         {/* Review Section */}
-                        {revision.status === "draft" || revision.status === "under review" ? (
+                        {(() => {
+                          try {
+                            const changes = typeof revision.changes === 'string' ? JSON.parse(revision.changes) : revision.changes || {};
+                            const status = revision.status || changes.status || 'draft';
+                            return status === "draft" || status === "under review";
+                          } catch {
+                            return true;
+                          }
+                        })() ? (
                           reviewingRevisionId === revision.id ? (
                             <div className="pt-3 space-y-3 border-t">
                               <Textarea

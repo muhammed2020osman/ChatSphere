@@ -11,8 +11,10 @@ export function useWebSocket() {
     if (!isAuthenticated || !user) return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.hostname === 'localhost' ? 'localhost:5000' : window.location.host;
+    const host = 'localhost:5000'; // Force localhost:5000 for development
     const wsUrl = `${protocol}//${host}/ws`;
+    
+    console.log('WebSocket setup:', { protocol, host, wsUrl });
     
     console.log('WebSocket URL:', wsUrl);
 

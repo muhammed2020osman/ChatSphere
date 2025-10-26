@@ -202,17 +202,17 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
 
   const isOwnMessage = currentUser?.id === message.userId;
   const getUserInitials = () => {
-    if (message.user.firstName && message.user.lastName) {
+    if (message.user?.firstName && message.user?.lastName) {
       return `${message.user.firstName[0]}${message.user.lastName[0]}`.toUpperCase();
     }
-    return message.user.email?.[0]?.toUpperCase() || "?";
+    return message.user?.email?.[0]?.toUpperCase() || "?";
   };
 
   const getUserName = () => {
-    if (message.user.firstName && message.user.lastName) {
+    if (message.user?.firstName && message.user?.lastName) {
       return `${message.user.firstName} ${message.user.lastName}`;
     }
-    return message.user.email || "Unknown";
+    return message.user?.email || "Unknown";
   };
 
   const formatTime = (date: Date | string) => {
@@ -272,7 +272,7 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
     >
       <div className="flex gap-3">
         <Avatar className="w-10 h-10">
-          <AvatarImage src={message.user.profileImageUrl || undefined} />
+          <AvatarImage src={message.user?.profileImageUrl || undefined} />
           <AvatarFallback>{getUserInitials()}</AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">

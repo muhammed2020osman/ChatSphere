@@ -1,4 +1,5 @@
-import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { eq, and, or, desc, asc, sql } from "drizzle-orm";
+import { randomUUID } from "crypto";
 import {
   users,
   channels,
@@ -17,26 +18,19 @@ import {
   pins,
   tickets,
   savedViews,
+  attachments,
   type User,
-  type UpsertUser,
   type Channel,
-  type InsertChannel,
   type Message,
-  type InsertMessage,
-  type DirectMessage,
-  type InsertDirectMessage,
   type Drawing,
-  type InsertDrawing,
   type Ticket,
-  type InsertTicket,
   type Attachment,
-  type InsertAttachment,
 } from "@shared/schema";
 import { db } from "./db";
 
 export class DatabaseStorage {
   // User operations
-  async upsertUser(userData: UpsertUser): Promise<User> {
+  async upsertUser(userData: any): Promise<User> {
     const existingUsers = await db.select().from(users);
     const isFirstUser = existingUsers.length === 0;
     
@@ -59,9 +53,6 @@ export class DatabaseStorage {
     return insertedUser[0];
   }
 
-  async getAllUsers(): Promise<User[]> {
-    return await db.select().from(users);
-  }
 
   async getUserById(id: string): Promise<User | null> {
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
@@ -72,20 +63,61 @@ export class DatabaseStorage {
     return this.getUserById(id);
   }
 
+  // Notification operations
+  async getUserNotifications(userId: string): Promise<any[]> {
+    return await db.select().from(notifications).where(eq(notifications.userId, userId));
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    const result = await db.select().from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+    return result.length;
+  }
+
+  async markNotificationAsRead(notificationId: string): Promise<void> {
+    await db.update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.id, notificationId));
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
+    await db.update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.userId, userId));
+  }
+
+  // Ticket operations
+  async getTicketsFiltered(filters: any): Promise<any[]> {
+    return await db.select().from(tickets);
+  }
+
+  // Saved views operations
+  async getSavedViews(userId: string): Promise<any[]> {
+    return await db.select().from(savedViews).where(eq(savedViews.userId, userId));
+  }
+
   async getUserByEmail(email: string): Promise<User | null> {
     const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
     return result[0] || null;
   }
 
-  async updateUser(id: string, updates: Partial<UpsertUser>): Promise<User | null> {
+  async updateUser(id: string, updates: any): Promise<User | null> {
     await db.update(users).set(updates).where(eq(users.id, id));
     return await this.getUserById(id);
   }
 
   // Channel operations
-  async createChannel(channelData: InsertChannel): Promise<Channel> {
+  async createChannel(channelData: any): Promise<Channel> {
+    // Generate ID if not provided
+    if (!channelData.id) {
+      channelData.id = randomUUID();
+    }
+    
     await db.insert(channels).values(channelData);
     const result = await db.select().from(channels).where(eq(channels.id, channelData.id)).limit(1);
+    if (!result[0]) {
+      throw new Error('Failed to create channel');
+    }
     return result[0];
   }
 
@@ -93,12 +125,106 @@ export class DatabaseStorage {
     return await db.select().from(channels);
   }
 
+  async getUserChannels(userId: string): Promise<Channel[]> {
+    // Get all public channels and channels where user is a member
+    const publicChannels = await db.select().from(channels).where(eq(channels.isPrivate, false));
+    
+    // Get user's private channels
+    const userPrivateChannels = await db.select()
+      .from(channels)
+      .innerJoin(channelMembers, eq(channels.id, channelMembers.channelId))
+      .where(and(eq(channelMembers.userId, userId), eq(channels.isPrivate, true)));
+    
+    // Combine and return unique channels
+    const allChannels = [...publicChannels, ...userPrivateChannels.map((c: any) => c.channels)];
+    return allChannels;
+  }
+
   async getChannelById(id: string): Promise<Channel | null> {
     const result = await db.select().from(channels).where(eq(channels.id, id)).limit(1);
     return result[0] || null;
   }
 
-  async updateChannel(id: string, updates: Partial<InsertChannel>): Promise<Channel | null> {
+  async getChannel(id: string): Promise<Channel | null> {
+    return this.getChannelById(id);
+  }
+
+  async getChannelMessages(channelId: string): Promise<any[]> {
+    const result = await db
+      .select({
+        message: messages,
+        user: users,
+      })
+      .from(messages)
+      .innerJoin(users, eq(messages.userId, users.id))
+      .where(eq(messages.channelId, channelId))
+      .orderBy(asc(messages.createdAt));
+    
+    return result.map(r => ({
+      ...r.message,
+      user: r.user,
+    }));
+  }
+
+  async isChannelMember(channelId: string, userId: string): Promise<boolean> {
+    const result = await db.select().from(channelMembers)
+      .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.userId, userId)))
+      .limit(1);
+    return result.length > 0;
+  }
+
+  async getAllMessages(userId: string): Promise<any[]> {
+    return await db.select().from(messages);
+  }
+
+  async getUserThreads(userId: string): Promise<any[]> {
+    return await db.select().from(messages).where(eq(messages.userId, userId));
+  }
+
+  async getAllDisciplines(): Promise<any[]> {
+    return await db.select().from(disciplines);
+  }
+
+  async getAllFloors(): Promise<any[]> {
+    return await db.select().from(floors);
+  }
+
+  async getDrawings(page: number, limit: number): Promise<any[]> {
+    const offset = (page - 1) * limit;
+    return await db.select().from(drawings).limit(limit).offset(offset);
+  }
+
+  async getDrawingBySheetNo(sheetNo: string): Promise<any | null> {
+    // Search in both name and data.sheetNo
+    const result = await db.select().from(drawings).where(
+      or(
+        eq(drawings.name, sheetNo),
+        sql`JSON_EXTRACT(data, '$.sheetNo') = ${sheetNo}`
+      )
+    ).limit(1);
+    return result[0] || null;
+  }
+
+  async getDrawingRevisions(drawingId: string): Promise<any[]> {
+    return await db.select().from(drawingRevisions).where(eq(drawingRevisions.drawingId, drawingId));
+  }
+
+  async createDrawing(drawingData: any): Promise<any> {
+    const result = await db.insert(drawings).values(drawingData);
+    console.log('MySQL insert result:', JSON.stringify(result));
+    // For MySQL with UUID primary keys, insertId is 0
+    // We need to query the last inserted record
+    const lastInserted = await db.select().from(drawings).where(eq(drawings.createdBy, drawingData.createdBy)).orderBy(desc(drawings.createdAt)).limit(1);
+    console.log('Last inserted drawing:', lastInserted[0]);
+    return lastInserted[0];
+  }
+
+  async getDrawing(id: string): Promise<any | null> {
+    const result = await db.select().from(drawings).where(eq(drawings.id, id)).limit(1);
+    return result[0] || null;
+  }
+
+  async updateChannel(id: string, updates: any): Promise<Channel | null> {
     await db.update(channels).set(updates).where(eq(channels.id, id));
     return await this.getChannelById(id);
   }
@@ -108,7 +234,7 @@ export class DatabaseStorage {
   }
 
   // Message operations
-  async createMessage(messageData: InsertMessage): Promise<Message> {
+  async createMessage(messageData: any): Promise<Message> {
     await db.insert(messages).values(messageData);
     const result = await db.select().from(messages).where(eq(messages.id, messageData.id)).limit(1);
     return result[0];
@@ -129,7 +255,7 @@ export class DatabaseStorage {
     return result[0] || null;
   }
 
-  async updateMessage(id: string, updates: Partial<InsertMessage>): Promise<Message | null> {
+  async updateMessage(id: string, updates: any): Promise<Message | null> {
     await db.update(messages).set(updates).where(eq(messages.id, id));
     return await this.getMessageById(id);
   }
@@ -139,18 +265,18 @@ export class DatabaseStorage {
   }
 
   // Direct message operations
-  async createDirectMessage(dmData: InsertDirectMessage): Promise<DirectMessage> {
+  async createDirectMessage(dmData: any): Promise<any> {
     await db.insert(directMessages).values(dmData);
     const result = await db.select().from(directMessages).where(eq(directMessages.id, dmData.id)).limit(1);
     return result[0];
   }
 
-  async getDirectMessages(senderId: string, receiverId: string, limit = 50, offset = 0): Promise<DirectMessage[]> {
+  async getDirectMessages(senderId: string, receiverId: string, limit = 50, offset = 0): Promise<any[]> {
     return await db
       .select()
       .from(directMessages)
-      .where(
-        and(
+        .where(
+          and(
           eq(directMessages.senderId, senderId),
           eq(directMessages.receiverId, receiverId)
         )
@@ -160,138 +286,39 @@ export class DatabaseStorage {
       .offset(offset);
   }
 
-  // Drawing operations
-  async createDrawing(drawingData: InsertDrawing): Promise<Drawing> {
-    await db.insert(drawings).values(drawingData);
-    const result = await db.select().from(drawings).where(eq(drawings.id, drawingData.id)).limit(1);
-    return result[0];
-  }
-
-  async getAllDrawings(): Promise<Drawing[]> {
-    return await db.select().from(drawings);
-  }
-
-  async getDrawingById(id: string): Promise<Drawing | null> {
-    const result = await db.select().from(drawings).where(eq(drawings.id, id)).limit(1);
-    return result[0] || null;
-  }
-
-  async updateDrawing(id: string, updates: Partial<InsertDrawing>): Promise<Drawing | null> {
-    await db.update(drawings).set(updates).where(eq(drawings.id, id));
-    return await this.getDrawingById(id);
-  }
-
-  async deleteDrawing(id: string): Promise<void> {
-    await db.delete(drawings).where(eq(drawings.id, id));
-  }
-
-  // Ticket operations
-  async createTicket(ticketData: InsertTicket): Promise<Ticket> {
-    await db.insert(tickets).values(ticketData);
-    const result = await db.select().from(tickets).where(eq(tickets.id, ticketData.id)).limit(1);
-    return result[0];
-  }
-
-  async getAllTickets(): Promise<Ticket[]> {
-    return await db.select().from(tickets);
-  }
-
-  async getTicketById(id: string): Promise<Ticket | null> {
-    const result = await db.select().from(tickets).where(eq(tickets.id, id)).limit(1);
-    return result[0] || null;
-  }
-
-  async updateTicket(id: string, updates: Partial<InsertTicket>): Promise<Ticket | null> {
-    await db.update(tickets).set(updates).where(eq(tickets.id, id));
-    return await this.getTicketById(id);
-  }
-
-  async deleteTicket(id: string): Promise<void> {
-    await db.delete(tickets).where(eq(tickets.id, id));
-  }
-
-  // Attachment operations
-  async createAttachment(attachmentData: InsertAttachment): Promise<Attachment> {
-    await db.insert(attachments).values(attachmentData);
-    const result = await db.select().from(attachments).where(eq(attachments.id, attachmentData.id)).limit(1);
-    return result[0];
-  }
-
-  async getAttachmentsByMessage(messageId: string): Promise<Attachment[]> {
-    return await db.select().from(attachments).where(eq(attachments.messageId, messageId));
-  }
-
-  async deleteAttachment(id: string): Promise<void> {
-    await db.delete(attachments).where(eq(attachments.id, id));
-  }
-
-  // Reaction operations
-  async addReaction(messageId: string, userId: string, emoji: string): Promise<void> {
-    await db.insert(reactions).values({
-      id: crypto.randomUUID(),
-      messageId,
-      userId,
-      emoji,
-      createdAt: new Date(),
-    });
-  }
-
-  async removeReaction(messageId: string, userId: string, emoji: string): Promise<void> {
-    await db.delete(reactions).where(
-      and(
-        eq(reactions.messageId, messageId),
-        eq(reactions.userId, userId),
-        eq(reactions.emoji, emoji)
-      )
-    );
-  }
-
-  async getReactionsByMessage(messageId: string): Promise<any[]> {
-    return await db.select().from(reactions).where(eq(reactions.messageId, messageId));
-  }
-
-  // Notification operations
-  async createNotification(userId: string, type: string, title: string, message: string): Promise<void> {
-    await db.insert(notifications).values({
-      id: crypto.randomUUID(),
-      userId,
-      type,
-      title,
-      message,
-      isRead: false,
-      createdAt: new Date(),
-    });
-  }
-
-  async getNotificationsByUser(userId: string): Promise<any[]> {
-    return await db.select().from(notifications).where(eq(notifications.userId, userId));
-  }
-
-  async markNotificationAsRead(id: string): Promise<void> {
-    await db.update(notifications).set({ isRead: true }).where(eq(notifications.id, id));
-  }
-
-  // Starred message operations
-  async starMessage(messageId: string, userId: string): Promise<void> {
-    await db.insert(starredMessages).values({
-      id: crypto.randomUUID(),
-      messageId,
-      userId,
-      createdAt: new Date(),
-    });
-  }
-
-  async unstarMessage(messageId: string, userId: string): Promise<void> {
-    await db.delete(starredMessages).where(
-      and(
-        eq(starredMessages.messageId, messageId),
-        eq(starredMessages.userId, userId)
-      )
-    );
-  }
 
   async getStarredMessagesByUser(userId: string): Promise<any[]> {
     return await db.select().from(starredMessages).where(eq(starredMessages.userId, userId));
+  }
+
+  // Channel membership operations
+  async joinChannel(channelId: string, userId: string): Promise<void> {
+    await db.insert(channelMembers).values({
+      id: randomUUID(),
+      channelId,
+      userId,
+    });
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users);
+  }
+
+  // User operations
+
+  // Drawing revision operations
+  async createDrawingRevision(revisionData: any): Promise<any> {
+    const result = await db.insert(drawingRevisions).values(revisionData);
+    // For MySQL, we need to get the inserted ID from the result
+    const insertedId = result.insertId;
+    return { id: insertedId };
+  }
+
+  // Drawing page operations
+  async createDrawingPage(pageData: any): Promise<any> {
+    await db.insert(drawingPages).values(pageData);
+    const result = await db.select().from(drawingPages).where(eq(drawingPages.drawingId, pageData.drawingId)).orderBy(desc(drawingPages.createdAt)).limit(1);
+    return result[0];
   }
 }
 

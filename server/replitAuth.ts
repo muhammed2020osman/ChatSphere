@@ -87,19 +87,24 @@ export async function setupAuth(app: Express) {
     verified(null, user);
   };
 
-  for (const domain of process.env
-    .REPLIT_DOMAINS!.split(",")) {
-    const cleanDomain = domain.trim();
-    const strategy = new Strategy(
-      {
-        name: `replitauth:${cleanDomain}`,
-        config,
-        scope: "openid email profile offline_access",
-        callbackURL: `http://${cleanDomain}/api/callback`,
-      },
-      verify,
-    );
-    passport.use(strategy);
+  // Skip OIDC setup for local development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Skipping OIDC setup for local development');
+  } else {
+    const domains = process.env.REPLIT_DOMAINS?.split(",") || ["localhost:5000"];
+    for (const domain of domains) {
+      const cleanDomain = domain.trim();
+      const strategy = new Strategy(
+        {
+          name: `replitauth:${cleanDomain}`,
+          config,
+          scope: "openid email profile offline_access",
+          callbackURL: `http://${cleanDomain}/api/callback`,
+        },
+        verify,
+      );
+      passport.use(strategy);
+    }
   }
 
   passport.serializeUser((user: Express.User, cb) => cb(null, user));

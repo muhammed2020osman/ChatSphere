@@ -64,8 +64,8 @@ export default function Drawings() {
 
   const filteredDrawings = drawings?.filter((drawing) => {
     const matchesSearch = 
-      drawing.sheetNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      drawing.title.toLowerCase().includes(searchQuery.toLowerCase());
+      (drawing.sheetNo || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (drawing.title || "").toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesStatus = 
       statusFilter === "all" || 
@@ -139,7 +139,7 @@ export default function Drawings() {
               <SelectItem value="all">All Disciplines</SelectItem>
               {disciplines?.map((d) => (
                 <SelectItem key={d.id} value={d.id}>
-                  {d.code} - {d.name}
+                  {d.name || 'N/A'}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -187,25 +187,48 @@ export default function Drawings() {
               {filteredDrawings.map((drawing) => (
                 <TableRow key={drawing.id} data-testid={`row-drawing-${drawing.id}`}>
                   <TableCell className="font-mono font-medium" data-testid={`text-number-${drawing.id}`}>
-                    {drawing.sheetNo}
+                    {(() => {
+                      try {
+                        const data = typeof drawing.data === 'string' ? JSON.parse(drawing.data || '{}') : drawing.data || {};
+                        return data.sheetNo || drawing.name || 'N/A';
+                      } catch {
+                        return drawing.name || 'N/A';
+                      }
+                    })()}
                   </TableCell>
-                  <TableCell data-testid={`text-title-${drawing.id}`}>{drawing.title}</TableCell>
+                  <TableCell data-testid={`text-title-${drawing.id}`}>
+                    {drawing.name || 'N/A'}
+                  </TableCell>
                   <TableCell>
                     <Badge variant="secondary" data-testid={`badge-discipline-${drawing.id}`}>
-                      {drawing.discipline.code}
+                      {drawing.discipline?.name || 'N/A'}
                     </Badge>
                   </TableCell>
                   <TableCell data-testid={`text-floor-${drawing.id}`}>
                     {drawing.floor?.name || "N/A"}
                   </TableCell>
                   <TableCell className="font-mono" data-testid={`text-revision-${drawing.id}`}>
-                    {drawing.latestRevision?.revisionNo || "—"}
+                    {(() => {
+                      try {
+                        const data = typeof drawing.data === 'string' ? JSON.parse(drawing.data || '{}') : drawing.data || {};
+                        return data.revisionNo || drawing.latestRevision?.version || drawing.latestRevision?.revisionNo || "—";
+                      } catch {
+                        return drawing.latestRevision?.version || drawing.latestRevision?.revisionNo || "—";
+                      }
+                    })()}
                   </TableCell>
                   <TableCell>
-                    {drawing.latestRevision?.status 
-                      ? getStatusBadge(drawing.latestRevision.status)
-                      : <Badge variant="secondary">No Revision</Badge>
-                    }
+                    {(() => {
+                      try {
+                        const data = typeof drawing.data === 'string' ? JSON.parse(drawing.data || '{}') : drawing.data || {};
+                        const status = data.status || drawing.latestRevision?.status;
+                        return status ? getStatusBadge(status) : <Badge variant="secondary">No Revision</Badge>;
+                      } catch {
+                        return drawing.latestRevision?.status 
+                          ? getStatusBadge(drawing.latestRevision.status)
+                          : <Badge variant="secondary">No Revision</Badge>;
+                      }
+                    })()}
                   </TableCell>
                   <TableCell data-testid={`text-updated-${drawing.id}`}>
                     {drawing.updatedAt && format(new Date(drawing.updatedAt), "MMM d, yyyy")}

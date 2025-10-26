@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Discipline, Floor } from "@shared/schema";
+// import type { Discipline, Floor } from "@shared/schema";
 
 const uploadDrawingSchema = z.object({
   sheetNo: z.string().min(1, "Drawing number is required"),
@@ -53,11 +53,11 @@ export function UploadDrawingDialog({ open, onOpenChange }: UploadDrawingDialogP
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
 
-  const { data: disciplines } = useQuery<Discipline[]>({
+  const { data: disciplines } = useQuery<any[]>({
     queryKey: ["/api/disciplines"],
   });
 
-  const { data: floors } = useQuery<Floor[]>({
+  const { data: floors } = useQuery<any[]>({
     queryKey: ["/api/floors"],
   });
 
@@ -79,40 +79,37 @@ export function UploadDrawingDialog({ open, onOpenChange }: UploadDrawingDialogP
       setIsUploading(true);
 
       try {
-        // Get upload URL
-        const uploadResponse = await apiRequest<{ uploadURL: string }>("/api/objects/upload", {
-          method: "POST",
-        });
+        // Create FormData for file upload
+        const formData = new FormData();
+        formData.append('file', data.file);
 
-        // Upload file to object storage
-        await fetch(uploadResponse.uploadURL, {
+        // Upload file directly to the server
+        const uploadResponse = await apiRequest<{ 
+          success: boolean; 
+          fileUrl: string; 
+          fileName: string; 
+          fileSize: number; 
+          mimeType: string 
+        }>("/api/upload", {
           method: "PUT",
-          body: data.file,
-          headers: {
-            "Content-Type": data.file.type || "application/pdf",
-          },
+          body: formData,
         });
 
-        // Set ACL policy
-        const aclResponse = await apiRequest<{ objectPath: string }>("/api/attachments", {
-          method: "PUT",
-          body: {
-            attachmentURL: uploadResponse.uploadURL,
-            fileName: data.file.name,
-          },
-        });
-
-        const fileUrl = aclResponse.objectPath;
+        const fileUrl = uploadResponse.fileUrl;
 
         // Create drawing
         const drawing = await apiRequest<{ id: string }>("/api/drawings", {
           method: "POST",
           body: {
-            sheetNo: data.sheetNo,
-            title: data.title,
-            disciplineId: data.disciplineId,
-            floorId: data.floorId || null,
-            packageName: data.packageName || null,
+            name: data.title,
+            description: "",
+            data: {
+              sheetNo: data.sheetNo,
+              title: data.title,
+              disciplineId: data.disciplineId,
+              floorId: data.floorId,
+              packageName: data.packageName,
+            },
           },
         });
 
@@ -120,12 +117,14 @@ export function UploadDrawingDialog({ open, onOpenChange }: UploadDrawingDialogP
         await apiRequest(`/api/drawings/${drawing.id}/revisions`, {
           method: "POST",
           body: {
-            revisionNo: data.revisionNo,
-            status: "draft",
-            fileUrl,
-            fileName: data.file.name,
-            fileType: data.file.type,
-            fileSize: data.file.size.toString(),
+            version: data.revisionNo,
+            changes: {
+              fileUrl,
+              fileName: data.file.name,
+              fileType: data.file.type,
+              fileSize: data.file.size.toString(),
+              status: "draft",
+            },
           },
         });
 
@@ -244,7 +243,7 @@ export function UploadDrawingDialog({ open, onOpenChange }: UploadDrawingDialogP
                       <SelectContent>
                         {disciplines?.map((d) => (
                           <SelectItem key={d.id} value={d.id}>
-                            {d.code} - {d.name}
+                            {d.name || 'N/A'}
                           </SelectItem>
                         ))}
                       </SelectContent>

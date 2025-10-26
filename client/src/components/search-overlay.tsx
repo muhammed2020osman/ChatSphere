@@ -30,7 +30,7 @@ export function SearchOverlay({ open, onOpenChange }: SearchOverlayProps) {
   });
 
   const filteredChannels = channels?.filter((channel) =>
-    channel.name.toLowerCase().includes(query.toLowerCase())
+    (channel.name || "").toLowerCase().includes(query.toLowerCase())
   );
 
   const handleChannelClick = (channelId: string) => {
@@ -105,7 +105,7 @@ export function SearchOverlay({ open, onOpenChange }: SearchOverlayProps) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-medium text-sm">
-                          {message.user.firstName} {message.user.lastName}
+                          {message.user?.firstName || ''} {message.user?.lastName || ''}
                         </span>
                         <MessageSquare className="w-3 h-3 text-muted-foreground" />
                       </div>

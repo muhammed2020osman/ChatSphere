@@ -617,7 +617,7 @@ export function TicketsTableView({
                           </AvatarFallback>
                         </Avatar>
                         <span className="text-sm" data-testid={`text-ticket-assignee-${ticket.id}`}>
-                          {ticket.assignee.firstName} {ticket.assignee.lastName}
+                          {ticket.assignee?.firstName || ''} {ticket.assignee?.lastName || ''}
                         </span>
                       </div>
                     ) : (

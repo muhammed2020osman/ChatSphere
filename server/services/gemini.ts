@@ -49,6 +49,12 @@ export async function analyzeEngineeringDrawing(
   mimeType: string = "image/jpeg"
 ): Promise<DrawingAnalysis> {
   try {
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Gemini AI analysis timeout after 30 seconds')), 30000);
+    });
+
+    const analysisPromise = (async () => {
     const systemPrompt = `You are an expert engineering drawings analyzer specialized in construction and architectural blueprints.
 
 Analyze this technical drawing and extract structured information in JSON format.
@@ -96,72 +102,76 @@ Return JSON matching this structure:
       "Analyze this engineering drawing and provide detailed structured data as JSON.",
     ];
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-pro",
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "object",
-          properties: {
-            title: { type: "string" },
-            layers: {
-              type: "array",
-              items: { type: "string" },
-            },
-            dimensions: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  value: { type: "string" },
-                  unit: { type: "string" },
-                  location: { type: "string" },
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash", // Use faster model instead of pro
+        config: {
+          systemInstruction: systemPrompt,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              layers: {
+                type: "array",
+                items: { type: "string" },
+              },
+              dimensions: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    value: { type: "string" },
+                    unit: { type: "string" },
+                    location: { type: "string" },
+                  },
                 },
               },
-            },
-            elements: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  type: { type: "string" },
-                  description: { type: "string" },
-                  quantity: { type: "number" },
+              elements: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    type: { type: "string" },
+                    description: { type: "string" },
+                    quantity: { type: "number" },
+                  },
                 },
               },
-            },
-            titleBlock: {
-              type: "object",
-              properties: {
-                sheetNumber: { type: "string" },
-                revision: { type: "string" },
-                projectName: { type: "string" },
-                discipline: { type: "string" },
-                floor: { type: "string" },
-                scale: { type: "string" },
-                date: { type: "string" },
+              titleBlock: {
+                type: "object",
+                properties: {
+                  sheetNumber: { type: "string" },
+                  revision: { type: "string" },
+                  projectName: { type: "string" },
+                  discipline: { type: "string" },
+                  floor: { type: "string" },
+                  scale: { type: "string" },
+                  date: { type: "string" },
+                },
               },
+              annotations: {
+                type: "array",
+                items: { type: "string" },
+              },
+              summary: { type: "string" },
             },
-            annotations: {
-              type: "array",
-              items: { type: "string" },
-            },
-            summary: { type: "string" },
           },
         },
-      },
-      contents: contents,
-    });
+        contents: contents,
+      });
 
-    const rawJson = response.text;
+      const rawJson = response.text;
 
-    if (rawJson) {
-      const analysis: DrawingAnalysis = JSON.parse(rawJson);
-      return analysis;
-    } else {
-      throw new Error("Empty response from Gemini model");
-    }
+      if (rawJson) {
+        const analysis: DrawingAnalysis = JSON.parse(rawJson);
+        return analysis;
+      } else {
+        throw new Error("Empty response from Gemini model");
+      }
+    })();
+
+    // Race between analysis and timeout
+    return await Promise.race([analysisPromise, timeoutPromise]);
   } catch (error) {
     console.error("Failed to analyze engineering drawing:", error);
     throw new Error(`Failed to analyze drawing: ${error}`);

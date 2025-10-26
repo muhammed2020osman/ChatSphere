@@ -225,7 +225,7 @@ export function MessageComposer({
     if (!mentionSearch) return true;
     const search = mentionSearch.toLowerCase();
     const name = user.firstName && user.lastName 
-      ? `${user.firstName} ${user.lastName}`.toLowerCase()
+      ? `${user.firstName || ""} ${user.lastName || ""}`.toLowerCase()
       : (user.email || "").toLowerCase();
     return name.includes(search);
   }).slice(0, 5);

@@ -6,9 +6,12 @@ import { parse as parseCookie } from "cookie";
 import { randomUUID } from "crypto";
 import passport from "passport";
 import multer from "multer";
+import path from "path";
+import fs from "fs";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, getSession } from "./replitAuth";
-import { ObjectStorageService, ObjectNotFoundError, objectStorageClient, signObjectURL, parseObjectPath } from "./objectStorage";
+// Removed Object Storage imports for local development
+import { localStorage } from "./localStorage";
 import { extractMentions, findUserIdsByUsernames, requireAdmin } from "./utils";
 import { analyzeEngineeringDrawing } from "./services/gemini";
 import { convertPDFToImage, convertPDFPagesToImages, isPDF } from "./services/pdfConverter";
@@ -58,11 +61,14 @@ const upload = multer({
     fileSize: 50 * 1024 * 1024, // 50MB max file size
   },
   fileFilter: (req, file, cb) => {
+    console.log('Multer fileFilter - file:', file.originalname, 'mimetype:', file.mimetype);
     // Accept only PDF, PNG, JPG files
     const allowedMimes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
     if (allowedMimes.includes(file.mimetype)) {
+      console.log('File accepted by multer');
       cb(null, true);
     } else {
+      console.log('File rejected by multer - invalid type:', file.mimetype);
       cb(new Error('Invalid file type. Only PDF, PNG, and JPG files are allowed.'));
     }
   },
@@ -90,6 +96,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error verifying access code:", error);
       res.status(500).json({ message: "Failed to verify access code" });
+    }
+  });
+
+  // Serve uploaded files locally - MUST be first
+  app.get('/uploads/*', (req, res) => {
+    console.log('GET /uploads/* - Request received');
+    console.log('Request URL:', req.url);
+    console.log('Request params:', req.params);
+    try {
+      const filePath = req.params[0];
+      const fullPath = path.join(process.cwd(), 'uploads', filePath);
+      console.log('File path:', filePath);
+      console.log('Full path:', fullPath);
+      
+      // Check if file exists
+      if (!fs.existsSync(fullPath)) {
+        console.log('File not found:', fullPath);
+        return res.status(404).json({ message: 'File not found' });
+      }
+      
+      const ext = filePath.split('.').pop()?.toLowerCase();
+      let contentType = 'application/octet-stream';
+      if (ext === 'png') contentType = 'image/png';
+      else if (ext === 'jpg' || ext === 'jpeg') contentType = 'image/jpeg';
+      else if (ext === 'pdf') contentType = 'application/pdf';
+      
+      console.log('Serving file:', fullPath, 'with content type:', contentType);
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.sendFile(fullPath);
+    } catch (error) {
+      console.error('Error serving file:', error);
+      res.status(404).json({ message: 'File not found' });
     }
   });
 
@@ -221,9 +260,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const channel = await storage.createChannel(data);
       
+      // Auto-join creator to the channel
+      await storage.joinChannel(channel.id, userId);
+      
       // Only broadcast public channels to all clients
       // Private channels are only visible to members
-      if (!channel.isPrivate) {
+      if (!channel.isPrivate || channel.isPrivate === false) {
         broadcastToAll({ type: 'channel_created', channel });
       } else {
         // Private channel - only notify the creator
@@ -306,6 +348,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const data = insertMessageSchema.parse({
         ...req.body,
+        id: randomUUID(),
         userId,
         mentions,
       });
@@ -699,6 +742,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get user threads
+  app.get('/api/messages', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const messages = await storage.getAllMessages(userId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
   app.get('/api/messages/threads', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -707,6 +761,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching threads:", error);
       res.status(500).json({ message: "Failed to fetch threads" });
+    }
+  });
+
+  // Disciplines routes
+  app.get('/api/disciplines', isAuthenticated, async (req: any, res) => {
+    try {
+      const disciplines = await storage.getAllDisciplines();
+      res.json(disciplines);
+    } catch (error) {
+      console.error("Error fetching disciplines:", error);
+      res.status(500).json({ message: "Failed to fetch disciplines" });
+    }
+  });
+
+  // Floors routes
+  app.get('/api/floors', isAuthenticated, async (req: any, res) => {
+    try {
+      const floors = await storage.getAllFloors();
+      res.json(floors);
+    } catch (error) {
+      console.error("Error fetching floors:", error);
+      res.status(500).json({ message: "Failed to fetch floors" });
+    }
+  });
+
+  // Drawings routes
+  app.get('/api/drawings', isAuthenticated, async (req: any, res) => {
+    try {
+      const { page = 1, limit = 30 } = req.query;
+      const drawings = await storage.getDrawings(parseInt(page), parseInt(limit));
+      res.json(drawings);
+    } catch (error) {
+      console.error("Error fetching drawings:", error);
+      res.status(500).json({ message: "Failed to fetch drawings" });
     }
   });
 
@@ -799,25 +887,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+
   // Object storage routes - for file uploads in messages
   app.get("/objects/:objectPath(*)", isAuthenticated, async (req: any, res) => {
-    const userId = req.user.claims.sub;
-    const objectStorageService = new ObjectStorageService();
+    console.log('GET /objects/:objectPath - Request received');
+    console.log('Request URL:', req.url);
+    console.log('Object path:', req.params.objectPath);
+    // For local development, serve files directly
     try {
-      const objectFile = await objectStorageService.getObjectEntityFile(
-        req.path,
-      );
-      const canAccess = await objectStorageService.canAccessObjectEntity({
-        objectFile,
-        userId: userId,
-      });
-      if (!canAccess) {
-        return res.sendStatus(401);
-      }
-      objectStorageService.downloadObject(objectFile, res);
+      const objectPath = req.params.objectPath;
+      const filePath = objectPath.replace('/uploads/', '');
+      const buffer = await localStorage.downloadFile(filePath);
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.send(buffer);
     } catch (error) {
-      console.error("Error checking object access:", error);
-      if (error instanceof ObjectNotFoundError) {
+      console.error("Error serving file:", error);
+      if (error.message.includes('not found')) {
         return res.sendStatus(404);
       }
       return res.sendStatus(500);
@@ -825,9 +910,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/objects/upload", isAuthenticated, async (req, res) => {
-    const objectStorageService = new ObjectStorageService();
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-    res.json({ uploadURL });
+    // For local development, return a mock upload URL
+    res.json({ uploadURL: "/api/upload" });
+  });
+
+  // File upload endpoint
+  app.put("/api/upload", isAuthenticated, upload.single('file'), async (req: any, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const userId = req.user.claims.sub;
+      const file = req.file;
+      const timestamp = Date.now();
+      const fileExtension = file.originalname.split('.').pop() || 'bin';
+      const uniqueFileName = `${userId}_${timestamp}.${fileExtension}`;
+      const filePath = uniqueFileName; // Don't include 'uploads/' here as localStorage.uploadFile adds it
+      
+      // Upload file to local storage
+      const fileUrl = await localStorage.uploadFile(filePath, file.buffer, file.mimetype);
+      
+      res.json({
+        success: true,
+        fileUrl: fileUrl,
+        fileName: file.originalname,
+        fileSize: file.size,
+        mimeType: file.mimetype
+      });
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      res.status(500).json({ message: "Failed to upload file" });
+    }
   });
 
   app.put("/api/attachments", isAuthenticated, async (req: any, res) => {
@@ -838,17 +952,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const userId = req.user.claims.sub;
 
     try {
-      const objectStorageService = new ObjectStorageService();
-      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
-        req.body.attachmentURL,
-        {
-          owner: userId,
-          visibility: "public", // Message attachments are accessible to channel members
-        },
-      );
-
+      // For local development, return the attachment URL as is
       res.status(200).json({
-        objectPath: objectPath,
+        objectPath: req.body.attachmentURL,
         fileName: req.body.fileName,
       });
     } catch (error) {
@@ -1031,27 +1137,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       
+      console.log('Request body:', JSON.stringify(req.body, null, 2));
+      
       // Map drawingNo to sheetNo if provided (for backwards compatibility)
-      const { drawingNo, ...rest } = req.body;
+      const { drawingNo, title, sheetNo, ...rest } = req.body;
       const drawingData = {
-        ...rest,
-        sheetNo: rest.sheetNo || drawingNo, // Use sheetNo if provided, fallback to drawingNo
+        name: title || sheetNo || drawingNo || rest.data?.title || rest.name, // Use title as name, fallback to sheetNo or drawingNo
+        description: rest.description || '',
+        data: {
+          sheetNo: sheetNo || drawingNo || rest.data?.sheetNo, // Store sheetNo in data
+          title: title || sheetNo || drawingNo || rest.data?.title || rest.name,
+          disciplineId: rest.disciplineId || rest.data?.disciplineId,
+          floorId: rest.floorId || rest.data?.floorId,
+          packageName: rest.packageName || rest.data?.packageName,
+          ...rest.data || {},
+        },
         createdBy: userId,
       };
       
       // Validate required fields
-      if (!drawingData.sheetNo) {
+      if (!drawingData.data.sheetNo) {
         return res.status(400).json({ message: "sheetNo is required" });
       }
       
       // Check if drawing with this sheetNo already exists
-      const existingDrawing = await storage.getDrawingBySheetNo(drawingData.sheetNo);
+      const existingDrawing = await storage.getDrawingBySheetNo(drawingData.data.sheetNo);
       
       if (existingDrawing) {
         // If it exists without revisions (draft), reuse it
         const revisions = await storage.getDrawingRevisions(existingDrawing.id);
         if (revisions.length === 0) {
-          console.log(`Reusing existing draft drawing with sheet_no: ${drawingData.sheetNo}`);
+          console.log(`Reusing existing draft drawing with sheet_no: ${drawingData.data.sheetNo}`);
           return res.json(existingDrawing);
         } else {
           // If it has revisions, it's already uploaded - return error
@@ -1086,7 +1202,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const revisionData = {
         ...req.body,
         drawingId: req.params.id,
-        uploadedBy: userId,
+        createdBy: userId,
+        version: req.body.version || req.body.revisionNo || '1.0', // Use version if provided, fallback to revisionNo
+        changes: req.body.changes || {}, // Add changes field
       };
       const revision = await storage.createDrawingRevision(revisionData);
       res.json(revision);
@@ -1151,9 +1269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const fileSize = file.size.toString();
       let fileBuffer = file.buffer;
 
-      // Setup object storage
-      const objectStorageService = new ObjectStorageService();
-      const privateObjectDir = objectStorageService.getPrivateObjectDir();
+      // Setup local storage for development
       const timestamp = Date.now();
 
       // Handle PDF files - multi-page support
@@ -1177,30 +1293,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const pdfConversionResults = await convertPDFPagesToImages(fileBuffer);
           console.log(`Converted ${pdfConversionResults.length} pages`);
           
-          // Step 3: Save original PDF
-          console.log('Step 3: Saving original PDF...');
+          // Step 3: Save original PDF locally
+          console.log('Step 3: Saving original PDF locally...');
           const pdfFileName = `${drawingId}_${revisionNo}_${timestamp}.pdf`;
-          const pdfPath = `${privateObjectDir}/drawings/${pdfFileName}`;
-          const pdfPathWithoutLeadingSlash = pdfPath.startsWith('/') ? pdfPath.slice(1) : pdfPath;
-          const pdfParts = pdfPathWithoutLeadingSlash.split('/');
-          const pdfBucketName = pdfParts[0];
-          const pdfObjectName = pdfParts.slice(1).join('/');
+          const pdfPath = `drawings/${pdfFileName}`;
           
-          const pdfBucket = objectStorageClient.bucket(pdfBucketName);
-          const pdfBlob = pdfBucket.file(pdfObjectName);
-          
-          await pdfBlob.save(fileBuffer, {
-            metadata: { contentType: 'application/pdf' },
-          });
-          
-          const pdfSignedUrl = await signObjectURL({
-            bucketName: pdfBucketName,
-            objectName: pdfObjectName,
-            method: "GET",
-            ttlSec: 7 * 24 * 60 * 60, // 7 days
-          });
-          pdfUrl = pdfSignedUrl;
-          console.log('Original PDF saved');
+          pdfUrl = await localStorage.uploadFile(pdfPath, fileBuffer, 'application/pdf');
+          console.log('Original PDF saved locally');
           
           // Step 4: Process each page - upload images and analyze with AI
           console.log('Step 4: Processing individual pages...');
@@ -1210,27 +1309,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             console.log(`Processing page ${pageNumber}/${pdfConversionResults.length}...`);
             
-            // Upload page image
+            // Upload page image locally
             const pageImageFileName = `${drawingId}_${revisionNo}_p${pageNumber}_${timestamp}.png`;
-            const pageImagePath = `${privateObjectDir}/drawings/${pageImageFileName}`;
-            const pageImagePathWithoutSlash = pageImagePath.startsWith('/') ? pageImagePath.slice(1) : pageImagePath;
-            const pageImageParts = pageImagePathWithoutSlash.split('/');
-            const pageImageBucketName = pageImageParts[0];
-            const pageImageObjectName = pageImageParts.slice(1).join('/');
+            const pageImagePath = `drawings/${pageImageFileName}`;
             
-            const pageImageBucket = objectStorageClient.bucket(pageImageBucketName);
-            const pageImageBlob = pageImageBucket.file(pageImageObjectName);
-            
-            await pageImageBlob.save(pageResult.imageBuffer, {
-              metadata: { contentType: 'image/png' },
-            });
-            
-            const pageImageUrl = await signObjectURL({
-              bucketName: pageImageBucketName,
-              objectName: pageImageObjectName,
-              method: "GET",
-              ttlSec: 7 * 24 * 60 * 60, // 7 days
-            });
+            const pageImageUrl = await localStorage.uploadFile(pageImagePath, pageResult.imageBuffer, 'image/png');
             
             // Analyze page with Gemini AI
             let pageAiData = null;
@@ -1265,14 +1348,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Single image file (PNG/JPG)
         console.log('Single image file detected');
         
-        // Analyze with Gemini AI
+        // Analyze with Gemini AI (skip in development if needed)
         let aiData = null;
-        try {
-          console.log('Analyzing image with Gemini AI...');
-          aiData = await analyzeEngineeringDrawing(fileBuffer, fileType);
-          console.log('AI analysis completed');
-        } catch (aiError) {
-          console.error('AI analysis failed (continuing):', aiError);
+        if (process.env.SKIP_AI_ANALYSIS === 'true' || process.env.NODE_ENV === 'development') {
+          console.log('Skipping AI analysis (SKIP_AI_ANALYSIS=true)');
+          aiData = {
+            title: "Engineering Drawing",
+            summary: "Drawing uploaded without AI analysis",
+            layers: [],
+            dimensions: [],
+            elements: [],
+            titleBlock: {},
+            annotations: []
+          };
+        } else {
+          try {
+            console.log('Analyzing image with Gemini AI...');
+            aiData = await analyzeEngineeringDrawing(fileBuffer, fileType);
+            console.log('AI analysis completed');
+          } catch (aiError) {
+            console.error('AI analysis failed (continuing):', aiError);
+            // Provide fallback data
+            aiData = {
+              title: "Engineering Drawing",
+              summary: "Drawing uploaded - AI analysis failed",
+              layers: [],
+              dimensions: [],
+              elements: [],
+              titleBlock: {},
+              annotations: []
+            };
+          }
         }
         
         // Create single page result
@@ -1283,37 +1389,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Upload main thumbnail image
+      // Upload main thumbnail image locally
       const fileExtension = isPdfFile ? 'png' : fileName.split('.').pop();
       const uniqueFileName = `${drawingId}_${revisionNo}_${timestamp}.${fileExtension}`;
-      const objectPath = `${privateObjectDir}/drawings/${uniqueFileName}`;
-      const pathWithoutLeadingSlash = objectPath.startsWith('/') ? objectPath.slice(1) : objectPath;
-      const parts = pathWithoutLeadingSlash.split('/');
+      const imagePath = `drawings/${uniqueFileName}`;
       
-      if (parts.length < 2) {
-        throw new Error('Invalid object storage path configuration');
-      }
-
-      const bucketName = parts[0];
-      const objectName = parts.slice(1).join('/');
-      const bucket = objectStorageClient.bucket(bucketName);
-      const blob = bucket.file(objectName);
-
-      await blob.save(fileBuffer, {
-        metadata: { contentType: fileType },
-      });
-
-      const thumbnailUrl = await signObjectURL({
-        bucketName,
-        objectName,
-        method: "GET",
-        ttlSec: 7 * 24 * 60 * 60, // 7 days
-      });
+      const thumbnailUrl = await localStorage.uploadFile(imagePath, fileBuffer, fileType);
 
       // Create drawing revision
       const revisionData = {
         drawingId,
         revisionNo,
+        version: revisionNo, // Map revisionNo to version
+        changes: {}, // Add changes field
+        createdBy: userId,
         status: 'draft' as const,
         fileUrl: isPdfFile ? pdfUrl : thumbnailUrl, // PDF URL or image URL
         thumbnailUrl,
@@ -1386,9 +1475,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Manual upload endpoint (without AI processing)
   app.post('/api/drawings/upload-manual', isAuthenticated, upload.single('file'), async (req: any, res) => {
+    console.log('POST /api/drawings/upload-manual - Request received');
+    console.log('File:', req.file);
+    console.log('Body:', req.body);
     try {
       const userId = req.user.claims.sub;
       const { sheetNo, title, disciplineId, floorId, versionType, parentDrawingId, revisionNotes } = req.body;
+      console.log('Request body:', req.body);
 
       // Validation: Ensure file exists
       if (!req.file) {
@@ -1418,17 +1511,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let drawingId: string;
 
       // Drawing Creation/Selection based on versionType
+      console.log('Version type:', versionType);
       if (versionType === 'new') {
         // Create new drawing
         const drawingData = {
-          sheetNo,
-          title,
-          disciplineId,
-          floorId: floorId || null,
+          name: title, // Add required name field
+          description: '', // Add required description field
+          data: {
+            sheetNo,
+            title,
+            disciplineId,
+            floorId: floorId || null,
+          },
           createdBy: userId,
         };
+        console.log('Creating drawing with data:', drawingData);
         const drawing = await storage.createDrawing(drawingData);
+        console.log('Drawing creation result:', drawing);
         drawingId = drawing.id;
+        console.log('Created drawing with ID:', drawingId);
+        
+        if (!drawingId) {
+          throw new Error('Failed to create drawing - no ID returned');
+        }
       } else {
         // versionType === 'update'
         // Use parentDrawingId and verify it exists
@@ -1447,58 +1552,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Auto-generated revision number: ${revisionNo}`);
 
       // File Upload (PDF Only - NO CONVERSION)
-      const objectStorageService = new ObjectStorageService();
-      const privateObjectDir = objectStorageService.getPrivateObjectDir();
+      // Use local storage for development
       const timestamp = Date.now();
       const fileName = file.originalname;
       const fileSize = file.size.toString();
 
-      // Save original PDF to Object Storage
-      const pdfFileName = `${drawingId}_${revisionNo}_${timestamp}.pdf`;
-      const pdfPath = `${privateObjectDir}/drawings/${pdfFileName}`;
-      const pdfPathWithoutLeadingSlash = pdfPath.startsWith('/') ? pdfPath.slice(1) : pdfPath;
-      const pdfParts = pdfPathWithoutLeadingSlash.split('/');
+      // Save original PDF locally
+      const pdfFileName = `${drawingId}_${revisionNo}_${Date.now()}.pdf`;
+      const pdfPath = `drawings/${pdfFileName}`;
       
-      if (pdfParts.length < 2) {
-        throw new Error('Invalid object storage path configuration');
-      }
-
-      const pdfBucketName = pdfParts[0];
-      const pdfObjectName = pdfParts.slice(1).join('/');
-      
-      const pdfBucket = objectStorageClient.bucket(pdfBucketName);
-      const pdfBlob = pdfBucket.file(pdfObjectName);
-      
-      await pdfBlob.save(file.buffer, {
-        metadata: { contentType: 'application/pdf' },
-      });
-      
-      // Generate signed URL (7 days expiration)
-      const pdfSignedUrl = await signObjectURL({
-        bucketName: pdfBucketName,
-        objectName: pdfObjectName,
-        method: "GET",
-        ttlSec: 7 * 24 * 60 * 60, // 7 days
-      });
+      const pdfSignedUrl = await localStorage.uploadFile(pdfPath, file.buffer, 'application/pdf');
 
       console.log('Manual PDF upload completed - no AI processing');
 
       // Create Revision with uploadMethod='manual'
       const revisionData = {
-        drawingId,
-        revisionNo,
-        status: 'draft' as const,
-        fileUrl: pdfSignedUrl,
-        thumbnailUrl: null, // No thumbnail for manual upload
-        fileName,
-        fileType: 'application/pdf',
-        fileSize,
-        uploadMethod: 'manual', // CRITICAL: Set upload method to manual
-        aiExtractedData: null, // No AI data for manual upload
-        uploadedBy: userId,
-        reviewNotes: revisionNotes || null,
+        drawingId: drawingId, // This will be mapped to drawing_id by Drizzle
+        version: revisionNo, // Map revisionNo to version
+        changes: {
+          fileUrl: pdfSignedUrl,
+          fileName: fileName,
+          fileType: 'application/pdf',
+          fileSize: fileSize,
+          status: 'draft',
+        }, // Add changes field with file info
+        createdBy: userId,
       };
 
+      console.log('Creating revision with data:', revisionData);
       const revision = await storage.createDrawingRevision(revisionData);
 
       // Return simplified response compatible with frontend success screen
@@ -1847,6 +1928,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to delete saved view" });
     }
   });
+
 
   return httpServer;
 }

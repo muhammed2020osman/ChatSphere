@@ -149,8 +149,8 @@ export function TicketsFiltersPanel({
     const query = drawingSearchQuery.toLowerCase();
     return drawings.filter(
       (d) =>
-        d.sheetNo.toLowerCase().includes(query) ||
-        d.title.toLowerCase().includes(query)
+        (d.sheetNo || "").toLowerCase().includes(query) ||
+        (d.title || "").toLowerCase().includes(query)
     );
   }, [drawings, drawingSearchQuery]);
 
@@ -526,7 +526,7 @@ export function TicketsFiltersPanel({
                             htmlFor={`assignee-${user.id}`}
                             className="text-sm font-normal cursor-pointer"
                           >
-                            {user.firstName} {user.lastName}
+                            {user.firstName || ''} {user.lastName || ''}
                           </Label>
                         </div>
                       ))}
