@@ -22,13 +22,5 @@
   ],
   "env": {
     "NODE_ENV": "production"
-  },
-  "functions": {
-    "index.js": {
-      "runtime": "nodejs20.x"
-    },
-    "api/index.js": {
-      "runtime": "nodejs20.x"
-    }
   }
 }

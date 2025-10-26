@@ -16,6 +16,11 @@
 - Frontend files served from `dist/public`
 - Proper fallback to `index.html` for SPA routing
 
+### 4. **Vercel Configuration Fixed**
+- Removed conflicting `functions` property
+- Using only `builds` property as per Vercel documentation
+- Proper Node.js runtime configuration
+
 ## 📁 New File Structure
 
 ```
@@ -55,6 +60,7 @@ ChatSphere/
 - ✅ API routes work separately
 - ✅ Proper static file serving
 - ✅ Client-side routing support
+- ✅ Fixed Vercel configuration conflict
 
 ## 📝 Environment Variables Still Required
 
