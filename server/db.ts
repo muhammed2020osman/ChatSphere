@@ -82,8 +82,7 @@ pool.getConnection()
     console.error('❌ Failed to connect to MySQL database:', error.message);
     console.error('Error code:', error.code);
     console.error('Please check your DATABASE_URL and MySQL server settings');
-    console.error('⚠️  WARNING: Application will use temporary fallback data until database connection is fixed');
-    console.error('Continuing without database connection...');
+    console.error('Application will fail to serve data until database connection is established');
     // Don't exit - let the app continue and show proper error messages
   });
 

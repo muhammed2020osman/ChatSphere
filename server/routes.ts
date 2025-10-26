@@ -1093,50 +1093,10 @@ app.get('/api/disciplines', isAuthenticated, async (req, res) => {
     res.json(disciplines);
   } catch (error) {
     console.error("Error fetching disciplines:", error);
-    console.log("⚠️ Using temporary fallback data due to database connection issues");
-    // Temporary fallback data until database connection is fixed
-    res.json([
-      { 
-        id: "disc-1", 
-        name: "Architecture", 
-        description: "Architectural drawings", 
-        code: "ARCH",
-        color: "#3B82F6",
-        createdAt: new Date().toISOString() 
-      },
-      { 
-        id: "disc-2", 
-        name: "Structural", 
-        description: "Structural engineering", 
-        code: "STR",
-        color: "#10B981",
-        createdAt: new Date().toISOString() 
-      },
-      { 
-        id: "disc-3", 
-        name: "MEP", 
-        description: "Mechanical, Electrical, Plumbing", 
-        code: "MEP",
-        color: "#F59E0B",
-        createdAt: new Date().toISOString() 
-      },
-      { 
-        id: "disc-4", 
-        name: "Civil", 
-        description: "Civil engineering", 
-        code: "CIV",
-        color: "#8B5CF6",
-        createdAt: new Date().toISOString() 
-      },
-      { 
-        id: "disc-5", 
-        name: "Landscape", 
-        description: "Landscape architecture", 
-        code: "LAND",
-        color: "#06B6D4",
-        createdAt: new Date().toISOString() 
-      }
-    ]);
+    res.status(500).json({ 
+      message: "Failed to fetch disciplines from database",
+      error: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 
@@ -1146,55 +1106,10 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
     res.json(floors);
   } catch (error) {
     console.error("Error fetching floors:", error);
-    console.log("⚠️ Using temporary fallback data due to database connection issues");
-    // Temporary fallback data until database connection is fixed
-    res.json([
-      { 
-        id: "floor-1", 
-        name: "Ground Floor", 
-        level: "0", 
-        description: "Ground level", 
-        projectId: null, 
-        sortOrder: 1,
-        createdAt: new Date().toISOString() 
-      },
-      { 
-        id: "floor-2", 
-        name: "First Floor", 
-        level: "1", 
-        description: "First level", 
-        projectId: null, 
-        sortOrder: 2,
-        createdAt: new Date().toISOString() 
-      },
-      { 
-        id: "floor-3", 
-        name: "Second Floor", 
-        level: "2", 
-        description: "Second level", 
-        projectId: null, 
-        sortOrder: 3,
-        createdAt: new Date().toISOString() 
-      },
-      { 
-        id: "floor-4", 
-        name: "Third Floor", 
-        level: "3", 
-        description: "Third level", 
-        projectId: null, 
-        sortOrder: 4,
-        createdAt: new Date().toISOString() 
-      },
-      { 
-        id: "floor-5", 
-        name: "Basement", 
-        level: "-1", 
-        description: "Basement level", 
-        projectId: null, 
-        sortOrder: 0,
-        createdAt: new Date().toISOString() 
-      }
-    ]);
+    res.status(500).json({ 
+      message: "Failed to fetch floors from database",
+      error: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 
