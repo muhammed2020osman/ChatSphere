@@ -197,9 +197,31 @@ export class DatabaseStorage {
     return await db.select().from(floors);
   }
 
-  async getDrawings(page: number, limit: number): Promise<any[]> {
+  async getDrawings(page: number, limit: number): Promise<{
+    drawings: any[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
     const offset = (page - 1) * limit;
-    return await db.select().from(drawings).limit(limit).offset(offset);
+    
+    // Get total count
+    const totalResult = await db.select({ count: sql`count(*)` }).from(drawings);
+    const total = totalResult[0]?.count || 0;
+    
+    // Get drawings with pagination
+    const drawingsData = await db.select().from(drawings).limit(limit).offset(offset);
+    
+    const totalPages = Math.ceil(total / limit);
+    
+    return {
+      drawings: drawingsData,
+      total,
+      page,
+      limit,
+      totalPages
+    };
   }
 
   async getDrawingBySheetNo(sheetNo: string): Promise<any | null> {
