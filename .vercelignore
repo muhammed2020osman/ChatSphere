@@ -101,6 +101,7 @@ drizzle.config.ts
 
 # Old deployment files
 app.js
+index.js
 
 # Development scripts
 build.sh
