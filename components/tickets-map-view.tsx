@@ -30,7 +30,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PDFViewerCanvas } from "@/components/pdf-viewer-canvas";
 import type { TicketFilters } from "./tickets-filters-panel";
 import type { DrawingWithDetails, Pin, Ticket, TicketWithDetails } from "@shared/schema";
-import mapLocationIcon from "@assets/map-location_1761314621260.png";
+import mapLocationIcon from "../attached_assets/map-location_1761314621260.png";
 
 interface TicketsMapViewProps {
   filters: TicketFilters;
