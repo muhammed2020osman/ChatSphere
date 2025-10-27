@@ -46,7 +46,7 @@ export interface IStorage {
   isChannelMember(channelId: string, userId: string): Promise<boolean>;
   
   // Message operations
-  getChannelMessages(channelId: string): Promise<any[]>;
+  getChannelMessages(channelId: string, options?: { limit?: number; before?: string }): Promise<any[]>;
   getMessage(messageId: string): Promise<Message | undefined>;
   createMessage(message: any): Promise<Message>;
   searchMessages(query: string, userId: string): Promise<any[]>;
@@ -257,7 +257,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Message operations
-  async getChannelMessages(channelId: string): Promise<any[]> {
+  async getChannelMessages(channelId: string, options?: { limit?: number; before?: string }): Promise<any[]> {
+    const limit = options?.limit || 50;
+    const before = options?.before;
+    
+    let whereCondition = eq(messages.channelId, channelId);
+    
+    if (before) {
+      // Add before condition for pagination
+      whereCondition = and(
+        eq(messages.channelId, channelId),
+        sql`${messages.createdAt} < ${before}`
+      );
+    }
+    
     const result = await db
       .select({
         message: messages,
@@ -265,8 +278,9 @@ export class DatabaseStorage implements IStorage {
       })
       .from(messages)
       .innerJoin(users, eq(messages.userId, users.id))
-      .where(eq(messages.channelId, channelId))
-      .orderBy(asc(messages.createdAt));
+      .where(whereCondition)
+      .orderBy(desc(messages.createdAt))
+      .limit(limit);
     
     return result.map(r => ({
       ...r.message,
