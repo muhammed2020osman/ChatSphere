@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "30");
     
-    const result = await storage.getDrawings({ page, limit });
+    const result = await storage.getDrawings(page, limit);
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const user = await requireAuth();
     const body = await request.json();
     
-    const drawing = await storage.createDrawing(body, user.id);
+    const drawing = await storage.createDrawing({ ...body, createdBy: user.id });
     return NextResponse.json(drawing);
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
