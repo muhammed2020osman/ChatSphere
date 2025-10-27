@@ -3,96 +3,113 @@ import mysql from 'mysql2/promise';
 import { drizzle } from 'drizzle-orm/mysql2';
 import * as schema from "./schema";
 
-// Use MySQL for production
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
-  );
-}
+// Skip database initialization during build time if DATABASE_URL is not available
+let pool: mysql.Pool | null = null;
+let dbInstance: ReturnType<typeof drizzle> | null = null;
 
-// Parse DATABASE_URL with error handling
-let url: URL;
-try {
-  url = new URL(process.env.DATABASE_URL);
-} catch (error) {
-  throw new Error(
-    `Invalid DATABASE_URL format: ${process.env.DATABASE_URL}. Expected format: mysql://username:password@host:port/database`
-  );
-}
-
-const config = {
-  host: url.hostname,
-  port: parseInt(url.port) || 3306,
-  user: url.username,
-  password: url.password,
-  database: url.pathname.slice(1), // Remove leading slash
-  // Connection pool settings for external database
-  connectionLimit: 10, // Increased for better performance
-  // Additional settings for external connections
-  multipleStatements: false,
-  charset: 'utf8mb4',
-  // SSL configuration - disable for development
-  ssl: false,
-  // Add connection timeout
-  connectTimeout: 30000,
-  // Add acquire timeout
-  acquireTimeout: 30000,
-  // Add idle timeout
-  idleTimeout: 300000, // 5 minutes
-  // Enable keep-alive
-  keepAliveInitialDelay: 0,
-  enableKeepAlive: true,
-  // Additional MySQL-specific settings
-  timezone: 'Z',
-  dateStrings: false,
-  supportBigNumbers: true,
-  bigNumberStrings: true,
-  // Try to reconnect
-  reconnect: true,
-  // Debug mode for troubleshooting
-  debug: process.env.NODE_ENV === 'development' ? ['ComProtocol'] : false,
-  // Additional connection options that might help with permissions
-  authPlugins: {
-    mysql_native_password: () => () => Buffer.from(url.password)
-  },
-  // Force protocol 41 (MySQL 4.1+)
-  protocol41: true,
-  // Additional authentication options
-  authSwitchHandler: (data, cb) => {
-    if (data.pluginName === 'mysql_native_password') {
-      const password = Buffer.from(url.password);
-      const token = Buffer.from(data.authPluginData.slice(0, 20));
-      const hash = require('crypto').createHash('sha1');
-      hash.update(password);
-      hash.update(token);
-      cb(null, hash.digest());
-    }
+function createDatabaseConnection() {
+  // Only initialize if DATABASE_URL is available and not during build
+  if (!process.env.DATABASE_URL || process.env.NODE_ENV === 'build') {
+    return null;
   }
-};
 
-// Create connection pool with error handling
-export const pool = mysql.createPool(config);
+  if (!pool) {
+    // Parse DATABASE_URL with error handling
+    let url: URL;
+    try {
+      url = new URL(process.env.DATABASE_URL);
+    } catch (error) {
+      throw new Error(
+        `Invalid DATABASE_URL format: ${process.env.DATABASE_URL}. Expected format: mysql://username:password@host:port/database`
+      );
+    }
 
-// Test connection on startup
-pool.getConnection()
-  .then((connection) => {
-    console.log('✅ MySQL database connected successfully');
-    connection.release();
-  })
-  .catch((error) => {
-    console.error('❌ Failed to connect to MySQL database:', error.message);
-    console.error('Error code:', error.code);
-    console.error('Please check your DATABASE_URL and MySQL server settings');
-    console.error('Application will fail to serve data until database connection is established');
-    // Don't exit - let the app continue and show proper error messages
-  });
+    const config = {
+      host: url.hostname,
+      port: parseInt(url.port) || 3306,
+      user: url.username,
+      password: url.password,
+      database: url.pathname.slice(1), // Remove leading slash
+      // Connection pool settings for external database
+      connectionLimit: 10, // Increased for better performance
+      // Additional settings for external connections
+      multipleStatements: false,
+      charset: 'utf8mb4',
+      // SSL configuration - disable for development
+      ssl: false,
+      // Add connection timeout
+      connectTimeout: 30000,
+      // Add acquire timeout
+      acquireTimeout: 30000,
+      // Add idle timeout
+      idleTimeout: 300000, // 5 minutes
+      // Enable keep-alive
+      keepAliveInitialDelay: 0,
+      enableKeepAlive: true,
+      // Additional MySQL-specific settings
+      timezone: 'Z',
+      dateStrings: false,
+      supportBigNumbers: true,
+      bigNumberStrings: true,
+      // Try to reconnect
+      reconnect: true,
+      // Debug mode for troubleshooting
+      debug: process.env.NODE_ENV === 'development' ? ['ComProtocol'] : false,
+      // Additional connection options that might help with permissions
+      authPlugins: {
+        mysql_native_password: () => () => Buffer.from(url.password)
+      },
+      // Force protocol 41 (MySQL 4.1+)
+      protocol41: true,
+      // Additional authentication options
+      authSwitchHandler: (data: any, cb: any) => {
+        if (data.pluginName === 'mysql_native_password') {
+          const password = Buffer.from(url.password);
+          const token = password;
+          cb(null, token);
+        }
+      },
+    };
 
-export const db = drizzle(pool, { schema, mode: "default" });
+    pool = mysql.createPool(config);
+    
+    // Add error handling for the pool
+    pool.on('connection', (connection) => {
+      console.log('🔗 New database connection established');
+    });
+    
+    pool.on('error', (error) => {
+      console.error('❌ Database pool error:', error);
+      // Don't exit - let the app continue and show proper error messages
+    });
+  }
+  return pool;
+}
+
+// Initialize database connection
+pool = createDatabaseConnection();
+
+// Create db instance only if pool is available
+if (pool) {
+  dbInstance = drizzle(pool, { schema, mode: "default" });
+}
+
+export { pool };
+export const db = dbInstance;
 
 // Function to initialize database tables and data
 export async function initializeDatabase() {
   try {
     console.log('🔄 Initializing database tables and data...');
+    
+    // Ensure we have a database connection
+    if (!pool) {
+      pool = createDatabaseConnection();
+    }
+    
+    if (!pool) {
+      throw new Error('Database connection not available');
+    }
     
     // Test connection first
     const connection = await pool.getConnection();

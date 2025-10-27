@@ -7,16 +7,13 @@ export async function GET(
   { params }: { params: { query: string } }
 ) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
     
     const { searchParams } = new URL(request.url);
     const channelId = searchParams.get("channelId");
     const limit = parseInt(searchParams.get("limit") || "20");
     
-    const results = await storage.searchMessages(params.query, {
-      channelId,
-      limit,
-    });
+    const results = await storage.searchMessages(params.query, user.id);
     
     return NextResponse.json(results);
   } catch (error) {
