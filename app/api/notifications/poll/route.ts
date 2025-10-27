@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const lastTimestamp = searchParams.get("lastTimestamp");
 
     const newNotifications = await storage.pollNotifications(user.id, {
-      lastTimestamp,
+      lastTimestamp: lastTimestamp || undefined,
     });
 
     return NextResponse.json({

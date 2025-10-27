@@ -69,6 +69,7 @@ export interface IStorage {
   markNotificationAsRead(notificationId: string): Promise<void>;
   markAllNotificationsAsRead(userId: string): Promise<void>;
   getUnreadNotificationCount(userId: string): Promise<number>;
+  pollNotifications(userId: string, options: { lastTimestamp?: string }): Promise<any[]>;
   
   // Message editing/deletion
   updateMessage(messageId: string, content: string, mentions?: string[]): Promise<Message>;
@@ -496,6 +497,28 @@ export class DatabaseStorage implements IStorage {
     const result = await db.select().from(notifications)
       .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
     return result.length;
+  }
+
+  async pollNotifications(userId: string, options: { lastTimestamp?: string }): Promise<any[]> {
+    const { lastTimestamp } = options;
+    
+    let whereCondition = eq(notifications.userId, userId);
+    
+    if (lastTimestamp) {
+      // Get notifications after the last timestamp
+      whereCondition = and(
+        eq(notifications.userId, userId),
+        sql`${notifications.createdAt} > ${lastTimestamp}`
+      );
+    }
+    
+    const result = await db
+      .select()
+      .from(notifications)
+      .where(whereCondition)
+      .orderBy(desc(notifications.createdAt));
+    
+    return result;
   }
 
   // Message editing/deletion
