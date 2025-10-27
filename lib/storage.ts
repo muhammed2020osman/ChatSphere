@@ -52,6 +52,7 @@ export interface IStorage {
   searchMessages(query: string, userId: string): Promise<any[]>;
   getUserThreads(userId: string): Promise<any[]>;
   getAllMessages(userId: string): Promise<any[]>;
+  pollMessages(channelId: string, options: { lastMessageId?: string; lastTimestamp?: string }): Promise<any[]>;
   
   // Direct message operations
   getDirectMessages(userId1: string, userId2: string): Promise<any[]>;
@@ -348,6 +349,41 @@ export class DatabaseStorage implements IStorage {
 
   async getAllMessages(userId: string): Promise<any[]> {
     return await db.select().from(messages);
+  }
+
+  async pollMessages(channelId: string, options: { lastMessageId?: string; lastTimestamp?: string }): Promise<any[]> {
+    const { lastMessageId, lastTimestamp } = options;
+    
+    let whereCondition = eq(messages.channelId, channelId);
+    
+    if (lastMessageId) {
+      // Get messages after the last message ID
+      whereCondition = and(
+        eq(messages.channelId, channelId),
+        sql`${messages.id} > ${lastMessageId}`
+      );
+    } else if (lastTimestamp) {
+      // Get messages after the last timestamp
+      whereCondition = and(
+        eq(messages.channelId, channelId),
+        sql`${messages.createdAt} > ${lastTimestamp}`
+      );
+    }
+    
+    const result = await db
+      .select({
+        message: messages,
+        user: users,
+      })
+      .from(messages)
+      .innerJoin(users, eq(messages.userId, users.id))
+      .where(whereCondition)
+      .orderBy(asc(messages.createdAt));
+    
+    return result.map(r => ({
+      ...r.message,
+      user: r.user,
+    }));
   }
 
   // Direct message operations

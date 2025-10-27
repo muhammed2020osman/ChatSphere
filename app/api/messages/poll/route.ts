@@ -16,8 +16,8 @@ export async function GET(request: NextRequest) {
     }
 
     const newMessages = await storage.pollMessages(channelId, {
-      lastMessageId,
-      lastTimestamp,
+      lastMessageId: lastMessageId || undefined,
+      lastTimestamp: lastTimestamp || undefined,
     });
 
     return NextResponse.json({
