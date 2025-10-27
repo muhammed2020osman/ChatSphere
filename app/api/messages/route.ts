@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: "Channel ID is required" }, { status: 400 });
     }
 
-    const messagesList = await storage.getMessages(channelId, { limit, offset });
+    const messagesList = await storage.getChannelMessages(channelId, { limit });
     return NextResponse.json(messagesList);
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
