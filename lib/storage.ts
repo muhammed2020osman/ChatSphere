@@ -136,6 +136,10 @@ export interface IStorage {
   // File upload operations
   uploadDrawingManual(file: any, fields: Record<string, string>, userId: string): Promise<any>;
   uploadDrawingFile(drawingId: string, file: any, fields: Record<string, string>): Promise<any>;
+  
+  // Attachment operations
+  uploadFile(fileName: string, buffer: Buffer, fileType: string): Promise<{ url: string }>;
+  createAttachment(attachment: any): Promise<Attachment>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -937,6 +941,36 @@ export class DatabaseStorage implements IStorage {
       console.error('Error uploading drawing file:', error);
       throw new Error('Failed to upload drawing file');
     }
+  }
+
+  // Attachment operations
+  async uploadFile(fileName: string, buffer: Buffer, fileType: string): Promise<{ url: string }> {
+    // For now, we'll simulate file upload by creating a local file path
+    // In a real implementation, this would upload to cloud storage (S3, etc.)
+    const uploadPath = `/uploads/${fileName}`;
+    
+    // In a real implementation, you would:
+    // 1. Upload the buffer to cloud storage
+    // 2. Return the public URL
+    
+    // For now, return a simulated URL
+    return {
+      url: uploadPath
+    };
+  }
+
+  async createAttachment(attachmentData: any): Promise<Attachment> {
+    const attachmentId = randomUUID();
+    const attachment = {
+      id: attachmentId,
+      ...attachmentData,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    await db.insert(attachments).values(attachment);
+    const result = await db.select().from(attachments).where(eq(attachments.id, attachmentId)).limit(1);
+    return result[0];
   }
 }
 
