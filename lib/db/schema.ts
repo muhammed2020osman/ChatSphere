@@ -55,12 +55,7 @@ export const messages = mysqlTable("messages", {
   channelId: varchar("channel_id", { length: 191 }).references(() => channels.id),
   userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
   replyToId: varchar("reply_to_id", { length: 191 }),
-  attachmentUrl: text("attachment_url"),
-  attachmentType: varchar("attachment_type", { length: 100 }),
-  attachmentName: varchar("attachment_name", { length: 255 }),
-  threadParentId: varchar("thread_parent_id", { length: 191 }),
   mentions: json("mentions").default([]),
-  editedAt: timestamp("edited_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
@@ -71,8 +66,6 @@ export const drawings = mysqlTable("drawings", {
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   data: json("data").notNull(),
-  disciplineId: varchar("discipline_id", { length: 191 }).references(() => disciplines.id),
-  floorId: varchar("floor_id", { length: 191 }).references(() => floors.id),
   createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
@@ -83,20 +76,11 @@ export const tickets = mysqlTable("tickets", {
   id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
-  type: varchar("type", { length: 50 }).default("issue").notNull(),
   status: varchar("status", { length: 50 }).default("open").notNull(),
   priority: varchar("priority", { length: 50 }).default("medium").notNull(),
   drawingId: varchar("drawing_id", { length: 191 }).references(() => drawings.id),
-  disciplineId: varchar("discipline_id", { length: 191 }).references(() => disciplines.id),
-  pinId: varchar("pin_id", { length: 191 }).references(() => pins.id),
-  layerId: varchar("layer_id", { length: 191 }).references(() => layers.id),
   assignedTo: varchar("assigned_to", { length: 191 }).references(() => users.id),
   createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
-  reporter: varchar("reporter", { length: 191 }).references(() => users.id),
-  channelId: varchar("channel_id", { length: 191 }).references(() => channels.id),
-  slaHours: varchar("sla_hours", { length: 10 }),
-  dueDate: timestamp("due_date"),
-  tags: json("tags").default([]),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
@@ -171,8 +155,6 @@ export const disciplines = mysqlTable("disciplines", {
   id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
-  code: varchar("code", { length: 20 }),
-  color: varchar("color", { length: 20 }),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -259,10 +241,7 @@ export const drawingComments = mysqlTable("drawing_comments", {
 export const floors = mysqlTable("floors", {
   id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
   name: varchar("name", { length: 100 }).notNull(),
-  level: varchar("level", { length: 20 }).notNull(),
   description: text("description"),
-  projectId: varchar("project_id", { length: 191 }).references(() => projects.id),
-  sortOrder: varchar("sort_order", { length: 10 }).default("0"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
