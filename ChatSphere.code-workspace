@@ -10,7 +10,7 @@
 			"**/.idea": true,
 			"**/node_modules": true,
 			"**/vendor": true,
-		
+ 
 			"**/.svn": true,
 			"**/.hg": true,
 			"**/CVS": true,

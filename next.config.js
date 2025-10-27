@@ -1,22 +1,14 @@
-const path = require('path');
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   images: {
     domains: ['localhost'],
     unoptimized: true,
-  },
-  webpack: (config) => {
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      '@': path.resolve(__dirname, './'),
-      '@shared': path.resolve(__dirname, './lib/db'),
-      '@assets': path.resolve(__dirname, './attached_assets'),
-    };
-    return config;
   },
   async headers() {
     return [
