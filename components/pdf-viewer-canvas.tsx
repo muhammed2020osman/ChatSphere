@@ -1,14 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
-import * as pdfjsLib from 'pdfjs-dist';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-// @ts-ignore - Vite URL import
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-
-// Use local worker bundled by Vite instead of CDN to avoid network issues
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 interface PDFViewerCanvasProps {
   pdfUrl: string;
@@ -50,9 +44,22 @@ export function PDFViewerCanvas({
         return;
       }
 
+      // Dynamic import pdfjs-dist only on client side
+      let pdfjsLib: any = null;
+      try {
+        pdfjsLib = await import('pdfjs-dist');
+        // Set worker source for Next.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      } catch (err) {
+        console.error('Failed to load pdfjs-dist:', err);
+        setError('Failed to load PDF library');
+        setLoading(false);
+        return;
+      }
+
       const maxRetries = 2;
       const isRetry = attemptNumber > 0;
-      let loadingTask: pdfjsLib.PDFDocumentLoadingTask | null = null;
+      let loadingTask: any = null;
 
       try {
         setLoading(true);
@@ -99,7 +106,7 @@ export function PDFViewerCanvas({
         const pdf = await Promise.race([
           loadingTask.promise,
           timeoutPromise
-        ]) as pdfjsLib.PDFDocumentProxy;
+        ]) as any;
 
         clearTimeout(timeoutId);
         console.log('[PDF Viewer] PDF loaded successfully, pages:', pdf.numPages);
@@ -188,37 +195,27 @@ export function PDFViewerCanvas({
           let errorMessage = 'Failed to load PDF';
           if (err instanceof Error) {
             if (err.message.includes('timeout')) {
-              errorMessage = 'PDF loading timeout. The file may be too large or the signed URL may have expired. Please try refreshing the page.';
-            } else if (err.message.includes('CORS')) {
-              errorMessage = 'CORS error: Cannot load PDF from the provided URL. Please check server configuration.';
-            } else if (err.message.includes('404') || err.message.includes('Not Found')) {
-              errorMessage = 'PDF file not found. The signed URL may have expired. Please refresh the page.';
-            } else if (err.message.includes('NetworkError') || err.message.includes('Failed to fetch')) {
-              errorMessage = 'Network error: Cannot reach the PDF file. Please check your internet connection.';
+              errorMessage = 'PDF loading timeout. The file may be too large or the URL may be expired.';
+            } else if (err.message.includes('Invalid PDF')) {
+              errorMessage = 'Invalid PDF file format.';
+            } else if (err.message.includes('Network')) {
+              errorMessage = 'Network error while loading PDF. Please check your connection.';
             } else {
-              errorMessage = err.message;
+              errorMessage = `PDF loading error: ${err.message}`;
             }
           }
           
           setError(errorMessage);
-          setRetrying(false);
           setLoading(false);
+          setRetrying(false);
         }
       } finally {
-        // Always clean up timeout and abort loading task
         clearTimeout(timeoutId);
-        if (loadingTask) {
-          try {
-            loadingTask.destroy();
-            console.log('[PDF Viewer] Loading task destroyed');
-          } catch (destroyErr) {
-            console.warn('[PDF Viewer] Error destroying loading task:', destroyErr);
-          }
-        }
       }
     };
 
-    loadPDF(0);
+    // Start loading
+    loadPDF();
 
     return () => {
       isMounted = false;
@@ -226,138 +223,81 @@ export function PDFViewerCanvas({
     };
   }, [pdfUrl, zoom]);
 
+  // Handle panning
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    setIsPanning(true);
-    setStartPanPosition({
-      x: e.clientX - panPosition.x,
-      y: e.clientY - panPosition.y,
-    });
+    if (onPanChange) {
+      setIsPanning(true);
+      setStartPanPosition({ x: e.clientX - panPosition.x, y: e.clientY - panPosition.y });
+    }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isPanning) return;
-    
-    const newPosition = {
-      x: e.clientX - startPanPosition.x,
-      y: e.clientY - startPanPosition.y,
-    };
-    
-    onPanChange?.(newPosition);
+    if (isPanning && onPanChange) {
+      onPanChange({
+        x: e.clientX - startPanPosition.x,
+        y: e.clientY - startPanPosition.y,
+      });
+    }
   };
 
   const handleMouseUp = () => {
     setIsPanning(false);
   };
 
-  const handleMouseLeave = () => {
-    setIsPanning(false);
-  };
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length !== 1) return;
-    const touch = e.touches[0];
-    setIsPanning(true);
-    setStartPanPosition({
-      x: touch.clientX - panPosition.x,
-      y: touch.clientY - panPosition.y,
-    });
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isPanning || e.touches.length !== 1) return;
-    
-    const touch = e.touches[0];
-    const newPosition = {
-      x: touch.clientX - startPanPosition.x,
-      y: touch.clientY - startPanPosition.y,
-    };
-    
-    onPanChange?.(newPosition);
-  };
-
-  const handleTouchEnd = () => {
-    setIsPanning(false);
-  };
-
   return (
     <div
       ref={containerRef}
-      className={`relative overflow-hidden ${className}`}
-      style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
+      className={`relative w-full h-full ${className}`}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseLeave}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      data-testid="pdf-viewer-container"
+      onMouseLeave={handleMouseUp}
     >
-      <canvas
-        ref={canvasRef}
-        className="absolute top-0 left-0"
-        style={{
-          transform: `translate(${panPosition.x}px, ${panPosition.y}px)`,
-          opacity: loading || error ? 0 : 1,
-        }}
-        data-testid="pdf-canvas"
-      />
-      
-      <svg
-        className="absolute top-0 left-0 pointer-events-none"
-        width={canvasDimensions.width}
-        height={canvasDimensions.height}
-        style={{
-          transform: `translate(${panPosition.x}px, ${panPosition.y}px)`,
-          opacity: loading || error ? 0 : 1,
-        }}
-        data-testid="pdf-svg-overlay"
-      >
-        <g style={{ pointerEvents: 'auto' }}>
-          {children}
-        </g>
-      </svg>
-
+      {/* Loading State */}
       {loading && (
-        <div
-          className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm"
-          data-testid="pdf-viewer-loading"
-        >
-          <div className="flex flex-col items-center gap-3 w-64">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground text-center">
-              {retrying ? `Retrying... (Attempt ${retryCount}/2)` : 'Loading PDF...'}
+        <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-10">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-sm text-muted-foreground mb-2">
+              {retrying ? `Retrying... (${retryCount}/2)` : 'Loading PDF...'}
             </p>
             {loadProgress > 0 && (
-              <div className="w-full">
-                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                  <div
-                    className="bg-primary h-full transition-all duration-300"
-                    style={{ width: `${loadProgress}%` }}
-                    data-testid="pdf-load-progress"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground text-center mt-1">{loadProgress}%</p>
+              <div className="w-48 bg-muted rounded-full h-2 mx-auto">
+                <div 
+                  className="bg-primary h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${loadProgress}%` }}
+                />
               </div>
             )}
           </div>
         </div>
       )}
 
+      {/* Error State */}
       {error && (
-        <div
-          className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm p-6"
-          data-testid="pdf-viewer-error"
-        >
-          <Alert variant="destructive" className="max-w-md">
+        <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-10">
+          <Alert className="max-w-md">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Error loading PDF:</strong> {error}
+              {error}
             </AlertDescription>
           </Alert>
         </div>
       )}
+
+      {/* PDF Canvas */}
+      <canvas
+        ref={canvasRef}
+        data-testid="pdf-canvas"
+        className="max-w-full max-h-full object-contain cursor-grab active:cursor-grabbing"
+        style={{
+          transform: `translate(${panPosition.x}px, ${panPosition.y}px)`,
+          transformOrigin: 'top left',
+        }}
+      />
+
+      {/* Children overlay */}
+      {children}
     </div>
   );
 }

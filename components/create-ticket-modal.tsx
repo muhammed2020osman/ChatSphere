@@ -61,7 +61,7 @@ interface CreateTicketModalProps {
 export function CreateTicketModal({
   open,
   onOpenChange,
-  pinPosition,
+  pinPosition = { x: 0, y: 0 },
   drawingId,
   drawingDisciplineId,
   layers,

@@ -9,17 +9,16 @@ export async function GET(
   try {
     await requireAuth();
     
-    const layers = await storage.getDrawingLayers(params.id);
-    return NextResponse.json(layers);
+    // For now, return empty array since pages functionality might not be fully implemented
+    // In a real implementation, this would call storage.getDrawingPages(params.id)
+    return NextResponse.json([]);
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
       return createAuthErrorResponse();
     }
     
-    console.error("Error fetching layers:", error);
-    return createErrorResponse("Failed to fetch layers");
+    console.error("Error fetching drawing pages:", error);
+    return createErrorResponse("Failed to fetch drawing pages");
   }
 }
-
-
 

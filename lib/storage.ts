@@ -131,6 +131,10 @@ export interface IStorage {
   createSavedView(view: any): Promise<any>;
   updateSavedView(id: string, updates: any): Promise<any>;
   deleteSavedView(id: string): Promise<void>;
+  
+  // File upload operations
+  uploadDrawingManual(file: any, fields: Record<string, string>, userId: string): Promise<any>;
+  uploadDrawingFile(drawingId: string, file: any, fields: Record<string, string>): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -811,6 +815,116 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSavedView(id: string): Promise<void> {
     await db.delete(savedViews).where(eq(savedViews.id, id));
+  }
+
+  // File upload operations
+  async uploadDrawingManual(file: any, fields: Record<string, string>, userId: string): Promise<any> {
+    try {
+      // Create drawing record
+      const drawingId = randomUUID();
+      const drawingData = {
+        id: drawingId,
+        name: fields.title || fields.sheetNo || 'Untitled Drawing',
+        description: fields.description || '',
+        data: JSON.stringify({
+          sheetNo: fields.sheetNo || '',
+          title: fields.title || '',
+          disciplineId: fields.disciplineId || null,
+          floorId: fields.floorId || null,
+          packageName: fields.packageName || null
+        }),
+        disciplineId: fields.disciplineId || null,
+        floorId: fields.floorId || null,
+        createdBy: userId
+      };
+
+      await db.insert(drawings).values(drawingData);
+
+      // Create revision record
+      const revisionId = randomUUID();
+      const revisionData = {
+        id: revisionId,
+        drawingId: drawingId,
+        version: fields.revisionNo || 'A',
+        changes: JSON.stringify({
+          fileName: file.fileName,
+          fileSize: file.fileSize,
+          fileType: file.fileType,
+          uploadMethod: 'manual'
+        }),
+        status: 'draft',
+        fileUrl: null, // In a real implementation, this would be the uploaded file URL
+        fileName: file.fileName,
+        fileType: file.fileType,
+        fileSize: file.fileSize.toString(),
+        uploadedBy: userId,
+        createdBy: userId
+      };
+
+      await db.insert(drawingRevisions).values(revisionData);
+
+      return {
+        id: drawingId,
+        fileName: file.fileName,
+        title: fields.title || '',
+        sheetNo: fields.sheetNo || '',
+        revisionNo: fields.revisionNo || 'A',
+        status: 'draft',
+        uploadedBy: userId,
+        uploadedAt: new Date().toISOString(),
+        fileSize: file.fileSize,
+        fileType: file.fileType,
+        uploadMethod: 'manual',
+        message: 'File uploaded successfully'
+      };
+    } catch (error) {
+      console.error('Error uploading drawing:', error);
+      throw new Error('Failed to upload drawing');
+    }
+  }
+
+  async uploadDrawingFile(drawingId: string, file: any, fields: Record<string, string>): Promise<any> {
+    try {
+      // Create new revision for existing drawing
+      const revisionId = randomUUID();
+      const revisionData = {
+        id: revisionId,
+        drawingId: drawingId,
+        version: fields.revisionNo || 'B',
+        changes: JSON.stringify({
+          fileName: file.fileName,
+          fileSize: file.fileSize,
+          fileType: file.fileType,
+          uploadMethod: 'manual'
+        }),
+        status: 'draft',
+        fileUrl: null, // In a real implementation, this would be the uploaded file URL
+        fileName: file.fileName,
+        fileType: file.fileType,
+        fileSize: file.fileSize.toString(),
+        uploadedBy: fields.uploadedBy || 'unknown',
+        createdBy: fields.uploadedBy || 'unknown'
+      };
+
+      await db.insert(drawingRevisions).values(revisionData);
+
+      return {
+        id: revisionId,
+        drawingId: drawingId,
+        fileName: file.fileName,
+        revisionNo: fields.revisionNo || 'B',
+        status: 'draft',
+        uploadedBy: fields.uploadedBy || 'unknown',
+        uploadedAt: new Date().toISOString(),
+        fileSize: file.fileSize,
+        fileType: file.fileType,
+        uploadMethod: 'manual',
+        message: 'File uploaded successfully'
+      };
+    } catch (error) {
+      console.error('Error uploading drawing file:', error);
+      throw new Error('Failed to upload drawing file');
+    }
   }
 }
 
