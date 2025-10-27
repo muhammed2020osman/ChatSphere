@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth();
     
-    const notifications = await storage.getNotifications(user.id);
+    const notifications = await storage.getUserNotifications(user.id);
     
     return NextResponse.json(notifications);
   } catch (error) {
