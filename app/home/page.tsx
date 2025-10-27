@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect, type CSSProperties } from "react";
-import { usePathname } from "next/navigation";
+
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+import { usePathname, useRouter } from "next/navigation";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ChannelView } from "@/components/channel-view";
@@ -25,23 +28,30 @@ import { useToast } from "@/hooks/use-toast";
 export default function Home() {
   const [createChannelOpen, setCreateChannelOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   const { isAuthenticated, isLoading } = useAuth();
   const { isConnected } = useWebSocket(); // WebSocket for real-time updates
   const { toast } = useToast();
   const pathname = usePathname();
+  const router = useRouter();
+
+  // Ensure we're on the client side
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (isClient && !isLoading && !isAuthenticated) {
       toast({
         title: "Unauthorized",
         description: "You are logged out. Logging in again...",
         variant: "destructive",
       });
       setTimeout(() => {
-        window.location.href = "/api/login";
+        router.push("/api/login");
       }, 500);
     }
-  }, [isAuthenticated, isLoading, toast]);
+  }, [isAuthenticated, isLoading, toast, isClient, router]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -101,6 +111,18 @@ export default function Home() {
       </div>
     );
   };
+
+  // Show loading state during SSR or initial client load
+  if (!isClient || isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider style={style}>

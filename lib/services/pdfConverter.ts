@@ -1,5 +1,23 @@
 import { PDFDocument } from 'pdf-lib';
-import { createCanvas } from 'canvas';
+
+// Lazy import canvas to avoid build issues
+let createCanvas: any = null;
+
+async function getCanvas() {
+  if (!createCanvas) {
+    try {
+      const canvas = await import('canvas');
+      createCanvas = canvas.createCanvas;
+    } catch (error) {
+      console.warn('Canvas not available, PDF conversion will be limited:', error);
+      // Return a mock function that throws an error
+      createCanvas = () => {
+        throw new Error('Canvas not available in this environment');
+      };
+    }
+  }
+  return createCanvas;
+}
 
 export interface PDFConversionResult {
   imageBuffer: Buffer;
@@ -41,7 +59,8 @@ export async function convertPDFToImage(
     const canvasHeight = Math.floor(pdfHeight * scale);
 
     // Create canvas
-    const canvas = createCanvas(canvasWidth, canvasHeight);
+    const canvasFactory = await getCanvas();
+    const canvas = canvasFactory(canvasWidth, canvasHeight);
     const context = canvas.getContext('2d');
 
     // Fill with white background
@@ -109,7 +128,8 @@ export async function convertPDFPagesToImages(
       const canvasHeight = Math.floor(pdfHeight * scale);
 
       // Create canvas for this page
-      const canvas = createCanvas(canvasWidth, canvasHeight);
+      const canvasFactory = await getCanvas();
+      const canvas = canvasFactory(canvasWidth, canvasHeight);
       const context = canvas.getContext('2d');
 
       // Fill with white background
