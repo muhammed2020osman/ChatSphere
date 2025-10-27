@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
       const response = NextResponse.redirect(new URL('/home', request.url));
       
       // Set session cookie
-      const isProduction = process.env.NODE_ENV === 'production';
+      const isProduction = (process.env.NODE_ENV as string) === 'production';
       response.cookies.set('dev-session', user.id, {
         httpOnly: true,
         secure: isProduction,

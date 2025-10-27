@@ -16,7 +16,7 @@ export async function PATCH(
       return NextResponse.json({ message: "Content is required" }, { status: 400 });
     }
     
-    const message = await storage.updateMessage(params.id, content, user.id);
+    const message = await storage.updateMessage(params.id, content);
     
     return NextResponse.json(message);
   } catch (error) {
@@ -36,7 +36,7 @@ export async function DELETE(
   try {
     const user = await requireAuth();
     
-    await storage.deleteMessage(params.id, user.id);
+    await storage.deleteMessage(params.id);
     
     return NextResponse.json({ message: "Message deleted successfully" });
   } catch (error) {
