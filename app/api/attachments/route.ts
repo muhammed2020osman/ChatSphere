@@ -3,6 +3,9 @@ import { requireAuth, createAuthErrorResponse, createErrorResponse } from "@/lib
 import { storage } from "@/lib/storage";
 import { parseFormData, validateFileType, validateFileSize } from "@/lib/file-upload-helpers";
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 export async function PUT(request: NextRequest) {
   try {
     const user = await requireAuth();
