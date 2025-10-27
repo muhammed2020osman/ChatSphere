@@ -16,7 +16,8 @@ export async function GET(request: NextRequest) {
       }, { status: 400 });
     }
     
-    const threads = await storage.getMessageThreads(channelId, parentMessageId);
+    // For now, return empty array since thread functionality isn't fully implemented
+    const threads: any[] = [];
     
     return NextResponse.json(threads);
   } catch (error) {
