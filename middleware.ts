@@ -10,6 +10,8 @@ export function middleware(request: NextRequest) {
     '/api/login',
     '/api/logout',
     '/api/auth',
+    '/api/disciplines',
+    '/api/floors',
     '/sheets',
     '/plans',
     '/ingest-plans',

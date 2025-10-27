@@ -6,9 +6,15 @@ export async function GET(request: NextRequest) {
   try {
     await requireAuth();
     
-    // For now, return empty array since pins functionality might not be fully implemented
-    // In a real implementation, this would call storage.getAllPins()
-    return NextResponse.json([]);
+    const { searchParams } = new URL(request.url);
+    const drawingId = searchParams.get("drawingId");
+    
+    if (!drawingId) {
+      return NextResponse.json({ message: "Drawing ID is required" }, { status: 400 });
+    }
+    
+    const pins = await storage.getDrawingPins(drawingId);
+    return NextResponse.json(pins);
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
       return createAuthErrorResponse();
@@ -24,16 +30,12 @@ export async function POST(request: NextRequest) {
     const user = await requireAuth();
     const body = await request.json();
     
-    // For now, return mock response since pins functionality might not be fully implemented
-    // In a real implementation, this would call storage.createPin(body)
-    const mockPin = {
-      id: `pin-${Date.now()}`,
+    const pin = await storage.createPin({
       ...body,
       createdBy: user.id,
-      createdAt: new Date().toISOString(),
-    };
+    });
     
-    return NextResponse.json(mockPin);
+    return NextResponse.json(pin);
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
       return createAuthErrorResponse();

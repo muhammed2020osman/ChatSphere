@@ -9,9 +9,8 @@ export async function GET(
   try {
     await requireAuth();
     
-    // For now, return empty array since pages functionality might not be fully implemented
-    // In a real implementation, this would call storage.getDrawingPages(params.id)
-    return NextResponse.json([]);
+    const pages = await storage.getDrawingPages(params.id);
+    return NextResponse.json(pages);
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
       return createAuthErrorResponse();

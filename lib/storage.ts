@@ -101,6 +101,7 @@ export interface IStorage {
   createDrawingPage(page: any): Promise<any>;
   getRevisionPages(revisionId: string): Promise<any[]>;
   getDrawingPage(pageId: string): Promise<any | undefined>;
+  getDrawingPages(drawingId: string): Promise<any[]>;
   
   // Layers operations
   getDrawingLayers(drawingId: string): Promise<any[]>;
@@ -627,6 +628,17 @@ export class DatabaseStorage implements IStorage {
   async getDrawingPage(pageId: string): Promise<any | undefined> {
     const result = await db.select().from(drawingPages).where(eq(drawingPages.id, pageId)).limit(1);
     return result[0] || undefined;
+  }
+
+  async getDrawingPages(drawingId: string): Promise<any[]> {
+    // Get all pages for all revisions of a drawing
+    const result = await db
+      .select()
+      .from(drawingPages)
+      .innerJoin(drawingRevisions, eq(drawingPages.revisionId, drawingRevisions.id))
+      .where(eq(drawingRevisions.drawingId, drawingId))
+      .orderBy(asc(drawingPages.pageNumber));
+    return result.map(row => row.drawing_pages);
   }
 
   // Layers operations

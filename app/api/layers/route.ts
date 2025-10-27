@@ -6,9 +6,15 @@ export async function GET(request: NextRequest) {
   try {
     await requireAuth();
     
-    // For now, return empty array since layers functionality might not be fully implemented
-    // In a real implementation, this would call storage.getAllLayers()
-    return NextResponse.json([]);
+    const { searchParams } = new URL(request.url);
+    const drawingId = searchParams.get("drawingId");
+    
+    if (!drawingId) {
+      return NextResponse.json({ message: "Drawing ID is required" }, { status: 400 });
+    }
+    
+    const layers = await storage.getDrawingLayers(drawingId);
+    return NextResponse.json(layers);
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
       return createAuthErrorResponse();
@@ -24,16 +30,12 @@ export async function POST(request: NextRequest) {
     const user = await requireAuth();
     const body = await request.json();
     
-    // For now, return mock response since layers functionality might not be fully implemented
-    // In a real implementation, this would call storage.createLayer(body)
-    const mockLayer = {
-      id: `layer-${Date.now()}`,
+    const layer = await storage.createLayer({
       ...body,
       createdBy: user.id,
-      createdAt: new Date().toISOString(),
-    };
+    });
     
-    return NextResponse.json(mockLayer);
+    return NextResponse.json(layer);
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
       return createAuthErrorResponse();

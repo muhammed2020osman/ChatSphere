@@ -10,15 +10,8 @@ export async function PATCH(
     await requireAuth();
     const body = await request.json();
     
-    // For now, return mock response since layer visibility functionality might not be fully implemented
-    // In a real implementation, this would call storage.updateLayerVisibility(params.id, body.visible)
-    const mockResponse = {
-      id: params.id,
-      visible: body.visible,
-      updatedAt: new Date().toISOString(),
-    };
-    
-    return NextResponse.json(mockResponse);
+    const updatedLayer = await storage.updateLayerVisibility(params.id, body.visible);
+    return NextResponse.json(updatedLayer);
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
       return createAuthErrorResponse();
