@@ -1084,4 +1084,19 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+// Lazy initialization of storage instance
+let storageInstance: DatabaseStorage | null = null;
+
+export function getStorage(): DatabaseStorage {
+  if (!storageInstance) {
+    storageInstance = new DatabaseStorage();
+  }
+  return storageInstance;
+}
+
+// Export a proxy object that delegates to the lazy instance
+export const storage = new Proxy({} as DatabaseStorage, {
+  get(target, prop) {
+    return getStorage()[prop as keyof DatabaseStorage];
+  }
+});
