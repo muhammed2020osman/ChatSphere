@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
-import type { Channel, MessageWithUser } from "@shared/schema";
+import type { Channel, MessageWithUser } from "@/shared/schema";
 import { MessageItem } from "./message-item";
 import { MessageComposer } from "./message-composer";
 import { Hash, Lock, Users, X } from "lucide-react";

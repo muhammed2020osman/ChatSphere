@@ -61,7 +61,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { TicketFilters } from "./tickets-filters-panel";
-import type { TicketWithDetails } from "@shared/schema";
+import type { TicketWithDetails } from "@/shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 

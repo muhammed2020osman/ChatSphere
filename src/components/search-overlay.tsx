@@ -8,7 +8,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Search, Hash, MessageSquare } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import type { Channel, MessageWithUser } from "@shared/schema";
+import type { Channel, MessageWithUser } from "@/shared/schema";
 import { useLocation } from "wouter";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 

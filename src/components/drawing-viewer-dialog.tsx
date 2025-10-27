@@ -16,7 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-// import type { DrawingWithDetails } from "@shared/schema";
+// import type { DrawingWithDetails } from "@/shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { UploadRevisionDialog } from "./upload-revision-dialog";

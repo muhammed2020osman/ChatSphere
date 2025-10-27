@@ -30,7 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { insertTicketSchema, type Discipline, type User, type Layer } from "@shared/schema";
+import { insertTicketSchema, type Discipline, type User, type Layer } from "@/shared/schema";
 
 // Extend ticket schema for form validation
 // Remove pinId and drawingId - these are set by the parent component

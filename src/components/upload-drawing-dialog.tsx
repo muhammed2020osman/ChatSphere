@@ -32,7 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-// import type { Discipline, Floor } from "@shared/schema";
+// import type { Discipline, Floor } from "@/shared/schema";
 
 const uploadDrawingSchema = z.object({
   sheetNo: z.string().min(1, "Drawing number is required"),

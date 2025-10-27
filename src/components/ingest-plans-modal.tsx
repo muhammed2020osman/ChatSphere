@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import type { Discipline, Floor, DrawingWithDetails } from "@shared/schema";
+import type { Discipline, Floor, DrawingWithDetails } from "@/shared/schema";
 
 type Step = "selection" | "upload" | "review" | "processing" | "success" | "manual_form";
 

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
-import type { DirectMessageWithUser, User } from "@shared/schema";
+import type { DirectMessageWithUser, User } from "@/shared/schema";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MessageComposer } from "./message-composer";
 import { Skeleton } from "@/components/ui/skeleton";

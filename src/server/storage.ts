@@ -25,7 +25,7 @@ import {
   type Drawing,
   type Ticket,
   type Attachment,
-} from "@shared/schema";
+} from "@/shared/schema";
 import { db } from "./db";
 
 export interface IStorage {

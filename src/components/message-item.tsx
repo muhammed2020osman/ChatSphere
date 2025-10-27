@@ -3,7 +3,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { MessageSquare, FileIcon, Download, Smile, ThumbsUp, Heart, Laugh, PartyPopper, CheckCircle, MoreVertical, Edit, Trash, Star } from "lucide-react";
-import type { MessageWithUser, ReactionWithUser } from "@shared/schema";
+import type { MessageWithUser, ReactionWithUser } from "@/shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import {

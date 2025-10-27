@@ -32,7 +32,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Pin, TicketWithDetails } from "@shared/schema";
+import type { Pin, TicketWithDetails } from "@/shared/schema";
 
 interface PinTimelineDrawerProps {
   pinId: string | null;

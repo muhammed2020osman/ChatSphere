@@ -52,7 +52,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import type { SavedView } from "@shared/schema";
+import type { SavedView } from "@/shared/schema";
 import type { TicketFilters } from "./tickets-filters-panel";
 
 interface SavedViewsDialogProps {
