@@ -3,6 +3,7 @@ import { QueryClientProviderWrapper } from '@/components/query-client-provider-w
 import { ThemeProvider } from '@/components/theme-provider';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/toaster';
+import '@/lib/db/init'; // Initialize database on startup
 
 export const metadata = {
   title: 'Workspace',

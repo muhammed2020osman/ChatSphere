@@ -1,64 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth, createAuthErrorResponse, createErrorResponse } from "@/lib/auth-helpers";
+import { storage } from "@/lib/storage";
 
 export async function GET(request: NextRequest) {
   try {
-    // Mock data for testing purposes
-    const mockDisciplines = [
-      {
-        id: "arch",
-        name: "Architectural",
-        description: "Architectural drawings and plans"
-      },
-      {
-        id: "struct",
-        name: "Structural",
-        description: "Structural engineering drawings"
-      },
-      {
-        id: "mep",
-        name: "MEP",
-        description: "Mechanical, Electrical, and Plumbing"
-      },
-      {
-        id: "civil",
-        name: "Civil",
-        description: "Civil engineering and site plans"
-      },
-      {
-        id: "landscape",
-        name: "Landscape",
-        description: "Landscape architecture and design"
-      }
-    ];
-
-    return NextResponse.json(mockDisciplines);
+    await requireAuth();
+    
+    const disciplines = await storage.getDisciplines();
+    return NextResponse.json(disciplines);
   } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return createAuthErrorResponse();
+    }
     console.error("Error fetching disciplines:", error);
-    return NextResponse.json({ message: "Failed to fetch disciplines" }, { status: 500 });
+    return createErrorResponse("Failed to fetch disciplines from database");
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    await requireAuth();
     const body = await request.json();
-    const { name, description } = body;
     
-    if (!name) {
+    if (!body.name) {
       return NextResponse.json({ message: "Name is required" }, { status: 400 });
     }
     
-    // Mock response for testing
-    const mockDiscipline = {
-      id: `mock-${Date.now()}`,
-      name,
-      description: description || "",
-      createdAt: new Date().toISOString()
-    };
-
-    return NextResponse.json(mockDiscipline);
+    const discipline = await storage.createDiscipline(body);
+    return NextResponse.json(discipline);
   } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return createAuthErrorResponse();
+    }
     console.error("Error creating discipline:", error);
-    return NextResponse.json({ message: "Failed to create discipline" }, { status: 500 });
+    return createErrorResponse("Failed to create discipline");
   }
 }
 
