@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       // Set session cookie
       response.cookies.set('dev-session', user.id, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: (process.env.NODE_ENV || 'development') === 'production',
         sameSite: 'lax',
         maxAge: 24 * 60 * 60
       });
