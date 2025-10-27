@@ -15,7 +15,7 @@ export async function GET(
     
     const messages = await storage.getChannelMessages(params.id, {
       limit,
-      before,
+      before: before || undefined,
     });
     
     return NextResponse.json(messages);
