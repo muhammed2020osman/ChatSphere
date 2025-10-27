@@ -150,7 +150,7 @@ export class DatabaseStorage implements IStorage {
     const isFirstUser = existingUsers.length === 0;
     
     // Check if user already exists
-    const existingUser = await this.getUserById(userData.id);
+    const existingUser = await this.getUser(userData.id);
     if (existingUser) {
       return existingUser;
     }
