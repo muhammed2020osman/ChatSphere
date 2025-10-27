@@ -9,7 +9,7 @@ export async function PATCH(
   try {
     const user = await requireAuth();
     
-    await storage.markNotificationAsRead(params.id, user.id);
+    await storage.markNotificationAsRead(params.id);
     
     return NextResponse.json({ message: "Notification marked as read" });
   } catch (error) {
