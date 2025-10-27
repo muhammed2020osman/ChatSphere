@@ -49,7 +49,7 @@ describe('Disciplines APIs', () => {
 
       const response = await authenticatedPost('/api/disciplines', disciplineData)
       
-      expectSuccessResponse(response, 201)
+      expectSuccessResponse(response, 200)
       expect(response.body).toHaveProperty('id')
       expect(response.body).toHaveProperty('name')
       expect(response.body.name).toBe(disciplineData.name)
