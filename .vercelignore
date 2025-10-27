@@ -1,6 +1,9 @@
 # Vercel ignore file
 # Files and directories to exclude from Vercel deployment
 
+# Client directory (Vite app)
+client/
+
 # Development files
 .env
 .env.local
