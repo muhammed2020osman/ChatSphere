@@ -9,7 +9,7 @@ export async function GET(
   try {
     await requireAuth();
     
-    const page = await storage.getPage(params.id);
+    const page = await storage.getDrawingPage(params.id);
     if (!page) {
       return NextResponse.json({ message: "Page not found" }, { status: 404 });
     }

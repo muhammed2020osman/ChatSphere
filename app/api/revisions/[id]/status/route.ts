@@ -16,7 +16,7 @@ export async function PATCH(
       return NextResponse.json({ message: "Status is required" }, { status: 400 });
     }
     
-    const revision = await storage.updateRevisionStatus(params.id, status);
+    const revision = await storage.updateRevisionStatus(params.id, status, user.id);
     
     return NextResponse.json(revision);
   } catch (error) {

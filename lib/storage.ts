@@ -142,6 +142,10 @@ export interface IStorage {
   // Attachment operations
   uploadFile(fileName: string, buffer: Buffer, fileType: string): Promise<{ url: string }>;
   createAttachment(attachment: any): Promise<Attachment>;
+  
+  // Object storage operations
+  getObject(objectPath: string): Promise<Buffer | null>;
+  uploadObject(fileName: string, buffer: Buffer, fileType: string): Promise<{ url: string }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1052,6 +1056,31 @@ export class DatabaseStorage implements IStorage {
     await db.insert(attachments).values(attachment);
     const result = await db.select().from(attachments).where(eq(attachments.id, attachmentId)).limit(1);
     return result[0];
+  }
+
+  // Object storage operations
+  async getObject(objectPath: string): Promise<Buffer | null> {
+    // For now, return null since we don't have actual file storage implemented
+    // In a real implementation, this would read from cloud storage (S3, etc.)
+    console.log(`Requested object: ${objectPath}`);
+    return null;
+  }
+
+  async uploadObject(fileName: string, buffer: Buffer, fileType: string): Promise<{ url: string }> {
+    // For now, simulate file upload by creating a local file path
+    // In a real implementation, this would upload to cloud storage (S3, etc.)
+    const uploadPath = `/objects/${fileName}`;
+    
+    console.log(`Uploading object: ${fileName}, size: ${buffer.length} bytes, type: ${fileType}`);
+    
+    // In a real implementation, you would:
+    // 1. Upload the buffer to cloud storage
+    // 2. Return the public URL
+    
+    // For now, return a simulated URL
+    return {
+      url: uploadPath
+    };
   }
 }
 
