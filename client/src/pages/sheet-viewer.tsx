@@ -49,7 +49,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { PDFViewerCanvas } from "@/components/pdf-viewer-canvas";
 import type { Layer, Pin, Discipline, DrawingRevision, DrawingWithDetails, Floor, Ticket } from "@shared/schema";
-import mapLocationIcon from "@assets/map-location_1761314621260.png";
+const mapLocationIcon = "/map-location_1761314621260.png";
 
 // Extend Pin type to include tickets
 type PinWithTickets = Pin & {
