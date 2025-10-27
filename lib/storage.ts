@@ -93,7 +93,7 @@ export interface IStorage {
   getDrawingBySheetNo(sheetNo: string): Promise<any | undefined>;
   createDrawing(drawing: any): Promise<any>;
   createDiscipline(disciplineData: any): Promise<any>;
-  createDrawingRevision(revision: any): Promise<any>;
+  createDrawingRevision(drawingId: string, revision: any): Promise<any>;
   getDrawingRevisions(drawingId: string): Promise<any[]>;
   updateRevisionStatus(revisionId: string, status: string, reviewedBy: string, reviewNotes?: string): Promise<any>;
   
@@ -606,11 +606,19 @@ export class DatabaseStorage implements IStorage {
     return lastInserted[0];
   }
 
-  async createDrawingRevision(revisionData: any): Promise<any> {
-    await db.insert(drawingRevisions).values(revisionData);
-    // For MySQL, we need to get the inserted ID from the result
-    const insertedId = revisionData.id || randomUUID();
-    return { id: insertedId };
+  async createDrawingRevision(drawingId: string, revisionData: any): Promise<any> {
+    const revisionId = randomUUID();
+    const revision = {
+      id: revisionId,
+      drawingId: drawingId,
+      ...revisionData,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    await db.insert(drawingRevisions).values(revision);
+    const result = await db.select().from(drawingRevisions).where(eq(drawingRevisions.id, revisionId)).limit(1);
+    return result[0];
   }
 
   async getDrawingRevisions(drawingId: string): Promise<any[]> {
