@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, createAuthErrorResponse, createErrorResponse } from "@/lib/auth-helpers";
 import { storage } from "@/lib/storage";
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth();
