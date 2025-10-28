@@ -9,3 +9,6 @@ import { createCanvas } from 'canvas';
 import { Canvas as createCanvas } from 'skia-canvas';
 
 slove 2
+pm2 start server/index.js --name "chat"
+
+pm2 start /www/wwwroot/ChatSphere/server/index.ts --name "chat"
