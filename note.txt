@@ -1,4 +1,5 @@
 cd /www/wwwroot/ChatSphere
+git stash
 git pull origin main --rebase
 pnpm remove canvas
 pnpm add skia-canvas
