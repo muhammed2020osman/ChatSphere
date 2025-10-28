@@ -12,3 +12,14 @@ slove 2
 pm2 start server/index.js --name "chat"
 
 pm2 start /www/wwwroot/ChatSphere/server/index.ts --name "chat"
+npx tsc -p tsconfig.build.json
+هذا سينشئ جميع ملفات .js داخل مجلد dist.
+
+تشغيل المشروع مع PM2:
+
+bash
+Copy code
+pm2 start dist/index.js --name "chat"
+pm2 save
+pm2 startup
+
