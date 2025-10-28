@@ -1,12 +1,9 @@
 {
-    "version": 3,
+    "version": 2,
     "builds": [
       {
         "src": "server/index.ts",
-        "use": "@vercel/node",
-        "config": {
-          "runtime": "nodejs18.x"
-        }
+        "use": "@vercel/node"
       }
     ],
     "routes": [
