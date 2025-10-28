@@ -1,6 +1,6 @@
 import { PDFDocument } from 'pdf-lib';
-import { createCanvas } from 'canvas';
-
+// import { createCanvas } from 'canvas';
+import { Canvas as createCanvas } from 'skia-canvas';
 export interface PDFConversionResult {
   imageBuffer: Buffer;
   mimeType: string;
