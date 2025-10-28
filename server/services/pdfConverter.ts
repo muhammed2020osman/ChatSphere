@@ -1,6 +1,8 @@
 import { PDFDocument } from 'pdf-lib';
 // import { createCanvas } from 'canvas';
-import { Canvas as createCanvas } from 'skia-canvas';
+// import { Canvas as createCanvas } from 'skia-canvas';
+import { createCanvas } from '@napi-rs/canvas';
+
 export interface PDFConversionResult {
   imageBuffer: Buffer;
   mimeType: string;

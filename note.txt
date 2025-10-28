@@ -7,3 +7,5 @@ import { createCanvas } from 'canvas';
 
 // الجديد
 import { Canvas as createCanvas } from 'skia-canvas';
+
+slove 2
