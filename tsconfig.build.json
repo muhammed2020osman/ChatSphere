@@ -6,7 +6,7 @@
       "module": "CommonJS",
       "target": "ES2020",
       "declaration": false,
-      "moduleResolution": "node",
+      "moduleResolution": "bundler",
       "allowImportingTsExtensions": false
     },
     "include": ["server/**/*", "shared/**/*"],
