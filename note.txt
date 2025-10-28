@@ -23,3 +23,8 @@ pm2 start dist/index.js --name "chat"
 pm2 save
 pm2 startup
 
+ن سيعمل مشروعك بشكل مستقر على VPS.
+
+يمكنك مراقبة اللوجات: pm2 logs chat
+
+إعادة التشغيل: pm2 restart chat
