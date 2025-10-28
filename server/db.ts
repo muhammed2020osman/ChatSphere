@@ -31,7 +31,7 @@ const config = {
   multipleStatements: false,
   charset: 'utf8mb4',
   // SSL configuration - disable for development
-  ssl: false,
+  // ssl: false, // Remove invalid ssl option
   // Add connection timeout
   connectTimeout: 30000,
   // Add acquire timeout
@@ -57,7 +57,7 @@ const config = {
   // Force protocol 41 (MySQL 4.1+)
   protocol41: true,
   // Additional authentication options
-  authSwitchHandler: (data, cb) => {
+  authSwitchHandler: (data: any, cb: any) => {
     if (data.pluginName === 'mysql_native_password') {
       const password = Buffer.from(url.password);
       const token = Buffer.from(data.authPluginData.slice(0, 20));
@@ -195,7 +195,7 @@ export async function initializeDatabase() {
         console.log(`✅ Disciplines already exist (${count} records)`);
       }
     } catch (error) {
-      console.log('⚠️ Error adding disciplines:', error.message);
+      console.log('⚠️ Error adding disciplines:', error instanceof Error ? error.message : 'Unknown error');
     }
     
     // Add initial floors if they don't exist
@@ -218,14 +218,14 @@ export async function initializeDatabase() {
         console.log(`✅ Floors already exist (${count} records)`);
       }
     } catch (error) {
-      console.log('⚠️ Error adding floors:', error.message);
+      console.log('⚠️ Error adding floors:', error instanceof Error ? error.message : 'Unknown error');
     }
     
     connection.release();
     console.log('✅ Database initialization completed');
     
   } catch (error) {
-    console.error('❌ Database initialization failed:', error.message);
+    console.error('❌ Database initialization failed:', error instanceof Error ? error.message : 'Unknown error');
     throw error;
   }
 }

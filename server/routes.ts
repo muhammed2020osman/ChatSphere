@@ -105,7 +105,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('Request URL:', req.url);
     console.log('Request params:', req.params);
     try {
-      const filePath = req.params[0];
+      const filePath = (req.params as any)[0] as string;
       const fullPath = path.join(process.cwd(), 'uploads', filePath);
       console.log('File path:', filePath);
       console.log('Full path:', fullPath);
@@ -265,7 +265,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Only broadcast public channels to all clients
       // Private channels are only visible to members
-      if (!channel.isPrivate || channel.isPrivate === false) {
+      if (!channel.isPrivate) {
         broadcastToAll({ type: 'channel_created', channel });
       } else {
         // Private channel - only notify the creator
@@ -354,6 +354,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Verify user is a member of the channel
+      if (!data.channelId) {
+        return res.status(400).json({ message: "Channel ID is required" });
+      }
+      
       const channel = await storage.getChannel(data.channelId);
       if (!channel) {
         return res.status(404).json({ message: "Channel not found" });
@@ -410,11 +414,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Broadcast new message only to channel members
-      broadcastToChannel(message.channelId, {
-        type: 'new_message',
-        channelId: message.channelId,
-        message: messageWithUser,
-      });
+      if (message.channelId) {
+        broadcastToChannel(message.channelId, {
+          type: 'new_message',
+          channelId: message.channelId,
+          message: messageWithUser,
+        });
+      }
       
       res.json(message);
     } catch (error) {
@@ -811,6 +817,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify user has access to the channel
+      if (!message.channelId) {
+        return res.status(400).json({ message: "Message has no channel ID" });
+      }
+      
       const channel = await storage.getChannel(message.channelId);
       if (!channel) {
         return res.status(404).json({ message: "Channel not found" });
@@ -856,6 +866,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify user has access to the channel
+      if (!message.channelId) {
+        return res.status(400).json({ message: "Message has no channel ID" });
+      }
+      
       const channel = await storage.getChannel(message.channelId);
       if (!channel) {
         return res.json({ isStarred: false });
@@ -902,7 +916,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.send(buffer);
     } catch (error) {
       console.error("Error serving file:", error);
-      if (error.message.includes('not found')) {
+      if (error instanceof Error && error.message.includes('not found')) {
         return res.sendStatus(404);
       }
       return res.sendStatus(500);

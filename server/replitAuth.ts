@@ -7,6 +7,16 @@ import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 
+// Extend session types
+declare module "express-session" {
+  interface SessionData {
+    passport?: {
+      user?: any;
+    };
+    user?: any;
+  }
+}
+
 if (!process.env.REPLIT_DOMAINS) {
   console.warn("REPLIT_DOMAINS not set, using local development mode");
 }
@@ -24,7 +34,7 @@ const getOidcConfig = memoize(
         issuer: { issuer: "https://replit.com/oidc" },
         client_id: "mock-client-id",
         client_secret: "mock-client-secret"
-      };
+      } as any; // Type assertion for mock config
     }
   },
   { maxAge: 3600 * 1000 }
