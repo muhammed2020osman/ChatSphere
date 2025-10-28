@@ -3,10 +3,11 @@
     "compilerOptions": {
       "noEmit": false,
       "outDir": "dist",
-      "module": "Node16",
+      "module": "ESNext",
       "target": "ES2020",
       "declaration": false,
-      "moduleResolution": "node16"
+      "moduleResolution": "bundler",
+      "allowImportingTsExtensions": false
     },
     "include": ["server/**/*", "shared/**/*"],
     "exclude": ["shared/schema-pg.ts"]
