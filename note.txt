@@ -20,7 +20,7 @@ npx tsc -p tsconfig.build.json
 
 bash
 Copy code
-pm2 start dist/index.js --name "chat"
+pm2 start dist/server/index.js --name "chat"
 pm2 save
 pm2 startup
 
