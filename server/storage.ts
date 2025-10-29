@@ -644,9 +644,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createLayer(layerData: any): Promise<any> {
-    await db.insert(layers).values(layerData);
-    const result = await db.select().from(layers).where(eq(layers.id, layerData.id)).limit(1);
-    return result[0];
+    // Generate a UUID for the layer
+    const layerId = randomUUID();
+    const layerWithId = {
+      ...layerData,
+      id: layerId,
+    };
+    
+    console.log('Creating layer with data:', layerWithId);
+    
+    try {
+      await db.insert(layers).values(layerWithId);
+      const result = await db.select().from(layers).where(eq(layers.id, layerId)).limit(1);
+      console.log('Layer created successfully:', result[0]);
+      return result[0];
+    } catch (error) {
+      console.error('Error creating layer:', error);
+      throw error;
+    }
   }
 
   async updateLayerVisibility(layerId: string, visible: boolean): Promise<any> {

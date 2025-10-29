@@ -1675,11 +1675,21 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
 
   app.post('/api/layers', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      console.log('POST /api/layers - req.user:', req.user);
+      console.log('POST /api/layers - req.body:', req.body);
+      
+      const userId = req.user?.claims?.sub;
+      if (!userId) {
+        console.error('No user ID found in request');
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+      
       const layerData = {
         ...req.body,
         createdBy: userId,
       };
+      
+      console.log('Creating layer with data:', layerData);
       const layer = await storage.createLayer(layerData);
       res.json(layer);
     } catch (error) {

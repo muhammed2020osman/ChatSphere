@@ -113,12 +113,13 @@ export default function SheetViewer() {
   const [currentDrawing, setCurrentDrawing] = useState<DrawingShape | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
 
   // Fetch drawing data
   const { data: drawing, isLoading: drawingLoading } = useQuery<DrawingWithDetails>({
-    queryKey: ['/api/drawings', id],
+    queryKey: [`/api/drawings/${id}`],
     enabled: !!id,
   });
 
@@ -325,10 +326,53 @@ export default function SheetViewer() {
       return;
     }
     
-    // TODO: Implement other drawing tools (line, rectangle, circle, text)
-    // For line/rectangle/circle: set start point and wait for mouse move/up
-    // For text: show input dialog
-  }, [activeTool, panPosition, zoom, drawingSettings]);
+    // Drawing tools: Line, Rectangle, Circle
+    if ((activeTool === "line" || activeTool === "rectangle" || activeTool === "circle") && imageRef.current) {
+      const rect = imageRef.current.getBoundingClientRect();
+      const scale = zoom / 100;
+      const x = (e.clientX - rect.left) / scale;
+      const y = (e.clientY - rect.top) / scale;
+      
+      setCurrentDrawing({
+        id: `shape-${Date.now()}`,
+        type: activeTool as "line" | "rectangle" | "circle",
+        color: drawingSettings.color,
+        strokeWidth: drawingSettings.strokeWidth,
+        start: { x, y },
+        end: { x, y },
+      });
+      setIsDrawing(true);
+      return;
+    }
+    
+    // Text tool: show input dialog
+    if (activeTool === "text" && imageRef.current) {
+      const rect = imageRef.current.getBoundingClientRect();
+      const scale = zoom / 100;
+      const x = (e.clientX - rect.left) / scale;
+      const y = (e.clientY - rect.top) / scale;
+      
+      const text = prompt("Enter text:");
+      if (text && text.trim()) {
+        const newDrawing: DrawingShape = {
+          id: `shape-${Date.now()}`,
+          type: "text",
+          color: drawingSettings.color,
+          strokeWidth: drawingSettings.strokeWidth,
+          position: { x, y },
+          text: text.trim(),
+        };
+        setDrawings([...drawings, newDrawing]);
+      }
+      return;
+    }
+    
+    // Eraser tool: remove drawings
+    if (activeTool === "eraser") {
+      // This will be handled in the SVG click handler
+      return;
+    }
+  }, [activeTool, panPosition, zoom, drawingSettings, drawings]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (isPanning && activeTool === "pan") {
@@ -364,7 +408,19 @@ export default function SheetViewer() {
       return;
     }
     
-    // TODO: Implement other drawing tools mouse move logic
+    // Drawing tools: Line, Rectangle, Circle (update end point)
+    if (isDrawing && (activeTool === "line" || activeTool === "rectangle" || activeTool === "circle") && imageRef.current && currentDrawing) {
+      const rect = imageRef.current.getBoundingClientRect();
+      const scale = zoom / 100;
+      const x = (e.clientX - rect.left) / scale;
+      const y = (e.clientY - rect.top) / scale;
+      
+      setCurrentDrawing({
+        ...currentDrawing,
+        end: { x, y },
+      });
+      return;
+    }
   }, [isPanning, activeTool, panStart, isDrawing, currentDrawing, zoom]);
 
   const handleMouseUp = useCallback(() => {
@@ -372,8 +428,20 @@ export default function SheetViewer() {
     
     // Drawing tools: Finish drawing
     if (isDrawing && currentDrawing) {
-      // Add the completed drawing to drawings array
-      setDrawings([...drawings, currentDrawing]);
+      // For line, rectangle, circle: only add if there's a meaningful end point
+      if (currentDrawing.type === "line" || currentDrawing.type === "rectangle" || currentDrawing.type === "circle") {
+        if (currentDrawing.start && currentDrawing.end) {
+          // Check if the shape has meaningful dimensions (not just a point)
+          const dx = Math.abs(currentDrawing.end.x - currentDrawing.start.x);
+          const dy = Math.abs(currentDrawing.end.y - currentDrawing.start.y);
+          if (dx > 2 || dy > 2) { // Minimum 2px size
+            setDrawings([...drawings, currentDrawing]);
+          }
+        }
+      } else {
+        // For pen tool: add the completed drawing
+        setDrawings([...drawings, currentDrawing]);
+      }
       setCurrentDrawing(null);
       setIsDrawing(false);
     }
@@ -382,6 +450,18 @@ export default function SheetViewer() {
   const handleMouseLeave = useCallback(() => {
     setShowCrosshair(false);
   }, []);
+
+  // Eraser tool: handle clicking on drawings to remove them
+  const handleDrawingClick = useCallback((e: React.MouseEvent, drawingId: string) => {
+    if (activeTool === "eraser") {
+      e.stopPropagation();
+      setDrawings(prev => prev.filter(d => d.id !== drawingId));
+      toast({
+        title: "Drawing Removed",
+        description: "Drawing has been erased",
+      });
+    }
+  }, [activeTool, toast]);
 
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (activeTool !== "pin" || tempPin) return;
@@ -586,6 +666,16 @@ export default function SheetViewer() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleZoomIn, handleZoomOut]);
 
+  // Fullscreen change event listener
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
+
   const handleToolClick = (toolId: Tool) => {
     if (toolId === "zoom-in") {
       handleZoomIn();
@@ -630,17 +720,18 @@ export default function SheetViewer() {
   const saveLayerMutation = useMutation({
     mutationFn: async (layerData: {
       drawingId: string;
-      disciplineId: string;
       name: string;
       type: string;
       data: DrawingShape[];
     }) => {
+      console.log('API request to /api/layers with data:', layerData);
       return await apiRequest('/api/layers', {
         method: 'POST',
         body: layerData,
       });
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('Layer saved successfully:', data);
       queryClient.invalidateQueries({ queryKey: [`/api/drawings/${id}/layers`] });
       toast({
         title: "Layer saved successfully",
@@ -650,6 +741,7 @@ export default function SheetViewer() {
       setDrawings([]);
     },
     onError: (error: any) => {
+      console.error('Failed to save layer:', error);
       toast({
         title: "Failed to save layer",
         description: error.message || "An error occurred",
@@ -659,7 +751,21 @@ export default function SheetViewer() {
   });
 
   const handleSaveLayer = useCallback(() => {
-    if (drawings.length === 0 ||!disciplines.length) {
+    if (drawings.length === 0) {
+      toast({
+        title: "No drawings to save",
+        description: "Please draw something before saving",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!disciplines.length) {
+      toast({
+        title: "Cannot save layer",
+        description: "No disciplines available",
+        variant: "destructive",
+      });
       return;
     }
     
@@ -675,14 +781,76 @@ export default function SheetViewer() {
       return;
     }
     
+    console.log('Saving layer with data:', {
+      drawingId: plan.id,
+      name: `Drawing Layer ${new Date().toLocaleString()}`,
+      type: "drawing",
+      data: drawings,
+    });
+    console.log('Plan object:', plan);
+    console.log('Drawing object:', drawing);
+    console.log('ID from params:', id);
+    
     saveLayerMutation.mutate({
       drawingId: plan.id,
-      disciplineId,
       name: `Drawing Layer ${new Date().toLocaleString()}`,
       type: "drawing",
       data: drawings,
     });
   }, [drawings, plan.id, disciplines, saveLayerMutation, toast]);
+
+  // Download handler
+  const handleDownload = useCallback(() => {
+    if (!selectedRevision?.fileUrl) {
+      toast({
+        title: "Download Error",
+        description: "No file available for download",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const link = document.createElement('a');
+      link.href = selectedRevision.fileUrl;
+      link.download = selectedRevision.fileName || `drawing-${plan.sheetNo}-rev-${selectedRevision.revisionNo}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast({
+        title: "Download Started",
+        description: "File download has started",
+      });
+    } catch (error) {
+      console.error("Download error:", error);
+      toast({
+        title: "Download Error",
+        description: "Failed to start download",
+        variant: "destructive",
+      });
+    }
+  }, [selectedRevision, plan.sheetNo, toast]);
+
+  // Fullscreen handler
+  const handleFullscreen = useCallback(async () => {
+    if (!canvasRef.current) return;
+
+    try {
+      if (!isFullscreen) {
+        await canvasRef.current.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch (error) {
+      console.error("Fullscreen error:", error);
+      toast({
+        title: "Fullscreen Error",
+        description: "Failed to toggle fullscreen mode",
+        variant: "destructive",
+      });
+    }
+  }, [isFullscreen, toast]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background">
@@ -720,13 +888,24 @@ export default function SheetViewer() {
               <span>Save Layer ({drawings.length})</span>
             </Button>
           )}
-          <Button variant="outline" size="sm" className="gap-2" data-testid="button-download-plan">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="gap-2" 
+            onClick={handleDownload}
+            data-testid="button-download-plan"
+          >
             <Download className="h-4 w-4" />
             <span>Download</span>
           </Button>
-          <Button variant="outline" size="sm" className="gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="gap-2"
+            onClick={handleFullscreen}
+          >
             <Maximize2 className="h-4 w-4" />
-            <span>Fullscreen</span>
+            <span>{isFullscreen ? "Exit Fullscreen" : "Fullscreen"}</span>
           </Button>
         </div>
       </div>
@@ -951,7 +1130,11 @@ export default function SheetViewer() {
               handleMouseLeave();
             }}
             style={{ 
-              cursor: displayMode === 'image' && activeTool === "pan" ? (isPanning ? "grabbing" : "grab") : displayMode === 'image' && activeTool === "pin" ? "none" : activeTool === "pin" ? "crosshair" : "default",
+              cursor: displayMode === 'image' && activeTool === "pan" ? (isPanning ? "grabbing" : "grab") : 
+                     displayMode === 'image' && activeTool === "pin" ? "none" : 
+                     activeTool === "pin" ? "crosshair" : 
+                     activeTool === "eraser" ? "crosshair" : 
+                     "default",
               userSelect: "none",
             }}
             data-testid="canvas-viewer"
@@ -1105,6 +1288,9 @@ export default function SheetViewer() {
                         fill="none"
                         strokeLinecap="round"
                         strokeLinejoin="round"
+                        onClick={(e) => handleDrawingClick(e, shape.id)}
+                        className={activeTool === "eraser" ? "cursor-pointer hover:opacity-70" : ""}
+                        style={{ pointerEvents: activeTool === "eraser" ? "auto" : "none" }}
                       />
                     );
                   }
@@ -1119,6 +1305,9 @@ export default function SheetViewer() {
                         stroke={shape.color}
                         strokeWidth={shape.strokeWidth}
                         strokeLinecap="round"
+                        onClick={(e) => handleDrawingClick(e, shape.id)}
+                        className={activeTool === "eraser" ? "cursor-pointer hover:opacity-70" : ""}
+                        style={{ pointerEvents: activeTool === "eraser" ? "auto" : "none" }}
                       />
                     );
                   }
@@ -1135,6 +1324,9 @@ export default function SheetViewer() {
                         stroke={shape.color}
                         strokeWidth={shape.strokeWidth}
                         fill="none"
+                        onClick={(e) => handleDrawingClick(e, shape.id)}
+                        className={activeTool === "eraser" ? "cursor-pointer hover:opacity-70" : ""}
+                        style={{ pointerEvents: activeTool === "eraser" ? "auto" : "none" }}
                       />
                     );
                   }
@@ -1152,6 +1344,9 @@ export default function SheetViewer() {
                         stroke={shape.color}
                         strokeWidth={shape.strokeWidth}
                         fill="none"
+                        onClick={(e) => handleDrawingClick(e, shape.id)}
+                        className={activeTool === "eraser" ? "cursor-pointer hover:opacity-70" : ""}
+                        style={{ pointerEvents: activeTool === "eraser" ? "auto" : "none" }}
                       />
                     );
                   }
@@ -1164,6 +1359,9 @@ export default function SheetViewer() {
                         fill={shape.color}
                         fontSize={shape.strokeWidth * 6}
                         fontFamily="Arial, sans-serif"
+                        onClick={(e) => handleDrawingClick(e, shape.id)}
+                        className={activeTool === "eraser" ? "cursor-pointer hover:opacity-70" : ""}
+                        style={{ pointerEvents: activeTool === "eraser" ? "auto" : "none" }}
                       >
                         {shape.text}
                       </text>
