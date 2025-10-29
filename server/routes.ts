@@ -545,6 +545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcastToChannel(message.channelId, {
         type: 'new_reaction',
         messageId: data.messageId,
+        channelId: message.channelId,
         reaction: reactionWithUser,
       });
 
@@ -590,6 +591,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcastToChannel(message.channelId, {
         type: 'remove_reaction',
         messageId,
+        channelId: message.channelId,
         userId,
         icon,
       });

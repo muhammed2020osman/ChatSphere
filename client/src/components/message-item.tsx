@@ -145,7 +145,7 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
         title: "Success",
         description: "Message updated successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/channels", channelId, "messages"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/channels/${channelId}/messages`] });
     },
     onError: (error: Error) => {
       toast({
@@ -167,7 +167,7 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
         title: "Success",
         description: "Message deleted successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/channels", channelId, "messages"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/channels/${channelId}/messages`] });
     },
     onError: (error: Error) => {
       toast({

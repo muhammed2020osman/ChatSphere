@@ -69,7 +69,7 @@ export function MessageComposer({
     },
     onSuccess: () => {
       if (channelId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/channels", channelId, "messages"] });
+        queryClient.invalidateQueries({ queryKey: [`/api/channels/${channelId}/messages`] });
       } else if (recipientId) {
         queryClient.invalidateQueries({ queryKey: ["/api/direct-messages", recipientId] });
       }

@@ -34,7 +34,7 @@ export function useWebSocket() {
           case "new_message":
             // Invalidate channel messages query
             queryClient.invalidateQueries({
-              queryKey: ["/api/channels", data.channelId, "messages"],
+              queryKey: [`/api/channels/${data.channelId}/messages`],
             });
             break;
 
@@ -56,6 +56,54 @@ export function useWebSocket() {
           case "user_status":
             // Invalidate users list to update online status
             queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+            break;
+
+          case "new_reaction":
+            // Invalidate reactions for the message
+            if (data.messageId) {
+              queryClient.invalidateQueries({
+                queryKey: ["/api/messages", data.messageId, "reactions"],
+              });
+              // Also invalidate channel messages to update UI
+              if (data.channelId) {
+                queryClient.invalidateQueries({
+                  queryKey: [`/api/channels/${data.channelId}/messages`],
+                });
+              }
+            }
+            break;
+
+          case "remove_reaction":
+            // Invalidate reactions for the message
+            if (data.messageId) {
+              queryClient.invalidateQueries({
+                queryKey: ["/api/messages", data.messageId, "reactions"],
+              });
+              // Also invalidate channel messages to update UI
+              if (data.channelId) {
+                queryClient.invalidateQueries({
+                  queryKey: [`/api/channels/${data.channelId}/messages`],
+                });
+              }
+            }
+            break;
+
+          case "message_updated":
+            // Invalidate channel messages to show updated content
+            if (data.message && data.message.channelId) {
+              queryClient.invalidateQueries({
+                queryKey: [`/api/channels/${data.message.channelId}/messages`],
+              });
+            }
+            break;
+
+          case "message_deleted":
+            // Invalidate channel messages to remove deleted message
+            if (data.channelId) {
+              queryClient.invalidateQueries({
+                queryKey: [`/api/channels/${data.channelId}/messages`],
+              });
+            }
             break;
 
           case "typing":
