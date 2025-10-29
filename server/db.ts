@@ -264,7 +264,8 @@ export async function initializeDatabase() {
         user_id VARCHAR(191) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (message_id) REFERENCES messages(id),
-        FOREIGN KEY (user_id) REFERENCES users(id)
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        UNIQUE KEY unique_message_user (message_id, user_id)
       )
     `);
     

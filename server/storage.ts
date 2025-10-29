@@ -460,14 +460,27 @@ export class DatabaseStorage implements IStorage {
 
   // Starred messages operations
   async starMessage(messageId: string, userId: string): Promise<any> {
-    await db
-      .insert(starredMessages)
-      .values({ messageId, userId });
-    
-    const result = await db.select().from(starredMessages)
-      .where(and(eq(starredMessages.messageId, messageId), eq(starredMessages.userId, userId)))
-      .limit(1);
-    return result[0];
+    try {
+      // Try to insert new star
+      await db
+        .insert(starredMessages)
+        .values({ messageId, userId });
+      
+      // Get the inserted record
+      const result = await db.select().from(starredMessages)
+        .where(and(eq(starredMessages.messageId, messageId), eq(starredMessages.userId, userId)))
+        .limit(1);
+      return result[0];
+    } catch (error: any) {
+      // If duplicate key error, return existing record
+      if (error.code === 'ER_DUP_ENTRY' || error.code === 'ER_DUP_KEYNAME') {
+        const existing = await db.select().from(starredMessages)
+          .where(and(eq(starredMessages.messageId, messageId), eq(starredMessages.userId, userId)))
+          .limit(1);
+        return existing[0];
+      }
+      throw error;
+    }
   }
 
   async unstarMessage(messageId: string, userId: string): Promise<void> {

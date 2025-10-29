@@ -835,11 +835,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      const starred = await storage.starMessage(id, userId);
-      res.json(starred);
+      // Check if already starred
+      const isStarred = await storage.isMessageStarred(id, userId);
+      
+      if (isStarred) {
+        // If already starred, unstar it
+        await storage.unstarMessage(id, userId);
+        res.json({ isStarred: false, message: "Message unstarred" });
+      } else {
+        // If not starred, star it
+        const starred = await storage.starMessage(id, userId);
+        res.json({ isStarred: true, ...starred });
+      }
     } catch (error) {
-      console.error("Error starring message:", error);
-      res.status(500).json({ message: "Failed to star message" });
+      console.error("Error toggling star:", error);
+      res.status(500).json({ message: "Failed to toggle star" });
     }
   });
 
