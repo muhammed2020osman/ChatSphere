@@ -1,3 +1,13 @@
+ login vps only use
+ ssh3
+ pass:Zy8pOuw,?gfd
+
+ssh root@72.61.96.90
+aPanel Internet Address: https://72.61.96.90:34627/1c8f2cf7
+aaPanel Internal Address: https://72.61.96.90:34627/1c8f2cf7
+username: kmzwyz1l
+password: d88ac464
+ 
 cd /www/wwwroot/ChatSphere
 git stash
 git pull origin main --rebase
@@ -20,12 +30,35 @@ npx tsc -p tsconfig.build.json
 
 bash
 Copy code
-pm2 start dist/server/index.js --name "chat"
+pm2 start dist/server/index.js --name "chat" -f
 pm2 save
 pm2 startup
+pm2 delete chat
 
-ن سيعمل مشروعك بشكل مستقر على VPS.
+ PORT=5000 pm2 start dist/server/index.js --name "chat" -f
 
 يمكنك مراقبة اللوجات: pm2 logs chat
 
 إعادة التشغيل: pm2 restart chat
+
+==========================================
+تحديث المشروع بعد git push:
+==========================================
+
+بعد رفع التحديثات على Git، نفذ الأوامر التالية على السيرفر:
+
+cd /www/wwwroot/ChatSphere
+git stash
+git pull origin main --rebase
+pnpm install
+npm run build
+pm2 restart chat
+pm2 save
+
+أو استخدام السكريبت:
+ssh root@72.61.96.90 'bash -s' < deploy.sh
+
+للتحقق من أن كل شيء يعمل:
+pm2 logs chat --lines 20
+curl http://localhost:5000
+curl http://souglink.com
