@@ -12,7 +12,16 @@
     "build1": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "db:verify": "tsx scripts/verify-db.ts",
+    "db:migrate": "tsx scripts/migrate-db.ts",
+    "db:fix": "tsx scripts/fix-database.ts",
+    "db:fix-names": "tsx scripts/fix-table-names.ts",
+    "db:fix-final": "tsx scripts/fix-final-issues.ts",
+    "db:fix-all": "tsx scripts/fix-all-issues.ts",
+    "test:messages": "tsx scripts/test-messages.ts",
+    "add:message": "tsx scripts/add-test-message.ts",
+    "test:api": "tsx scripts/test-api-message.ts"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.17.2",

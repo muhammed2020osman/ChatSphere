@@ -20,7 +20,7 @@ export function ChannelView() {
   });
 
   const { data: messages, isLoading: messagesLoading } = useQuery<MessageWithUser[]>({
-    queryKey: ["/api/channels", id, "messages"],
+    queryKey: [`/api/channels/${id}/messages`],
     enabled: !!id,
     refetchInterval: 3000,
   });
