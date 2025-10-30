@@ -27,27 +27,42 @@ export type AuthUser = {
 };
 
 export async function findAuthUserByEmail(email: string): Promise<AuthUser | null> {
-  const [rows] = await pool.query<mysql.RowDataPacket[]>(
-    'SELECT id, email, name, password_hash FROM auth_users WHERE email = ? LIMIT 1',
-    [email]
-  );
-  return rows[0] ? (rows[0] as unknown as AuthUser) : null;
+  try {
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      'SELECT id, email, name, password_hash FROM auth_users WHERE email = ? LIMIT 1',
+      [email]
+    );
+    return rows[0] ? (rows[0] as unknown as AuthUser) : null;
+  } catch (e: any) {
+    (e as any).code = (e as any)?.code || 'DB_UNAVAILABLE';
+    throw e;
+  }
 }
 
 export async function createAuthUser(params: { email: string; passwordHash: string; name: string; }): Promise<AuthUser> {
-  const [result] = await pool.execute<mysql.ResultSetHeader>(
-    'INSERT INTO auth_users (email, password_hash, name) VALUES (?, ?, ?)',
-    [params.email, params.passwordHash, params.name]
-  );
-  return { id: result.insertId, email: params.email, name: params.name };
+  try {
+    const [result] = await pool.execute<mysql.ResultSetHeader>(
+      'INSERT INTO auth_users (email, password_hash, name) VALUES (?, ?, ?)',
+      [params.email, params.passwordHash, params.name]
+    );
+    return { id: result.insertId, email: params.email, name: params.name };
+  } catch (e: any) {
+    (e as any).code = (e as any)?.code || 'DB_UNAVAILABLE';
+    throw e;
+  }
 }
 
 export async function findAuthUserById(id: number): Promise<AuthUser | null> {
-  const [rows] = await pool.query<mysql.RowDataPacket[]>(
-    'SELECT id, email, name FROM auth_users WHERE id = ? LIMIT 1',
-    [id]
-  );
-  return rows[0] ? (rows[0] as unknown as AuthUser) : null;
+  try {
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      'SELECT id, email, name FROM auth_users WHERE id = ? LIMIT 1',
+      [id]
+    );
+    return rows[0] ? (rows[0] as unknown as AuthUser) : null;
+  } catch (e: any) {
+    (e as any).code = (e as any)?.code || 'DB_UNAVAILABLE';
+    throw e;
+  }
 }
 
 

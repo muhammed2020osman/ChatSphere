@@ -19,10 +19,7 @@ export default function LoginPage() {
   useEffect(() => {
     // Ensure we don't rely on stale user cache on this page
     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-    // Proactively clear any existing session so user must enter credentials
-    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).finally(() => {
-      queryClient.setQueryData(["/api/auth/user"], null);
-    });
+    // Do NOT auto-logout here to avoid logging the user out after a successful login
   }, []);
 
   const { login } = useAuthContext();
