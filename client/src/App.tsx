@@ -1,4 +1,5 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
+import { useEffect } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -8,6 +9,7 @@ import { AccessCodeGate } from "@/components/access-code-gate";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
+import LoginPage from "@/pages/login";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
 import IngestPlansPage from "@/pages/ingest-plans";
@@ -19,6 +21,16 @@ function Router() {
   // Keep auth state available for components, but don't gate route definitions
   const { isAuthenticated, isLoading } = useAuth();
 
+  function Protected({ component: Comp }: { component: React.ComponentType<any> }) {
+    const [, navigate] = useLocation();
+    useEffect(() => {
+      if (!isLoading && !isAuthenticated) navigate("/login");
+    }, [isLoading, isAuthenticated, navigate]);
+    if (isLoading) return null;
+    if (!isAuthenticated) return null;
+    return <Comp />;
+  }
+
   return (
     <Switch>
       {/* Public routes (only need access code) */}
@@ -28,15 +40,18 @@ function Router() {
       <Route path="/ingest-plans" component={IngestPlansPage} />
       <Route path="/tickets" component={TicketsHub} />
       
-      {/* App routes always mounted; Home internally handles loading/auth UI */}
-      <Route path="/" component={Home} />
-      <Route path="/mentions" component={Home} />
-      <Route path="/threads" component={Home} />
-      <Route path="/starred" component={Home} />
-      <Route path="/drawings" component={Home} />
-      <Route path="/channel/:id" component={Home} />
-      <Route path="/dm/:userId" component={Home} />
-      <Route path="/settings" component={Home} />
+      {/* Login route */}
+      <Route path="/login" component={LoginPage} />
+
+      {/* Protected app routes */}
+      <Route path="/" component={() => <Protected component={Home} />} />
+      <Route path="/mentions" component={() => <Protected component={Home} />} />
+      <Route path="/threads" component={() => <Protected component={Home} />} />
+      <Route path="/starred" component={() => <Protected component={Home} />} />
+      <Route path="/drawings" component={() => <Protected component={Home} />} />
+      <Route path="/channel/:id" component={() => <Protected component={Home} />} />
+      <Route path="/dm/:userId" component={() => <Protected component={Home} />} />
+      <Route path="/settings" component={() => <Protected component={Home} />} />
       <Route path="/members" component={Home} />
 
       <Route component={NotFound} />

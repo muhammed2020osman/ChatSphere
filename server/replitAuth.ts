@@ -167,10 +167,8 @@ export async function setupAuth(app: Express) {
     verified(null, user);
   };
 
-  // Skip OIDC setup for local development
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Skipping OIDC setup for local development');
-  } else {
+  // Only configure OIDC in non-development environments
+  if (process.env.NODE_ENV !== 'development') {
     const domains = process.env.REPLIT_DOMAINS?.split(",") || ["localhost:5000"];
     for (const domain of domains) {
       const cleanDomain = domain.trim();
@@ -191,76 +189,15 @@ export async function setupAuth(app: Express) {
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   app.get("/api/login", async (req, res, next) => {
-    // For local development, create a mock user
-    if (process.env.NODE_ENV === 'development' && req.hostname === 'localhost') {
-      try {
-        // Create or get the development user
-        let devUser;
-        try {
-          devUser = await storage.upsertUser({
-            id: 'dev-user-123',
-            email: 'dev@localhost.com',
-            firstName: 'Development',
-            lastName: 'User',
-            profileImageUrl: null,
-            status: 'active',
-            role: 'admin'
-          });
-        } catch (error) {
-          console.error('Error creating dev user:', error);
-          // Try to get existing user
-          devUser = await storage.getUserById('dev-user-123');
-          if (!devUser) {
-            throw error;
-          }
-        }
-        
-        const mockUser = {
-          claims: {
-            sub: devUser.id,
-            email: devUser.email,
-            name: `${devUser.firstName} ${devUser.lastName}`,
-            profile_image_url: devUser.profileImageUrl
-          },
-          expires_at: Math.floor(Date.now() / 1000) + (24 * 60 * 60), // 24 hours
-          refresh_token: 'dev-refresh-token'
-        };
-        
-        // Set user in session manually
-        req.session.passport = { user: mockUser };
-        req.user = mockUser;
-        req.session.user = mockUser;
-        
-        // Save session and set cookie
-        req.session.save((err) => {
-          if (err) {
-            console.error('Session save error:', err);
-            return res.status(500).json({ message: 'Login failed' });
-          }
-          
-          console.log('User logged in successfully:', mockUser.claims);
-          console.log('Session ID:', req.sessionID);
-          
-          // Set session cookie
-          res.cookie('connect.sid', req.sessionID, {
-            httpOnly: true,
-            secure: false,
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-          });
-          
-          // Redirect to the main app instead of landing page
-          res.redirect('/');
-        });
-      } catch (error) {
-        console.error('Error creating dev user:', error);
-        res.status(500).json({ message: 'Login failed' });
-      }
-    } else {
-      passport.authenticate(`replitauth:${req.hostname}`, {
+    // Delegate to OIDC when configured; otherwise require local auth routes
+    if (process.env.NODE_ENV !== 'development') {
+      return passport.authenticate(`replitauth:${req.hostname}`, {
         prompt: "login consent",
         scope: ["openid", "email", "profile", "offline_access"],
       })(req, res, next);
     }
+    // In development, do not provide mock login; instruct client to use email/password
+    return res.status(401).json({ message: 'Use /api/auth/login to authenticate' });
   });
 
   app.get("/api/callback", (req, res, next) => {
@@ -271,94 +208,48 @@ export async function setupAuth(app: Express) {
   });
 
   app.get("/api/logout", (req, res) => {
-    req.logout(() => {
-      res.redirect(
-        client.buildEndSessionUrl(config, {
-          client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
-        }).href
-      );
+    // Destroy local session for both dev and production
+    req.session.destroy(() => {
+      res.clearCookie('connect.sid');
+      res.status(204).end();
     });
   });
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  // Try to get user from session if not in req.user
-  let user = req.user as any;
-  if (!user && req.session?.user) {
-    user = req.session.user;
-    req.user = user;
-  }
-
-  // For development, create a mock user if session exists
-  if (!user && req.sessionID) {
-    user = {
-      claims: {
-        sub: 'dev-user-123',
-        email: 'dev@localhost.com',
-        name: 'Development User',
-        profile_image_url: null
-      },
-      expires_at: Math.floor(Date.now() / 1000) + (24 * 60 * 60),
-      refresh_token: 'dev-refresh-token'
-    };
-    req.user = user;
-
-    // Ensure the dev user exists in the database to satisfy FK constraints
+  // Prefer local email/password session
+  if (req.session?.userId) {
     try {
-      await storage.upsertUser({
-        id: 'dev-user-123',
-        email: 'dev@localhost.com',
-        firstName: 'Development',
-        lastName: 'User',
-        profileImageUrl: null,
-        status: 'active',
-        role: 'admin'
-      });
-    } catch (e) {
-      // Best-effort; if it fails but the user exists already, continue
+      // Map to a claims-like shape expected by downstream code
+      req.user = {
+        claims: {
+          sub: `auth:${req.session.userId}`,
+          email: undefined,
+          name: undefined,
+          profile_image_url: null,
+        },
+      } as any;
+      return next();
+    } catch {
+      return res.status(401).json({ message: 'Unauthorized' });
     }
   }
 
-  console.log('Auth check:', {
-    isAuthenticated: req.isAuthenticated(),
-    hasUser: !!user,
-    userClaims: user?.claims,
-    sessionID: req.sessionID,
-    sessionUser: !!req.session?.user
-  });
-
-  if (!user || !user.claims) {
-    return res.status(401).json({ message: "Unauthorized" });
+  // Otherwise, fall back to OIDC session (if configured)
+  const user = req.user as any;
+  if (user?.claims && user.expires_at) {
+    const now = Math.floor(Date.now() / 1000);
+    if (now <= user.expires_at) return next();
+    const refreshToken = user.refresh_token;
+    if (!refreshToken) return res.status(401).json({ message: 'Unauthorized' });
+    try {
+      const cfg = await getOidcConfig();
+      const tokenResponse = await client.refreshTokenGrant(cfg, refreshToken);
+      updateUserSession(user, tokenResponse);
+      return next();
+    } catch {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
   }
-
-  // For development user, skip token expiration check
-  if (user.claims.sub === 'dev-user-123') {
-    return next();
-  }
-
-  if (!user.expires_at) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  const now = Math.floor(Date.now() / 1000);
-  if (now <= user.expires_at) {
-    return next();
-  }
-
-  const refreshToken = user.refresh_token;
-  if (!refreshToken) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-
-  try {
-    const config = await getOidcConfig();
-    const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
-    updateUserSession(user, tokenResponse);
-    return next();
-  } catch (error) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
+  return res.status(401).json({ message: 'Unauthorized' });
 };

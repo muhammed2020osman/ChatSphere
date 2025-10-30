@@ -63,10 +63,11 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
     } catch (_e) {
       // ignore
     } finally {
-      window.location.href = '/';
+      window.location.href = '/login';
     }
   };
 
+  const displayUser = (user ?? undefined) as User | undefined;
   return (
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border p-4">
@@ -295,22 +296,22 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
         <div className="flex items-center gap-2">
           <div className="relative">
             <Avatar className="w-8 h-8">
-              <AvatarImage src={user?.profileImageUrl || undefined} />
+              <AvatarImage src={displayUser?.profileImageUrl || undefined} />
               <AvatarFallback className="text-sm">
-                {getUserInitials(user)}
+                {getUserInitials(displayUser)}
               </AvatarFallback>
             </Avatar>
-            {user?.isOnline && (
+            {displayUser?.isOnline && (
               <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-status-online rounded-full border-2 border-sidebar" />
             )}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold truncate" data-testid="text-user-name">
-              {getUserName(user)}
+              {getUserName(displayUser)}
             </p>
-            {user?.status && (
+            {displayUser?.status && (
               <p className="text-xs text-muted-foreground truncate">
-                {user.status}
+                {displayUser.status}
               </p>
             )}
           </div>
