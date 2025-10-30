@@ -18,6 +18,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Channel, User } from "@shared/schema";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuthContext } from "@/contexts/AuthContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +32,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
   const { user } = useAuth();
+  const { logout } = useAuthContext();
   const [location] = useLocation();
 
   const { data: channels, isLoading: channelsLoading } = useQuery<Channel[]>({
@@ -59,7 +61,7 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      await logout();
     } catch (_e) {
       // ignore
     } finally {

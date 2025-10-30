@@ -21,6 +21,17 @@ app.use((req, res, next) => {
   }
 });
 
+// Prevent browsers from caching HTML so back button doesn't resurrect old UI
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+  }
+  next();
+});
+
 // Serve service worker with correct MIME type
 app.get('/service-worker.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');

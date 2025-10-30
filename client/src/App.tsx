@@ -10,6 +10,8 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
+import RegisterPage from "@/pages/register";
+import { AuthProvider } from "@/contexts/AuthContext";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
 import IngestPlansPage from "@/pages/ingest-plans";
@@ -31,6 +33,16 @@ function Router() {
     return <Comp />;
   }
 
+  function GuestOnly({ component: Comp }: { component: React.ComponentType<any> }) {
+    const [, navigate] = useLocation();
+    useEffect(() => {
+      if (!isLoading && isAuthenticated) navigate("/");
+    }, [isLoading, isAuthenticated, navigate]);
+    if (isLoading) return null;
+    if (isAuthenticated) return null;
+    return <Comp />;
+  }
+
   return (
     <Switch>
       {/* Public routes (only need access code) */}
@@ -42,6 +54,7 @@ function Router() {
       
       {/* Login route */}
       <Route path="/login" component={LoginPage} />
+      <Route path="/register" component={RegisterPage} />
 
       {/* Protected app routes */}
       <Route path="/" component={() => <Protected component={Home} />} />
@@ -63,14 +76,16 @@ export default function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider defaultTheme="dark">
-          <TooltipProvider>
-            <AccessCodeGate>
-              <Router />
-              <Toaster />
-            </AccessCodeGate>
-          </TooltipProvider>
-        </ThemeProvider>
+        <AuthProvider>
+          <ThemeProvider defaultTheme="dark">
+            <TooltipProvider>
+              <AccessCodeGate>
+                <Router />
+                <Toaster />
+              </AccessCodeGate>
+            </TooltipProvider>
+          </ThemeProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );

@@ -7,34 +7,30 @@ import AuthLayout from "@/components/auth/AuthLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthContext } from "@/contexts/AuthContext";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const [, navigate] = useLocation();
   const { isAuthenticated, isLoading } = useAuth();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Ensure we don't rely on stale user cache on this page
+    // Avoid stale user cache on this page as well
     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-    // Proactively clear any existing session so user must enter credentials
-    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).finally(() => {
-      queryClient.setQueryData(["/api/auth/user"], null);
-    });
   }, []);
 
-  const { login } = useAuthContext();
+  const { register: registerUser } = useAuthContext();
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      await login(email, password);
+      await registerUser(name, email, password);
       navigate("/");
     } catch (err: any) {
-      setError("Invalid email or password");
+      setError("Registration failed. Please check inputs");
     } finally {
       setLoading(false);
     }
@@ -42,10 +38,14 @@ export default function LoginPage() {
 
   return (
     <AuthLayout
-      title="Holla, Welcome Back"
-      subtitle="Hey, welcome back to your special place | مرحباً بك مجدداً"
+      title="Create your account"
+      subtitle="انشئ حسابك للوصول إلى مساحة العمل"
     >
       <form onSubmit={onSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm mb-1">Name</label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} required />
+        </div>
         <div>
           <label className="block text-sm mb-1">Email</label>
           <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -54,19 +54,12 @@ export default function LoginPage() {
           <label className="block text-sm mb-1">Password</label>
           <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </div>
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <label className="inline-flex items-center gap-2">
-            <input type="checkbox" className="accent-primary" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-            Remember me
-          </label>
-          <span className="opacity-70">Forgot Password?</span>
-        </div>
         {error && <p className="text-sm text-red-500">{error}</p>}
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "..." : "Sign In"}
+          {loading ? "..." : "Sign Up"}
         </Button>
         <p className="text-xs text-center text-muted-foreground">
-          Don’t have an account? <Link href="/register" className="text-primary">Sign Up</Link>
+          Already have an account? <Link href="/login" className="text-primary">Sign In</Link>
         </p>
       </form>
     </AuthLayout>

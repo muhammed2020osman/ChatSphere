@@ -48,8 +48,16 @@ router.post('/login', async (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
+  const cookieOpts = {
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+  };
   req.session.destroy(() => {
-    res.clearCookie('connect.sid');
+    // Clear both possible cookie names
+    res.clearCookie('sid', cookieOpts);
+    res.clearCookie('connect.sid', cookieOpts);
     res.status(204).end();
   });
 });

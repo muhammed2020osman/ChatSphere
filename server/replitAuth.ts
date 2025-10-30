@@ -51,6 +51,7 @@ export async function getSession() {
     const store = new session.MemoryStore();
     return session({
       secret: process.env.SESSION_SECRET!,
+      name: 'sid',
       store,
       resave: false,
       saveUninitialized: false,
@@ -115,6 +116,7 @@ export async function getSession() {
   }
   return session({
     secret: process.env.SESSION_SECRET!,
+    name: 'sid',
     store,
     resave: false,
     saveUninitialized: false,
@@ -209,8 +211,16 @@ export async function setupAuth(app: Express) {
 
   app.get("/api/logout", (req, res) => {
     // Destroy local session for both dev and production
+    const cookieOpts = {
+      httpOnly: true,
+      sameSite: 'lax' as const,
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+    };
     req.session.destroy(() => {
-      res.clearCookie('connect.sid');
+      // Clear both possible names just in case
+      res.clearCookie('sid', cookieOpts);
+      res.clearCookie('connect.sid', cookieOpts);
       res.status(204).end();
     });
   });
