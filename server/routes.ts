@@ -776,10 +776,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const threads = await storage.getUserThreads(userId);
-      res.json(threads);
+
+      // Ensure each thread has user and channel info for the UI
+      const enriched = [] as any[];
+      for (const t of threads as any[]) {
+        let user = (t as any).user;
+        if (!user && t.userId) {
+          user = await storage.getUser(t.userId);
+        }
+        let channelInfo = (t as any).channel;
+        if (!channelInfo && t.channelId) {
+          const ch = await storage.getChannel(t.channelId);
+          if (ch) channelInfo = { id: ch.id, name: ch.name };
+        }
+        enriched.push({ ...t, user, channel: channelInfo, replyCount: (t as any).replyCount ?? 0 });
+      }
+
+      res.json(enriched);
     } catch (error) {
-      console.error("Error fetching threads:", error);
-      res.status(500).json({ message: "Failed to fetch threads" });
+      // Fail-soft to avoid breaking the Threads page
+      console.error("Error fetching threads:", {
+        code: (error as any)?.code,
+        message: (error as any)?.message,
+        sqlMessage: (error as any)?.sqlMessage,
+      });
+      res.status(200).json([]);
     }
   });
 

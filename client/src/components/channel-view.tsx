@@ -19,10 +19,11 @@ export function ChannelView() {
     enabled: !!id,
   });
 
+  const isChannelRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/channel/');
   const { data: messages, isLoading: messagesLoading } = useQuery<MessageWithUser[]>({
     queryKey: [`/api/channels/${id}/messages`],
-    enabled: !!id,
-    refetchInterval: 3000,
+    enabled: !!id && isChannelRoute,
+    refetchInterval: isChannelRoute ? 3000 : false,
   });
 
   useEffect(() => {

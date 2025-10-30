@@ -16,6 +16,7 @@ import SheetViewer from "@/pages/sheet-viewer";
 import TicketsHub from "@/pages/tickets-hub";
 
 function Router() {
+  // Keep auth state available for components, but don't gate route definitions
   const { isAuthenticated, isLoading } = useAuth();
 
   return (
@@ -27,22 +28,17 @@ function Router() {
       <Route path="/ingest-plans" component={IngestPlansPage} />
       <Route path="/tickets" component={TicketsHub} />
       
-      {/* Authenticated routes (need OIDC login) */}
-      {isLoading || !isAuthenticated ? (
-        <Route path="/" component={Landing} />
-      ) : (
-        <>
-          <Route path="/" component={Home} />
-          <Route path="/mentions" component={Home} />
-          <Route path="/threads" component={Home} />
-          <Route path="/starred" component={Home} />
-          <Route path="/drawings" component={Home} />
-          <Route path="/channel/:id" component={Home} />
-          <Route path="/dm/:userId" component={Home} />
-          <Route path="/settings" component={Home} />
-          <Route path="/members" component={Home} />
-        </>
-      )}
+      {/* App routes always mounted; Home internally handles loading/auth UI */}
+      <Route path="/" component={Home} />
+      <Route path="/mentions" component={Home} />
+      <Route path="/threads" component={Home} />
+      <Route path="/starred" component={Home} />
+      <Route path="/drawings" component={Home} />
+      <Route path="/channel/:id" component={Home} />
+      <Route path="/dm/:userId" component={Home} />
+      <Route path="/settings" component={Home} />
+      <Route path="/members" component={Home} />
+
       <Route component={NotFound} />
     </Switch>
   );

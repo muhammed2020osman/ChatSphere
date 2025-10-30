@@ -9,28 +9,36 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { Message, User } from "@shared/schema";
 
 interface ThreadMessage extends Message {
-  user: User;
+  user?: User;
   replyCount: number;
   channel?: { id: string; name: string };
 }
 
 export default function ThreadsPage() {
-  const { data: threads, isLoading } = useQuery<ThreadMessage[]>({
+  const { data: currentUser } = useQuery<{ id: string; firstName?: string; lastName?: string; email?: string }>({
+    queryKey: ["/api/auth/user"],
+  });
+  const { data: threads, isLoading, isError } = useQuery<ThreadMessage[]>({
     queryKey: ["/api/messages/threads"],
+    retry: 1,
   });
 
-  const getUserInitials = (user: User) => {
+  const getUserInitials = (user?: User) => {
+    if (!user) return "?";
     if (user.firstName && user.lastName) {
       return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
     }
     return user.email?.[0]?.toUpperCase() || "?";
   };
 
-  const getUserName = (user: User) => {
+  const getUserName = (user?: User) => {
+    if (!user) return currentUser?.id ? ("You") : "Unknown";
     if (user.firstName && user.lastName) {
       return `${user.firstName} ${user.lastName}`;
     }
-    return user.email || "Unknown";
+    if (user.email) return user.email;
+    if (currentUser?.id && user.id === currentUser.id) return "You";
+    return user.id || "Unknown";
   };
 
   return (
@@ -61,6 +69,10 @@ export default function ThreadsPage() {
               </Card>
             ))}
           </div>
+        ) : isError ? (
+          <Card className="p-12 text-center">
+            <div className="text-sm text-muted-foreground">Failed to load threads. Showing an empty list.</div>
+          </Card>
         ) : threads && threads.length > 0 ? (
           <div className="space-y-3">
             {threads.map((thread) => (
@@ -74,16 +86,14 @@ export default function ThreadsPage() {
                 >
                   <div className="flex gap-3">
                     <Avatar className="w-10 h-10">
-                      <AvatarImage src={thread.user.profileImageUrl || undefined} />
+                      <AvatarImage src={thread.user?.profileImageUrl || undefined} />
                       <AvatarFallback>
                         {getUserInitials(thread.user)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-semibold">
-                          {getUserName(thread.user)}
-                        </span>
+                        <span className="font-semibold">{getUserName(thread.user)}</span>
                         {thread.channel && (
                           <span className="text-xs text-muted-foreground">
                             in #{thread.channel.name}

@@ -320,7 +320,36 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserThreads(userId: string): Promise<any[]> {
-    return await db.select().from(messages).where(eq(messages.userId, userId));
+    // Fetch user's messages with joined user and channel info
+    const base = await db
+      .select({
+        message: messages,
+        user: users,
+        channel: channels,
+      })
+      .from(messages)
+      .innerJoin(users, eq(messages.userId, users.id))
+      .leftJoin(channels, eq(messages.channelId, channels.id))
+      .where(eq(messages.userId, userId))
+      .orderBy(desc(messages.createdAt));
+
+    const threads: any[] = [];
+    for (const row of base as any[]) {
+      // Count replies for each message (thread)
+      const countResult = await db.select({ count: sql<number>`count(*)` })
+        .from(messages)
+        .where(eq(messages.threadParentId, row.message.id));
+      const replyCount = Number(countResult[0]?.count || 0);
+
+      threads.push({
+        ...row.message,
+        user: row.user,
+        replyCount,
+        channel: row.channel ? { id: row.channel.id, name: row.channel.name } : undefined,
+      });
+    }
+
+    return threads;
   }
 
   async getAllMessages(userId: string): Promise<any[]> {
@@ -470,9 +499,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUnreadNotificationCount(userId: string): Promise<number> {
-    const result = await db.select().from(notifications)
-      .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
-    return result.length;
+    try {
+      const result = await db
+        .select()
+        .from(notifications)
+        .where(
+          and(
+            eq(notifications.userId, userId),
+            or(eq(notifications.isRead, false), sql`${notifications.isRead} IS NULL`)
+          )
+        );
+      return result.length;
+    } catch (_e) {
+      return 0;
+    }
   }
 
   // Message editing/deletion
