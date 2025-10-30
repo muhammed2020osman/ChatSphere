@@ -16,6 +16,7 @@ import { extractMentions, findUserIdsByUsernames, requireAdmin } from "./utils";
 import { analyzeEngineeringDrawing } from "./services/gemini";
 import { convertPDFToImage, convertPDFPagesToImages, isPDF } from "./services/pdfConverter";
 import { extractPDFText } from "./services/pdfTextExtractor";
+import authRoutes from "./auth/routes";
 import { 
   insertChannelSchema, 
   insertMessageSchema, 
@@ -29,8 +30,8 @@ const clients = new Map<string, { ws: WebSocket; userId: string; channels: Set<s
 
 // Helper to get authenticated userId from WebSocket request
 async function getAuthenticatedUserId(req: IncomingMessage): Promise<string | null> {
+  const sessionMiddleware = await getSession();
   return new Promise((resolve) => {
-    const sessionMiddleware = getSession();
     const mockRes = {
       getHeader: () => {},
       setHeader: () => {},
@@ -77,6 +78,9 @@ const upload = multer({
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
+
+  // Local auth routes (email/password session-based)
+  app.use('/api/auth', authRoutes);
 
   // Access code verification (no auth required)
   app.post('/api/verify-access-code', async (req, res) => {

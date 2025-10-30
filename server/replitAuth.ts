@@ -2,6 +2,9 @@ import * as client from "openid-client";
 import { Strategy, type VerifyFunction } from "openid-client/passport";
 import passport from "passport";
 import session from "express-session";
+import MySQLStoreFactory from "express-mysql-session";
+import mysql from "mysql2/promise";
+import mysql2 from "mysql2";
 import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
@@ -40,18 +43,85 @@ const getOidcConfig = memoize(
   { maxAge: 3600 * 1000 }
 );
 
-export function getSession() {
+export async function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
-  // Use memory store for MySQL compatibility
-  const sessionStore = new session.MemoryStore();
+  const MySQLStore = MySQLStoreFactory(session as any);
+  // In development, always use in-memory sessions to avoid DB-related crashes
+  if (process.env.NODE_ENV === 'development') {
+    const store = new session.MemoryStore();
+    return session({
+      secret: process.env.SESSION_SECRET!,
+      store,
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        httpOnly: true,
+        secure: false,
+        sameSite: 'lax',
+        maxAge: sessionTtl,
+      },
+    });
+  }
+  // Ensure session store connects to the selected database
+  let dbUrl: URL | null = null;
+  try {
+    dbUrl = new URL(process.env.DATABASE_URL || "");
+  } catch (e) {
+    // In development without DATABASE_URL, allow fallback to default connector
+  }
+  const connectionOptions = dbUrl
+    ? {
+        host: dbUrl.hostname,
+        port: parseInt(dbUrl.port) || 3306,
+        user: dbUrl.username,
+        password: dbUrl.password,
+        database: dbUrl.pathname.slice(1),
+        charset: "utf8mb4",
+      }
+    : undefined;
+  // Prefer MySQL-backed session store if DB is reachable; otherwise fallback to MemoryStore
+  let store: session.Store;
+  if (connectionOptions) {
+    try {
+      const test = await mysql.createConnection({
+        ...connectionOptions,
+        connectTimeout: 5000,
+      });
+      await test.ping();
+      await test.end();
+      // Use a dedicated table name to avoid clashing with existing tables
+      // Use callback-style pool for express-mysql-session compatibility
+      const cbPool = mysql2.createPool({
+        host: connectionOptions.host,
+        port: connectionOptions.port,
+        user: connectionOptions.user,
+        password: connectionOptions.password,
+        database: connectionOptions.database,
+        charset: connectionOptions.charset,
+        connectionLimit: 10,
+      });
+      store = new MySQLStore({
+        schema: { tableName: "express_sessions" },
+        createDatabaseTable: true,
+        clearExpired: true,
+        expiration: sessionTtl,
+      }, cbPool as any);
+    } catch (err) {
+      console.warn("Session DB unreachable, using in-memory session store for development.");
+      store = new session.MemoryStore();
+    }
+  } else {
+    store = new session.MemoryStore();
+  }
   return session({
     secret: process.env.SESSION_SECRET!,
-    store: sessionStore,
-    resave: true,
-    saveUninitialized: true,
+    store,
+    resave: false,
+    saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
       maxAge: sessionTtl,
     },
   });
@@ -81,7 +151,7 @@ async function upsertUser(
 
 export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
-  app.use(getSession());
+  app.use(await getSession());
   app.use(passport.initialize());
   app.use(passport.session());
 

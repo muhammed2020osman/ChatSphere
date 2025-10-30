@@ -57,6 +57,16 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
     return u.email || "Unknown";
   };
 
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    } catch (_e) {
+      // ignore
+    } finally {
+      window.location.href = '/';
+    }
+  };
+
   return (
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border p-4">
@@ -84,9 +94,9 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
               </DropdownMenuItem>
             )}
             <DropdownMenuItem asChild>
-              <a href="/api/logout" data-testid="link-logout">
+              <button onClick={handleLogout} data-testid="link-logout" className="w-full text-left">
                 Sign out
-              </a>
+              </button>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
