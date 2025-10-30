@@ -233,6 +233,21 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
       refresh_token: 'dev-refresh-token'
     };
     req.user = user;
+
+    // Ensure the dev user exists in the database to satisfy FK constraints
+    try {
+      await storage.upsertUser({
+        id: 'dev-user-123',
+        email: 'dev@localhost.com',
+        firstName: 'Development',
+        lastName: 'User',
+        profileImageUrl: null,
+        status: 'active',
+        role: 'admin'
+      });
+    } catch (e) {
+      // Best-effort; if it fails but the user exists already, continue
+    }
   }
 
   console.log('Auth check:', {
