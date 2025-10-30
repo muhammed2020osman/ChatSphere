@@ -60,7 +60,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { TicketFilters } from "./tickets-filters-panel";
 import type { TicketWithDetails } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 interface TicketsTableViewProps {
@@ -155,11 +155,12 @@ export function TicketsTableView({
     totalPages: number;
   }>({
     queryKey: ["/api/tickets", queryParams],
+    queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
-  const tickets = data?.tickets || [];
-  const totalPages = data?.totalPages || 1;
-  const total = data?.total || 0;
+  const tickets = (data && (data as any).tickets ? (data as any).tickets : []) as TicketWithDetails[];
+  const totalPages = (data && (data as any).totalPages) ? (data as any).totalPages : 1;
+  const total = (data && (data as any).total) ? (data as any).total : 0;
 
   // Handle sorting
   const handleSort = (field: SortField) => {

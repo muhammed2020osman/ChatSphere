@@ -775,7 +775,78 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTicketsFiltered(filters: any): Promise<any> {
-    return await db.select().from(tickets);
+    // Defaults
+    const page = Math.max(1, Number(filters.page || 1));
+    const limit = Math.max(1, Number(filters.limit || 20));
+    const offset = (page - 1) * limit;
+
+    // Build where conditions
+    const conditions: any[] = [];
+
+    if (filters.search) {
+      conditions.push(sql`${tickets.title} LIKE ${'%' + filters.search + '%'}`);
+    }
+    if (filters.type && Array.isArray(filters.type) && filters.type.length > 0) {
+      conditions.push(inArray(tickets.type, filters.type));
+    }
+    if (filters.status && Array.isArray(filters.status) && filters.status.length > 0) {
+      conditions.push(inArray(tickets.status, filters.status));
+    }
+    if (filters.priority && Array.isArray(filters.priority) && filters.priority.length > 0) {
+      conditions.push(inArray(tickets.priority, filters.priority));
+    }
+    if (filters.assignedTo && Array.isArray(filters.assignedTo) && filters.assignedTo.length > 0) {
+      conditions.push(inArray(tickets.assignedTo, filters.assignedTo));
+    }
+    if (filters.drawingId && Array.isArray(filters.drawingId) && filters.drawingId.length > 0) {
+      conditions.push(inArray(tickets.drawingId, filters.drawingId));
+    }
+    if (filters.disciplineId && Array.isArray(filters.disciplineId) && filters.disciplineId.length > 0) {
+      conditions.push(inArray(tickets.disciplineId, filters.disciplineId));
+    }
+    if (filters.layerId && Array.isArray(filters.layerId) && filters.layerId.length > 0) {
+      conditions.push(inArray(tickets.layerId, filters.layerId));
+    }
+    if (filters.tags && Array.isArray(filters.tags) && filters.tags.length > 0) {
+      // tags is a JSON array column; do simple LIKE match for any tag for now
+      const likeConds = filters.tags.map((t: string) => sql`JSON_CONTAINS(${tickets.tags}, '"${t}"')`);
+      conditions.push(or(...likeConds));
+    }
+    if (filters.dateFrom) {
+      conditions.push(sql`${tickets.createdAt} >= ${new Date(filters.dateFrom)}`);
+    }
+    if (filters.dateTo) {
+      conditions.push(sql`${tickets.createdAt} <= ${new Date(filters.dateTo)}`);
+    }
+
+    // Sorting
+    const sortBy = (filters.sortBy as string) || 'createdAt';
+    const sortOrder = (filters.sortOrder as 'asc' | 'desc') || 'desc';
+    const sortColumn: any = (tickets as any)[sortBy] || tickets.createdAt;
+    const orderByExpr = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
+
+    // Total count
+    const whereExpr = conditions.length > 0 ? and(...conditions) : null;
+    const totalSelect = db.select({ count: sql<number>`count(*)` }).from(tickets);
+    const totalResult = whereExpr
+      ? await totalSelect.where(whereExpr)
+      : await totalSelect;
+    const total = Number(totalResult[0]?.count || 0);
+
+    // Page of tickets
+    const baseSelect = db.select().from(tickets);
+    const rows = await (whereExpr ? baseSelect.where(whereExpr) : baseSelect)
+      .orderBy(orderByExpr)
+      .limit(limit)
+      .offset(offset);
+
+    return {
+      tickets: rows,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
   }
 
   async getDrawingTickets(drawingId: string): Promise<Ticket[]> {
