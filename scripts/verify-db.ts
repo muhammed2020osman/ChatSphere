@@ -80,8 +80,8 @@ const expectedTables = {
     columns: [
       { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
       { name: 'email', type: 'varchar(255)', nullable: true, key: 'UNI' },
-      { name: 'first_name', type: 'varchar(100)', nullable: true, key: '' },
-      { name: 'last_name', type: 'varchar(100)', nullable: true, key: '' },
+      { name: 'name', type: 'varchar(255)', nullable: true, key: '' },
+      { name: 'password_hash', type: 'varchar(255)', nullable: true, key: '' },
       { name: 'profile_image_url', type: 'text', nullable: true, key: '' },
       { name: 'status', type: 'varchar(50)', nullable: true, key: '' },
       { name: 'is_online', type: 'tinyint(1)', nullable: true, key: '' },

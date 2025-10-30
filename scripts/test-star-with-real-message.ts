@@ -28,9 +28,9 @@ async function testStarWithRealMessage() {
 
     // إنشاء مستخدم تجريبي أولاً
     await connection.execute(`
-      INSERT INTO users (id, email, first_name, last_name, profile_image_url, status, is_online, last_seen, role, created_at, updated_at) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), NOW())
-    `, [testUserId, 'test@example.com', 'Test', 'User', null, 'active', 1, 'user']);
+      INSERT INTO users (id, email, name, profile_image_url, status, is_online, last_seen, role, created_at, updated_at) 
+      VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), NOW())
+    `, [testUserId, 'test@example.com', 'Test User', null, 'active', 1, 'user']);
 
     // إنشاء قناة تجريبية
     await connection.execute(`

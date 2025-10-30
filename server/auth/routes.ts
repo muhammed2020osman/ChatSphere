@@ -1,19 +1,19 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { ensureAuthUsersTable, createAuthUser, findAuthUserByEmail, findAuthUserById } from './user.model';
+import { ensureUsersAuthColumns, createAuthUser, findAuthUserByEmail, findAuthUserById, emailExists } from './user.model';
 
 declare module 'express-session' {
   interface SessionData {
-    userId?: number;
+    userId?: string;
   }
 }
 
 const router = Router();
 
-// Ensure table exists on first import
-ensureAuthUsersTable().catch((e) => {
-  console.error('Failed to ensure auth_users table:', e);
+// Ensure users auth columns exist on first import
+ensureUsersAuthColumns().catch((e) => {
+  console.error('Failed to ensure users auth columns:', e);
 });
 
 const registerSchema = z.object({
@@ -24,11 +24,12 @@ const registerSchema = z.object({
 
 router.post('/register', async (req, res) => {
   try {
+    await ensureUsersAuthColumns();
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input' });
     const { email, password, name } = parsed.data;
-    const existing = await findAuthUserByEmail(email);
-    if (existing) return res.status(409).json({ error: 'Email already in use' });
+    const exists = await emailExists(email);
+    if (exists) return res.status(409).json({ error: 'Email already in use' });
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await createAuthUser({ email, passwordHash, name });
     req.session.userId = user.id;
@@ -46,6 +47,7 @@ router.post('/register', async (req, res) => {
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
 router.post('/login', async (req, res) => {
   try {
+    await ensureUsersAuthColumns();
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input' });
     const { email, password } = parsed.data;
@@ -80,6 +82,14 @@ router.post('/logout', (req, res) => {
 });
 
 router.get('/me', async (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ error: 'Unauthorized' });
+  const user = await findAuthUserById(req.session.userId);
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  res.json(user);
+});
+
+// Backwards-compatible alias for clients expecting /user
+router.get('/user', async (req, res) => {
   if (!req.session.userId) return res.status(401).json({ error: 'Unauthorized' });
   const user = await findAuthUserById(req.session.userId);
   if (!user) return res.status(401).json({ error: 'Unauthorized' });

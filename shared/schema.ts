@@ -26,9 +26,9 @@ export const sessions = mysqlTable(
 // User storage table - Required for Replit Auth
 export const users = mysqlTable("users", {
   id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
-  email: varchar("email", { length: 255 }).unique(),
-  firstName: varchar("first_name", { length: 100 }),
-  lastName: varchar("last_name", { length: 100 }),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   profileImageUrl: text("profile_image_url"),
   status: varchar("status", { length: 50 }),
   isOnline: boolean("is_online").default(false),

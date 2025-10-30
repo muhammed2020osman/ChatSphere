@@ -108,16 +108,17 @@ export async function initializeDatabase() {
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(191) PRIMARY KEY DEFAULT (UUID()),
-        email VARCHAR(255) UNIQUE,
-        first_name VARCHAR(100),
-        last_name VARCHAR(100),
+        email VARCHAR(255) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
         profile_image_url TEXT,
         status VARCHAR(50),
         is_online BOOLEAN DEFAULT FALSE,
         last_seen TIMESTAMP,
         role VARCHAR(20) DEFAULT 'member' NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY idx_users_email (email)
       )
     `);
     

@@ -54,8 +54,7 @@ async function testMessages() {
         m.id,
         m.content,
         m.created_at,
-        u.first_name,
-        u.last_name,
+        u.name,
         u.email,
         c.name as channel_name
       FROM messages m
@@ -67,7 +66,7 @@ async function testMessages() {
 
     console.log('\n📝 آخر 10 رسائل:');
     (recentMessages as any[]).forEach((msg, index) => {
-      console.log(`${index + 1}. [${msg.channel_name}] ${msg.first_name || msg.email}: ${msg.content.substring(0, 50)}...`);
+      console.log(`${index + 1}. [${msg.channel_name}] ${msg.name || msg.email}: ${msg.content.substring(0, 50)}...`);
     });
 
     // Check if the specific channel exists
@@ -88,8 +87,7 @@ async function testMessages() {
         m.id,
         m.content,
         m.created_at,
-        u.first_name,
-        u.last_name,
+        u.name,
         u.email
       FROM messages m
       LEFT JOIN users u ON m.user_id = u.id
@@ -100,7 +98,7 @@ async function testMessages() {
 
     console.log(`\n📨 رسائل القناة المحددة (${(channelMessages as any[]).length} رسالة):`);
     (channelMessages as any[]).forEach((msg, index) => {
-      console.log(`${index + 1}. ${msg.first_name || msg.email}: ${msg.content}`);
+      console.log(`${index + 1}. ${msg.name || msg.email}: ${msg.content}`);
     });
 
   } catch (error) {

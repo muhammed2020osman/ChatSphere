@@ -1,18 +1,15 @@
 import mysql from 'mysql2/promise';
 import { pool } from '../db';
 
-export async function ensureAuthUsersTable(): Promise<void> {
+// Ensure unified users table has password_hash column for local email/password auth
+export async function ensureUsersAuthColumns(): Promise<void> {
   const connection = await pool.getConnection();
   try {
     await connection.execute(`
-      CREATE TABLE IF NOT EXISTS auth_users (
-        id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
-        email VARCHAR(255) NOT NULL UNIQUE,
-        password_hash VARCHAR(255) NOT NULL,
-        name VARCHAR(255) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NULL;
+    `);
+    await connection.execute(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255) NULL;
     `);
   } finally {
     connection.release();
@@ -20,16 +17,16 @@ export async function ensureAuthUsersTable(): Promise<void> {
 }
 
 export type AuthUser = {
-  id: number;
+  id: string | number;
   email: string;
-  name: string;
-  password_hash?: string;
+  name?: string;
+  password_hash?: string | null;
 };
 
 export async function findAuthUserByEmail(email: string): Promise<AuthUser | null> {
   try {
     const [rows] = await pool.query<mysql.RowDataPacket[]>(
-      'SELECT id, email, name, password_hash FROM auth_users WHERE email = ? LIMIT 1',
+      'SELECT id, email, password_hash FROM users WHERE email = ? LIMIT 1',
       [email]
     );
     return rows[0] ? (rows[0] as unknown as AuthUser) : null;
@@ -39,23 +36,38 @@ export async function findAuthUserByEmail(email: string): Promise<AuthUser | nul
   }
 }
 
-export async function createAuthUser(params: { email: string; passwordHash: string; name: string; }): Promise<AuthUser> {
+export async function emailExists(email: string): Promise<boolean> {
   try {
-    const [result] = await pool.execute<mysql.ResultSetHeader>(
-      'INSERT INTO auth_users (email, password_hash, name) VALUES (?, ?, ?)',
-      [params.email, params.passwordHash, params.name]
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      'SELECT 1 FROM users WHERE email = ? LIMIT 1',
+      [email]
     );
-    return { id: result.insertId, email: params.email, name: params.name };
+    return !!rows[0];
   } catch (e: any) {
     (e as any).code = (e as any)?.code || 'DB_UNAVAILABLE';
     throw e;
   }
 }
 
-export async function findAuthUserById(id: number): Promise<AuthUser | null> {
+export async function createAuthUser(params: { email: string; passwordHash: string; name: string; }): Promise<AuthUser> {
+  try {
+    await pool.execute<mysql.ResultSetHeader>(
+      'INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, "member")',
+      [params.email, params.passwordHash, params.name]
+    );
+    // Fetch the inserted user to get id reliably (UUID PK has no insertId)
+    const inserted = await findAuthUserByEmail(params.email);
+    return { id: inserted?.id!, email: params.email, name: params.name } as AuthUser;
+  } catch (e: any) {
+    (e as any).code = (e as any)?.code || 'DB_UNAVAILABLE';
+    throw e;
+  }
+}
+
+export async function findAuthUserById(id: string | number): Promise<AuthUser | null> {
   try {
     const [rows] = await pool.query<mysql.RowDataPacket[]>(
-      'SELECT id, email, name FROM auth_users WHERE id = ? LIMIT 1',
+      'SELECT id, email, name, password_hash FROM users WHERE id = ? LIMIT 1',
       [id]
     );
     return rows[0] ? (rows[0] as unknown as AuthUser) : null;
