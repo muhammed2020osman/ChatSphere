@@ -22,6 +22,19 @@ export default function RegisterPage() {
   }, []);
 
   const { register: registerUser } = useAuthContext();
+  const normalizeError = (e: any) => {
+    const raw = (e && (e.message || e.toString())) || '';
+    // Strip leading "<code>: " if present, e.g. "400: {\"error\":...}"
+    const cleaned = raw.replace(/^\d+:\s*/,'');
+    try {
+      const parsed = JSON.parse(cleaned);
+      // Prefer common keys
+      return parsed?.message || parsed?.error || cleaned;
+    } catch {
+      return cleaned || 'Registration failed. Please check inputs';
+    }
+  };
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -30,7 +43,7 @@ export default function RegisterPage() {
       await registerUser(name, email, password);
       navigate("/");
     } catch (err: any) {
-      setError("Registration failed. Please check inputs");
+      setError(normalizeError(err));
     } finally {
       setLoading(false);
     }

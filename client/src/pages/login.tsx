@@ -26,6 +26,16 @@ export default function LoginPage() {
   }, []);
 
   const { login } = useAuthContext();
+  const normalizeError = (e: any) => {
+    const raw = (e && (e.message || e.toString())) || '';
+    const cleaned = raw.replace(/^\d+:\s*/,'');
+    try {
+      const parsed = JSON.parse(cleaned);
+      return parsed?.message || parsed?.error || cleaned;
+    } catch {
+      return cleaned || 'Invalid email or password';
+    }
+  };
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -34,7 +44,7 @@ export default function LoginPage() {
       await login(email, password);
       navigate("/");
     } catch (err: any) {
-      setError("Invalid email or password");
+      setError(normalizeError(err));
     } finally {
       setLoading(false);
     }
