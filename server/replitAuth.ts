@@ -116,8 +116,11 @@ export async function getSession() {
   }
   // Determine if we're using HTTPS
   const isSecure = process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === 'true';
+  // Use 'none' for sameSite when secure is true (required for cross-site cookies on HTTPS)
+  // Use 'lax' for development (HTTP) or when secure is false
+  const sameSiteValue: 'none' | 'lax' | 'strict' = isSecure ? 'none' : 'lax';
   
-  return session({
+  const sessionConfig = {
     secret: process.env.SESSION_SECRET!,
     name: 'sid',
     store,
@@ -126,11 +129,25 @@ export async function getSession() {
     cookie: {
       httpOnly: true,
       secure: isSecure,
-      sameSite: 'lax',
+      sameSite: sameSiteValue,
       maxAge: sessionTtl,
       path: '/',
     },
-  });
+  };
+  
+  // Log session configuration in production for debugging
+  if (process.env.NODE_ENV === 'production' || process.env.DEBUG_SESSIONS === 'true') {
+    console.log('Session configuration:', {
+      storeType: store.constructor.name,
+      cookieSecure: isSecure,
+      cookieSameSite: sameSiteValue,
+      cookieName: sessionConfig.name,
+      hasSecret: !!sessionConfig.secret,
+      nodeEnv: process.env.NODE_ENV,
+    });
+  }
+  
+  return session(sessionConfig);
 }
 
 function updateUserSession(
@@ -214,10 +231,12 @@ export async function setupAuth(app: Express) {
 
   app.get("/api/logout", (req, res) => {
     // Destroy local session for both dev and production
+    const isSecure = process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === 'true';
+    const sameSiteValue: 'none' | 'lax' | 'strict' = isSecure ? 'none' : 'lax';
     const cookieOpts = {
       httpOnly: true,
-      sameSite: 'lax' as const,
-      secure: process.env.NODE_ENV === 'production',
+      sameSite: sameSiteValue as const,
+      secure: isSecure,
       path: '/',
     };
     req.session.destroy(() => {
@@ -230,6 +249,20 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  // Log session info for debugging (only in production or when DEBUG_SESSIONS is set)
+  if (process.env.NODE_ENV === 'production' || process.env.DEBUG_SESSIONS === 'true') {
+    console.log('isAuthenticated - Session check:', {
+      hasSession: !!req.session,
+      hasSessionId: !!req.sessionID,
+      sessionUserId: req.session?.userId,
+      sessionUserIdType: typeof req.session?.userId,
+      cookies: req.headers.cookie ? 'present' : 'missing',
+      cookieName: req.headers.cookie?.includes('sid') ? 'sid' : 'none',
+      path: req.path,
+      hostname: req.hostname,
+    });
+  }
+
   // Prefer local email/password session
   if (req.session?.userId) {
     try {
@@ -242,6 +275,9 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
           profile_image_url: null,
         },
       } as any;
+      if (process.env.NODE_ENV === 'production' || process.env.DEBUG_SESSIONS === 'true') {
+        console.log('isAuthenticated - Session authenticated:', req.session.userId);
+      }
       return next();
     } catch (error) {
       console.error('Error mapping session userId to user:', error);
@@ -273,12 +309,15 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   // Log authentication failure for debugging
   console.error('Authentication failed:', {
     hasSession: !!req.session,
+    hasSessionId: !!req.sessionID,
     hasSessionUserId: !!req.session?.userId,
     hasUser: !!req.user,
     hasUserClaims: !!(req.user as any)?.claims,
     path: req.path,
     method: req.method,
-    cookies: req.headers.cookie,
+    hostname: req.hostname,
+    cookies: req.headers.cookie ? 'present' : 'missing',
+    cookieHeader: req.headers.cookie?.substring(0, 100), // First 100 chars only
   });
   
   return res.status(401).json({ message: 'Unauthorized' });

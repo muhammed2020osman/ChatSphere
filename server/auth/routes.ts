@@ -84,6 +84,14 @@ router.post('/login', async (req, res) => {
         console.error('Error saving session after login:', err);
         return res.status(500).json({ message: 'Failed to save session' });
       }
+      // Log session info for debugging (only in production or when DEBUG_SESSIONS is set)
+      if (process.env.NODE_ENV === 'production' || process.env.DEBUG_SESSIONS === 'true') {
+        console.log('Session saved after login:', {
+          userId: user.id,
+          sessionId: req.sessionID,
+          sessionUserId: req.session.userId,
+        });
+      }
       res.json({ id: user.id, email: user.email, name: user.name });
     });
   } catch (e: any) {
@@ -96,10 +104,12 @@ router.post('/login', async (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
+  const isSecure = process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === 'true';
+  const sameSiteValue: 'none' | 'lax' | 'strict' = isSecure ? 'none' : 'lax';
   const cookieOpts = {
     httpOnly: true,
-    sameSite: 'lax' as const,
-    secure: process.env.NODE_ENV === 'production',
+    sameSite: sameSiteValue as const,
+    secure: isSecure,
     path: '/',
   };
   req.session.destroy(() => {
