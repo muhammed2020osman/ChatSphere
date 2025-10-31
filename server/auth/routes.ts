@@ -78,7 +78,14 @@ router.post('/login', async (req, res) => {
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
     req.session.userId = user.id;
-    res.json({ id: user.id, email: user.email, name: user.name });
+    // Ensure session is saved before sending response
+    req.session.save((err) => {
+      if (err) {
+        console.error('Error saving session after login:', err);
+        return res.status(500).json({ message: 'Failed to save session' });
+      }
+      res.json({ id: user.id, email: user.email, name: user.name });
+    });
   } catch (e: any) {
     const message = e?.message || '';
     if (message.includes('ETIMEDOUT') || message.includes('ENETUNREACH') || e?.code === 'DB_UNAVAILABLE') {

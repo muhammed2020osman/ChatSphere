@@ -114,6 +114,9 @@ export async function getSession() {
   } else {
     store = new session.MemoryStore();
   }
+  // Determine if we're using HTTPS
+  const isSecure = process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === 'true';
+  
   return session({
     secret: process.env.SESSION_SECRET!,
     name: 'sid',
@@ -122,9 +125,10 @@ export async function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecure,
       sameSite: 'lax',
       maxAge: sessionTtl,
+      path: '/',
     },
   });
 }
@@ -239,7 +243,8 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
         },
       } as any;
       return next();
-    } catch {
+    } catch (error) {
+      console.error('Error mapping session userId to user:', error);
       return res.status(401).json({ message: 'Unauthorized' });
     }
   }
@@ -250,15 +255,31 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     const now = Math.floor(Date.now() / 1000);
     if (now <= user.expires_at) return next();
     const refreshToken = user.refresh_token;
-    if (!refreshToken) return res.status(401).json({ message: 'Unauthorized' });
+    if (!refreshToken) {
+      console.error('OIDC session expired and no refresh token available');
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
     try {
       const cfg = await getOidcConfig();
       const tokenResponse = await client.refreshTokenGrant(cfg, refreshToken);
       updateUserSession(user, tokenResponse);
       return next();
-    } catch {
+    } catch (error) {
+      console.error('Error refreshing OIDC token:', error);
       return res.status(401).json({ message: 'Unauthorized' });
     }
   }
+  
+  // Log authentication failure for debugging
+  console.error('Authentication failed:', {
+    hasSession: !!req.session,
+    hasSessionUserId: !!req.session?.userId,
+    hasUser: !!req.user,
+    hasUserClaims: !!(req.user as any)?.claims,
+    path: req.path,
+    method: req.method,
+    cookies: req.headers.cookie,
+  });
+  
   return res.status(401).json({ message: 'Unauthorized' });
 };
