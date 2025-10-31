@@ -78,7 +78,7 @@ const expectedTables = {
   },
   users: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
       { name: 'email', type: 'varchar(255)', nullable: true, key: 'UNI' },
       { name: 'name', type: 'varchar(255)', nullable: true, key: '' },
       { name: 'password_hash', type: 'varchar(255)', nullable: true, key: '' },
@@ -94,26 +94,26 @@ const expectedTables = {
   },
   channels: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
       { name: 'name', type: 'varchar(100)', nullable: false, key: '' },
       { name: 'description', type: 'text', nullable: true, key: '' },
       { name: 'is_private', type: 'tinyint(1)', nullable: false, key: '' },
-      { name: 'created_by', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'created_by', type: 'int', nullable: false, key: 'MUL' },
       { name: 'created_at', type: 'timestamp', nullable: true, key: '' },
     ],
     indexes: []
   },
   messages: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
       { name: 'content', type: 'text', nullable: false, key: '' },
-      { name: 'channel_id', type: 'varchar(191)', nullable: true, key: 'MUL' },
-      { name: 'user_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
-      { name: 'reply_to_id', type: 'varchar(191)', nullable: true, key: '' },
+      { name: 'channel_id', type: 'int', nullable: true, key: 'MUL' },
+      { name: 'user_id', type: 'int', nullable: false, key: 'MUL' },
+      { name: 'reply_to_id', type: 'int', nullable: true, key: '' },
       { name: 'attachment_url', type: 'text', nullable: true, key: '' },
       { name: 'attachment_type', type: 'varchar(100)', nullable: true, key: '' },
       { name: 'attachment_name', type: 'varchar(255)', nullable: true, key: '' },
-      { name: 'thread_parent_id', type: 'varchar(191)', nullable: true, key: '' },
+      { name: 'thread_parent_id', type: 'int', nullable: true, key: '' },
       { name: 'mentions', type: 'json', nullable: true, key: '' },
       { name: 'edited_at', type: 'timestamp', nullable: true, key: '' },
       { name: 'created_at', type: 'timestamp', nullable: true, key: '' },
@@ -123,13 +123,13 @@ const expectedTables = {
   },
   drawings: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
       { name: 'name', type: 'varchar(255)', nullable: false, key: '' },
       { name: 'description', type: 'text', nullable: true, key: '' },
       { name: 'data', type: 'json', nullable: false, key: '' },
-      { name: 'discipline_id', type: 'varchar(191)', nullable: true, key: 'MUL' },
-      { name: 'floor_id', type: 'varchar(191)', nullable: true, key: 'MUL' },
-      { name: 'created_by', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'discipline_id', type: 'int', nullable: true, key: 'MUL' },
+      { name: 'floor_id', type: 'int', nullable: true, key: 'MUL' },
+      { name: 'created_by', type: 'int', nullable: false, key: 'MUL' },
       { name: 'created_at', type: 'timestamp', nullable: true, key: '' },
       { name: 'updated_at', type: 'timestamp', nullable: true, key: '' },
     ],
@@ -137,20 +137,20 @@ const expectedTables = {
   },
   tickets: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
       { name: 'title', type: 'varchar(255)', nullable: false, key: '' },
       { name: 'description', type: 'text', nullable: true, key: '' },
       { name: 'type', type: 'varchar(50)', nullable: false, key: '' },
       { name: 'status', type: 'varchar(50)', nullable: false, key: '' },
       { name: 'priority', type: 'varchar(50)', nullable: false, key: '' },
-      { name: 'drawing_id', type: 'varchar(191)', nullable: true, key: 'MUL' },
-      { name: 'discipline_id', type: 'varchar(191)', nullable: true, key: 'MUL' },
-      { name: 'pin_id', type: 'varchar(191)', nullable: true, key: 'MUL' },
-      { name: 'layer_id', type: 'varchar(191)', nullable: true, key: 'MUL' },
-      { name: 'assigned_to', type: 'varchar(191)', nullable: true, key: 'MUL' },
-      { name: 'created_by', type: 'varchar(191)', nullable: false, key: 'MUL' },
-      { name: 'reporter', type: 'varchar(191)', nullable: true, key: 'MUL' },
-      { name: 'channel_id', type: 'varchar(191)', nullable: true, key: 'MUL' },
+      { name: 'drawing_id', type: 'int', nullable: true, key: 'MUL' },
+      { name: 'discipline_id', type: 'int', nullable: true, key: 'MUL' },
+      { name: 'pin_id', type: 'int', nullable: true, key: 'MUL' },
+      { name: 'layer_id', type: 'int', nullable: true, key: 'MUL' },
+      { name: 'assigned_to', type: 'int', nullable: true, key: 'MUL' },
+      { name: 'created_by', type: 'int', nullable: false, key: 'MUL' },
+      { name: 'reporter', type: 'int', nullable: true, key: 'MUL' },
+      { name: 'channel_id', type: 'int', nullable: true, key: 'MUL' },
       { name: 'sla_hours', type: 'varchar(10)', nullable: true, key: '' },
       { name: 'due_date', type: 'timestamp', nullable: true, key: '' },
       { name: 'tags', type: 'json', nullable: true, key: '' },
@@ -161,11 +161,11 @@ const expectedTables = {
   },
   directMessages: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
       { name: 'content', type: 'text', nullable: false, key: '' },
-      { name: 'from_user_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
-      { name: 'to_user_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
-      { name: 'reply_to_id', type: 'varchar(191)', nullable: true, key: '' },
+      { name: 'from_user_id', type: 'int', nullable: false, key: 'MUL' },
+      { name: 'to_user_id', type: 'int', nullable: false, key: 'MUL' },
+      { name: 'reply_to_id', type: 'int', nullable: true, key: '' },
       { name: 'attachment_url', type: 'text', nullable: true, key: '' },
       { name: 'attachment_type', type: 'varchar(100)', nullable: true, key: '' },
       { name: 'attachment_name', type: 'varchar(255)', nullable: true, key: '' },
@@ -176,18 +176,18 @@ const expectedTables = {
   },
   channelMembers: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
-      { name: 'channel_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
-      { name: 'user_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
+      { name: 'channel_id', type: 'int', nullable: false, key: 'MUL' },
+      { name: 'user_id', type: 'int', nullable: false, key: 'MUL' },
       { name: 'joined_at', type: 'timestamp', nullable: true, key: '' },
     ],
     indexes: []
   },
   reactions: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
-      { name: 'message_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
-      { name: 'user_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
+      { name: 'message_id', type: 'int', nullable: false, key: 'MUL' },
+      { name: 'user_id', type: 'int', nullable: false, key: 'MUL' },
       { name: 'icon', type: 'varchar(10)', nullable: false, key: '' },
       { name: 'created_at', type: 'timestamp', nullable: true, key: '' },
     ],
@@ -195,12 +195,12 @@ const expectedTables = {
   },
   notifications: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
-      { name: 'user_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
+      { name: 'user_id', type: 'int', nullable: false, key: 'MUL' },
       { name: 'type', type: 'varchar(50)', nullable: false, key: '' },
-      { name: 'message_id', type: 'varchar(191)', nullable: true, key: 'MUL' },
-      { name: 'channel_id', type: 'varchar(191)', nullable: true, key: 'MUL' },
-      { name: 'from_user_id', type: 'varchar(191)', nullable: true, key: 'MUL' },
+      { name: 'message_id', type: 'int', nullable: true, key: 'MUL' },
+      { name: 'channel_id', type: 'int', nullable: true, key: 'MUL' },
+      { name: 'from_user_id', type: 'int', nullable: true, key: 'MUL' },
       { name: 'content', type: 'text', nullable: false, key: '' },
       { name: 'is_read', type: 'tinyint(1)', nullable: true, key: '' },
       { name: 'created_at', type: 'timestamp', nullable: true, key: '' },
@@ -209,30 +209,30 @@ const expectedTables = {
   },
   starredMessages: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
-      { name: 'message_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
-      { name: 'user_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
+      { name: 'message_id', type: 'int', nullable: false, key: 'MUL' },
+      { name: 'user_id', type: 'int', nullable: false, key: 'MUL' },
       { name: 'created_at', type: 'timestamp', nullable: true, key: '' },
     ],
     indexes: []
   },
   attachments: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
       { name: 'filename', type: 'varchar(255)', nullable: false, key: '' },
       { name: 'original_name', type: 'varchar(255)', nullable: false, key: '' },
       { name: 'mime_type', type: 'varchar(100)', nullable: false, key: '' },
       { name: 'size', type: 'varchar(20)', nullable: false, key: '' },
       { name: 'url', type: 'text', nullable: false, key: '' },
-      { name: 'message_id', type: 'varchar(191)', nullable: true, key: 'MUL' },
-      { name: 'created_by', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'message_id', type: 'int', nullable: true, key: 'MUL' },
+      { name: 'created_by', type: 'int', nullable: false, key: 'MUL' },
       { name: 'created_at', type: 'timestamp', nullable: true, key: '' },
     ],
     indexes: []
   },
   disciplines: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
       { name: 'name', type: 'varchar(100)', nullable: false, key: '' },
       { name: 'description', type: 'text', nullable: true, key: '' },
       { name: 'code', type: 'varchar(20)', nullable: true, key: '' },
@@ -243,11 +243,11 @@ const expectedTables = {
   },
   projects: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
       { name: 'name', type: 'varchar(255)', nullable: false, key: '' },
       { name: 'description', type: 'text', nullable: true, key: '' },
       { name: 'status', type: 'varchar(50)', nullable: true, key: '' },
-      { name: 'created_by', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'created_by', type: 'int', nullable: false, key: 'MUL' },
       { name: 'created_at', type: 'timestamp', nullable: true, key: '' },
       { name: 'updated_at', type: 'timestamp', nullable: true, key: '' },
     ],
@@ -255,9 +255,9 @@ const expectedTables = {
   },
   projectMembers: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
-      { name: 'project_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
-      { name: 'user_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
+      { name: 'project_id', type: 'int', nullable: false, key: 'MUL' },
+      { name: 'user_id', type: 'int', nullable: false, key: 'MUL' },
       { name: 'role', type: 'varchar(50)', nullable: true, key: '' },
       { name: 'joined_at', type: 'timestamp', nullable: true, key: '' },
     ],
@@ -265,8 +265,8 @@ const expectedTables = {
   },
   drawingPages: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
-      { name: 'revision_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
+      { name: 'revision_id', type: 'int', nullable: false, key: 'MUL' },
       { name: 'page_number', type: 'varchar(10)', nullable: false, key: '' },
       { name: 'image_url', type: 'text', nullable: false, key: '' },
       { name: 'thumbnail_url', type: 'text', nullable: true, key: '' },
@@ -281,20 +281,20 @@ const expectedTables = {
   },
   drawingAnnotations: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
-      { name: 'drawing_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
-      { name: 'page_id', type: 'varchar(191)', nullable: true, key: 'MUL' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
+      { name: 'drawing_id', type: 'int', nullable: false, key: 'MUL' },
+      { name: 'page_id', type: 'int', nullable: true, key: 'MUL' },
       { name: 'type', type: 'varchar(50)', nullable: false, key: '' },
       { name: 'data', type: 'json', nullable: false, key: '' },
-      { name: 'created_by', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'created_by', type: 'int', nullable: false, key: 'MUL' },
       { name: 'created_at', type: 'timestamp', nullable: true, key: '' },
     ],
     indexes: []
   },
   drawingRevisions: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
-      { name: 'drawing_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
+      { name: 'drawing_id', type: 'int', nullable: false, key: 'MUL' },
       { name: 'version', type: 'varchar(20)', nullable: false, key: '' },
       { name: 'changes', type: 'json', nullable: false, key: '' },
       { name: 'status', type: 'varchar(50)', nullable: false, key: '' },
@@ -304,35 +304,35 @@ const expectedTables = {
       { name: 'file_type', type: 'varchar(100)', nullable: true, key: '' },
       { name: 'file_size', type: 'varchar(20)', nullable: true, key: '' },
       { name: 'ai_extracted_data', type: 'json', nullable: true, key: '' },
-      { name: 'uploaded_by', type: 'varchar(191)', nullable: true, key: 'MUL' },
-      { name: 'reviewed_by', type: 'varchar(191)', nullable: true, key: 'MUL' },
+      { name: 'uploaded_by', type: 'int', nullable: true, key: 'MUL' },
+      { name: 'reviewed_by', type: 'int', nullable: true, key: 'MUL' },
       { name: 'review_notes', type: 'text', nullable: true, key: '' },
       { name: 'uploaded_at', type: 'timestamp', nullable: true, key: '' },
       { name: 'reviewed_at', type: 'timestamp', nullable: true, key: '' },
-      { name: 'created_by', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'created_by', type: 'int', nullable: false, key: 'MUL' },
       { name: 'created_at', type: 'timestamp', nullable: true, key: '' },
     ],
     indexes: []
   },
   drawingComments: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
-      { name: 'drawing_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
+      { name: 'drawing_id', type: 'int', nullable: false, key: 'MUL' },
       { name: 'content', type: 'text', nullable: false, key: '' },
       { name: 'x', type: 'varchar(20)', nullable: true, key: '' },
       { name: 'y', type: 'varchar(20)', nullable: true, key: '' },
-      { name: 'created_by', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'created_by', type: 'int', nullable: false, key: 'MUL' },
       { name: 'created_at', type: 'timestamp', nullable: true, key: '' },
     ],
     indexes: []
   },
   floors: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
       { name: 'name', type: 'varchar(100)', nullable: false, key: '' },
       { name: 'level', type: 'varchar(20)', nullable: false, key: '' },
       { name: 'description', type: 'text', nullable: true, key: '' },
-      { name: 'project_id', type: 'varchar(191)', nullable: true, key: 'MUL' },
+      { name: 'project_id', type: 'int', nullable: true, key: 'MUL' },
       { name: 'sort_order', type: 'varchar(10)', nullable: true, key: '' },
       { name: 'created_at', type: 'timestamp', nullable: true, key: '' },
     ],
@@ -340,9 +340,9 @@ const expectedTables = {
   },
   rooms: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
       { name: 'name', type: 'varchar(100)', nullable: false, key: '' },
-      { name: 'floor_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'floor_id', type: 'int', nullable: false, key: 'MUL' },
       { name: 'area', type: 'varchar(20)', nullable: true, key: '' },
       { name: 'description', type: 'text', nullable: true, key: '' },
       { name: 'created_at', type: 'timestamp', nullable: true, key: '' },
@@ -351,21 +351,21 @@ const expectedTables = {
   },
   layers: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
       { name: 'name', type: 'varchar(100)', nullable: false, key: '' },
       { name: 'type', type: 'varchar(50)', nullable: false, key: '' },
       { name: 'data', type: 'json', nullable: false, key: '' },
-      { name: 'drawing_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'drawing_id', type: 'int', nullable: false, key: 'MUL' },
       { name: 'visible', type: 'tinyint(1)', nullable: true, key: '' },
-      { name: 'created_by', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'created_by', type: 'int', nullable: false, key: 'MUL' },
       { name: 'created_at', type: 'timestamp', nullable: true, key: '' },
     ],
     indexes: []
   },
   drawingLayers: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
-      { name: 'drawing_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
+      { name: 'drawing_id', type: 'int', nullable: false, key: 'MUL' },
       { name: 'layer_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
       { name: 'order', type: 'varchar(10)', nullable: false, key: '' },
       { name: 'visible', type: 'tinyint(1)', nullable: true, key: '' },
@@ -375,23 +375,23 @@ const expectedTables = {
   },
   pins: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
       { name: 'name', type: 'varchar(100)', nullable: false, key: '' },
       { name: 'x', type: 'varchar(20)', nullable: false, key: '' },
       { name: 'y', type: 'varchar(20)', nullable: false, key: '' },
       { name: 'type', type: 'varchar(50)', nullable: false, key: '' },
       { name: 'data', type: 'json', nullable: true, key: '' },
-      { name: 'drawing_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
-      { name: 'layer_id', type: 'varchar(191)', nullable: true, key: 'MUL' },
-      { name: 'created_by', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'drawing_id', type: 'int', nullable: false, key: 'MUL' },
+      { name: 'layer_id', type: 'int', nullable: true, key: 'MUL' },
+      { name: 'created_by', type: 'int', nullable: false, key: 'MUL' },
       { name: 'created_at', type: 'timestamp', nullable: true, key: '' },
     ],
     indexes: []
   },
   drawingPins: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
-      { name: 'drawing_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
+      { name: 'drawing_id', type: 'int', nullable: false, key: 'MUL' },
       { name: 'pin_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
       { name: 'x', type: 'varchar(20)', nullable: false, key: '' },
       { name: 'y', type: 'varchar(20)', nullable: false, key: '' },
@@ -401,11 +401,11 @@ const expectedTables = {
   },
   savedViews: {
     columns: [
-      { name: 'id', type: 'varchar(191)', nullable: false, key: 'PRI' },
+      { name: 'id', type: 'int', nullable: false, key: 'PRI' },
       { name: 'name', type: 'varchar(100)', nullable: false, key: '' },
       { name: 'type', type: 'varchar(50)', nullable: false, key: '' },
       { name: 'data', type: 'json', nullable: false, key: '' },
-      { name: 'user_id', type: 'varchar(191)', nullable: false, key: 'MUL' },
+      { name: 'user_id', type: 'int', nullable: false, key: 'MUL' },
       { name: 'is_shared', type: 'tinyint(1)', nullable: true, key: '' },
       { name: 'created_at', type: 'timestamp', nullable: true, key: '' },
       { name: 'updated_at', type: 'timestamp', nullable: true, key: '' },
@@ -559,11 +559,22 @@ async function main() {
     const results: { [tableName: string]: VerificationResult } = {};
     let totalIssues = 0;
 
+    // Convert CamelCase to snake_case (handle exceptions like 'sessions', 'users')
+    function camelToSnake(str: string): string {
+      // If already lowercase or snake_case, return as is
+      if (str === str.toLowerCase() || str.includes('_')) {
+        return str;
+      }
+      return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`).replace(/^_/, '');
+    }
+
     // Verify each expected table
     for (const [tableName, expectedTable] of Object.entries(expectedTables)) {
       console.log(`فحص جدول: ${tableName}...`);
       
-      const actualTable = await getTableInfo(connection, tableName);
+      // Convert table name from CamelCase to snake_case
+      const dbTableName = camelToSnake(tableName);
+      const actualTable = await getTableInfo(connection, dbTableName);
       const result = verifyTable(expectedTable, actualTable);
       results[tableName] = result;
 

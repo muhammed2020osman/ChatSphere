@@ -7,7 +7,7 @@ USE `software-link_chatsphere`;
 
 -- Create disciplines table
 CREATE TABLE IF NOT EXISTS disciplines (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   description TEXT,
   code VARCHAR(50),
@@ -18,11 +18,11 @@ CREATE TABLE IF NOT EXISTS disciplines (
 
 -- Create floors table
 CREATE TABLE IF NOT EXISTS floors (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   level VARCHAR(50),
   description TEXT,
-  projectId VARCHAR(191),
+  projectId INT,
   sortOrder INT DEFAULT 0,
   createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS floors (
 
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   email VARCHAR(255) NOT NULL,
   name VARCHAR(255) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Create channels table
 CREATE TABLE IF NOT EXISTS channels (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   description TEXT,
   createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -53,12 +53,12 @@ CREATE TABLE IF NOT EXISTS channels (
 
 -- Create messages table
 CREATE TABLE IF NOT EXISTS messages (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   content TEXT NOT NULL,
-  userId VARCHAR(191) NOT NULL,
-  channelId VARCHAR(191) NOT NULL,
-  replyToId VARCHAR(191),
-  threadParentId VARCHAR(191),
+  userId INT NOT NULL,
+  channelId INT NOT NULL,
+  replyToId INT,
+  threadParentId INT,
   attachmentUrl TEXT,
   attachmentType VARCHAR(100),
   attachmentName VARCHAR(255),
@@ -72,11 +72,11 @@ CREATE TABLE IF NOT EXISTS messages (
 
 -- Create direct_messages table
 CREATE TABLE IF NOT EXISTS direct_messages (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   content TEXT NOT NULL,
-  fromUserId VARCHAR(191) NOT NULL,
-  toUserId VARCHAR(191) NOT NULL,
-  replyToId VARCHAR(191),
+  fromUserId INT NOT NULL,
+  toUserId INT NOT NULL,
+  replyToId INT,
   attachmentUrl TEXT,
   attachmentType VARCHAR(100),
   attachmentName VARCHAR(255),
@@ -89,9 +89,9 @@ CREATE TABLE IF NOT EXISTS direct_messages (
 
 -- Create reactions table
 CREATE TABLE IF NOT EXISTS reactions (
-  id VARCHAR(191) PRIMARY KEY,
-  messageId VARCHAR(191) NOT NULL,
-  userId VARCHAR(191) NOT NULL,
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  messageId INT NOT NULL,
+  userId INT NOT NULL,
   emoji VARCHAR(10) NOT NULL,
   icon VARCHAR(50),
   createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -101,11 +101,11 @@ CREATE TABLE IF NOT EXISTS reactions (
 
 -- Create notifications table
 CREATE TABLE IF NOT EXISTS notifications (
-  id VARCHAR(191) PRIMARY KEY,
-  userId VARCHAR(191) NOT NULL,
-  messageId VARCHAR(191),
-  channelId VARCHAR(191),
-  fromUserId VARCHAR(191),
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  userId INT NOT NULL,
+  messageId INT,
+  channelId INT,
+  fromUserId INT,
   content TEXT,
   type VARCHAR(50) NOT NULL,
   isRead BOOLEAN DEFAULT FALSE,
@@ -118,9 +118,9 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 -- Create starred_messages table
 CREATE TABLE IF NOT EXISTS starred_messages (
-  id VARCHAR(191) PRIMARY KEY,
-  userId VARCHAR(191) NOT NULL,
-  messageId VARCHAR(191) NOT NULL,
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  userId INT NOT NULL,
+  messageId INT NOT NULL,
   createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (userId) REFERENCES users(id),
   FOREIGN KEY (messageId) REFERENCES messages(id)
@@ -128,12 +128,12 @@ CREATE TABLE IF NOT EXISTS starred_messages (
 
 -- Create drawings table
 CREATE TABLE IF NOT EXISTS drawings (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   description TEXT,
-  disciplineId VARCHAR(191),
-  floorId VARCHAR(191),
-  projectId VARCHAR(191),
+  disciplineId INT,
+  floorId INT,
+  projectId INT,
   createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (disciplineId) REFERENCES disciplines(id),
@@ -142,8 +142,8 @@ CREATE TABLE IF NOT EXISTS drawings (
 
 -- Create drawing_revisions table
 CREATE TABLE IF NOT EXISTS drawing_revisions (
-  id VARCHAR(191) PRIMARY KEY,
-  drawingId VARCHAR(191) NOT NULL,
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  drawingId INT NOT NULL,
   version VARCHAR(50) NOT NULL,
   status VARCHAR(50) DEFAULT 'draft',
   fileUrl TEXT,
@@ -152,8 +152,8 @@ CREATE TABLE IF NOT EXISTS drawing_revisions (
   fileType VARCHAR(100),
   fileSize BIGINT,
   aiExtractedData JSON,
-  uploadedBy VARCHAR(191),
-  reviewedBy VARCHAR(191),
+  uploadedBy INT,
+  reviewedBy INT,
   reviewNotes TEXT,
   uploadedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   reviewedAt TIMESTAMP NULL,
@@ -166,8 +166,8 @@ CREATE TABLE IF NOT EXISTS drawing_revisions (
 
 -- Create drawing_pages table
 CREATE TABLE IF NOT EXISTS drawing_pages (
-  id VARCHAR(191) PRIMARY KEY,
-  revisionId VARCHAR(191) NOT NULL,
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  revisionId INT NOT NULL,
   pageNumber INT NOT NULL,
   imageUrl TEXT,
   thumbnailUrl TEXT,
@@ -182,10 +182,10 @@ CREATE TABLE IF NOT EXISTS drawing_pages (
 
 -- Create layers table
 CREATE TABLE IF NOT EXISTS layers (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   description TEXT,
-  drawingId VARCHAR(191) NOT NULL,
+  drawingId INT NOT NULL,
   visible BOOLEAN DEFAULT TRUE,
   createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -194,11 +194,11 @@ CREATE TABLE IF NOT EXISTS layers (
 
 -- Create pins table
 CREATE TABLE IF NOT EXISTS pins (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   x DECIMAL(10,2) NOT NULL,
   y DECIMAL(10,2) NOT NULL,
-  drawingId VARCHAR(191) NOT NULL,
-  layerId VARCHAR(191),
+  drawingId INT NOT NULL,
+  layerId INT,
   title VARCHAR(255),
   description TEXT,
   type VARCHAR(50) DEFAULT 'general',
@@ -210,19 +210,19 @@ CREATE TABLE IF NOT EXISTS pins (
 
 -- Create tickets table
 CREATE TABLE IF NOT EXISTS tickets (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(255) NOT NULL,
   description TEXT,
   type VARCHAR(50) DEFAULT 'general',
   status VARCHAR(50) DEFAULT 'open',
   priority VARCHAR(50) DEFAULT 'medium',
-  drawingId VARCHAR(191),
-  disciplineId VARCHAR(191),
-  pinId VARCHAR(191),
-  layerId VARCHAR(191),
-  reporter VARCHAR(191) NOT NULL,
-  assignee VARCHAR(191),
-  channelId VARCHAR(191),
+  drawingId INT,
+  disciplineId INT,
+  pinId INT,
+  layerId INT,
+  reporter INT NOT NULL,
+  assignee INT,
+  channelId INT,
   slaHours INT DEFAULT 24,
   dueDate TIMESTAMP NULL,
   tags TEXT,
@@ -239,11 +239,11 @@ CREATE TABLE IF NOT EXISTS tickets (
 
 -- Create saved_views table
 CREATE TABLE IF NOT EXISTS saved_views (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   description TEXT,
-  userId VARCHAR(191) NOT NULL,
-  drawingId VARCHAR(191) NOT NULL,
+  userId INT NOT NULL,
+  drawingId INT NOT NULL,
   viewData JSON NOT NULL,
   isShared BOOLEAN DEFAULT FALSE,
   createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -254,7 +254,7 @@ CREATE TABLE IF NOT EXISTS saved_views (
 
 -- Create attachments table
 CREATE TABLE IF NOT EXISTS attachments (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   fileName VARCHAR(255) NOT NULL,
   fileType VARCHAR(100) NOT NULL,
   fileSize BIGINT NOT NULL,
@@ -266,9 +266,9 @@ CREATE TABLE IF NOT EXISTS attachments (
 
 -- Create channel_members table
 CREATE TABLE IF NOT EXISTS channel_members (
-  id VARCHAR(191) PRIMARY KEY,
-  channelId VARCHAR(191) NOT NULL,
-  userId VARCHAR(191) NOT NULL,
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  channelId INT NOT NULL,
+  userId INT NOT NULL,
   role VARCHAR(50) DEFAULT 'member',
   joinedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (channelId) REFERENCES channels(id),
@@ -278,8 +278,8 @@ CREATE TABLE IF NOT EXISTS channel_members (
 
 -- Create sessions table
 CREATE TABLE IF NOT EXISTS sessions (
-  id VARCHAR(191) PRIMARY KEY,
-  userId VARCHAR(191) NOT NULL,
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  userId INT NOT NULL,
   expiresAt TIMESTAMP NOT NULL,
   createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (userId) REFERENCES users(id)

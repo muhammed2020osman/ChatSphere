@@ -3,6 +3,7 @@ import {
   index,
   uniqueIndex,
   mysqlTable,
+  int,
   varchar,
   text,
   timestamp,
@@ -25,7 +26,7 @@ export const sessions = mysqlTable(
 
 // User storage table - Required for Replit Auth
 export const users = mysqlTable("users", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  id: int("id").primaryKey().autoincrement(),
   email: varchar("email", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
@@ -40,25 +41,25 @@ export const users = mysqlTable("users", {
 
 // Channels table
 export const channels = mysqlTable("channels", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  id: int("id").primaryKey().autoincrement(),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
   isPrivate: boolean("is_private").default(false).notNull(),
-  createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
+  createdBy: int("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Messages table
 export const messages = mysqlTable("messages", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  id: int("id").primaryKey().autoincrement(),
   content: text("content").notNull(),
-  channelId: varchar("channel_id", { length: 191 }).references(() => channels.id),
-  userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
-  replyToId: varchar("reply_to_id", { length: 191 }),
+  channelId: int("channel_id").references(() => channels.id),
+  userId: int("user_id").notNull().references(() => users.id),
+  replyToId: int("reply_to_id"),
   attachmentUrl: text("attachment_url"),
   attachmentType: varchar("attachment_type", { length: 100 }),
   attachmentName: varchar("attachment_name", { length: 255 }),
-  threadParentId: varchar("thread_parent_id", { length: 191 }),
+  threadParentId: int("thread_parent_id"),
   mentions: json("mentions").default([]),
   editedAt: timestamp("edited_at"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -67,33 +68,33 @@ export const messages = mysqlTable("messages", {
 
 // Drawings table
 export const drawings = mysqlTable("drawings", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  id: int("id").primaryKey().autoincrement(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   data: json("data").notNull(),
-  disciplineId: varchar("discipline_id", { length: 191 }).references(() => disciplines.id),
-  floorId: varchar("floor_id", { length: 191 }).references(() => floors.id),
-  createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
+  disciplineId: int("discipline_id").references(() => disciplines.id),
+  floorId: int("floor_id").references(() => floors.id),
+  createdBy: int("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
 
 // Tickets table
 export const tickets = mysqlTable("tickets", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  id: int("id").primaryKey().autoincrement(),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   type: varchar("type", { length: 50 }).default("issue").notNull(),
   status: varchar("status", { length: 50 }).default("open").notNull(),
   priority: varchar("priority", { length: 50 }).default("medium").notNull(),
-  drawingId: varchar("drawing_id", { length: 191 }).references(() => drawings.id),
-  disciplineId: varchar("discipline_id", { length: 191 }).references(() => disciplines.id),
-  pinId: varchar("pin_id", { length: 191 }).references(() => pins.id),
-  layerId: varchar("layer_id", { length: 191 }).references(() => layers.id),
-  assignedTo: varchar("assigned_to", { length: 191 }).references(() => users.id),
-  createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
-  reporter: varchar("reporter", { length: 191 }).references(() => users.id),
-  channelId: varchar("channel_id", { length: 191 }).references(() => channels.id),
+  drawingId: int("drawing_id").references(() => drawings.id),
+  disciplineId: int("discipline_id").references(() => disciplines.id),
+  pinId: int("pin_id").references(() => pins.id),
+  layerId: int("layer_id").references(() => layers.id),
+  assignedTo: int("assigned_to").references(() => users.id),
+  createdBy: int("created_by").notNull().references(() => users.id),
+  reporter: int("reporter").references(() => users.id),
+  channelId: int("channel_id").references(() => channels.id),
   slaHours: varchar("sla_hours", { length: 10 }),
   dueDate: timestamp("due_date"),
   tags: json("tags").default([]),
@@ -103,11 +104,11 @@ export const tickets = mysqlTable("tickets", {
 
 // Direct messages table
 export const directMessages = mysqlTable("direct_messages", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  id: int("id").primaryKey().autoincrement(),
   content: text("content").notNull(),
-  fromUserId: varchar("from_user_id", { length: 191 }).notNull().references(() => users.id),
-  toUserId: varchar("to_user_id", { length: 191 }).notNull().references(() => users.id),
-  replyToId: varchar("reply_to_id", { length: 191 }),
+  fromUserId: int("from_user_id").notNull().references(() => users.id),
+  toUserId: int("to_user_id").notNull().references(() => users.id),
+  replyToId: int("reply_to_id"),
   attachmentUrl: text("attachment_url"),
   attachmentType: varchar("attachment_type", { length: 100 }),
   attachmentName: varchar("attachment_name", { length: 255 }),
@@ -117,29 +118,29 @@ export const directMessages = mysqlTable("direct_messages", {
 
 // Channel members table
 export const channelMembers = mysqlTable("channel_members", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
-  channelId: varchar("channel_id", { length: 191 }).notNull().references(() => channels.id),
-  userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
+  id: int("id").primaryKey().autoincrement(),
+  channelId: int("channel_id").notNull().references(() => channels.id),
+  userId: int("user_id").notNull().references(() => users.id),
   joinedAt: timestamp("joined_at").defaultNow(),
 });
 
 // Reactions table
 export const reactions = mysqlTable("reactions", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
-  messageId: varchar("message_id", { length: 191 }).notNull().references(() => messages.id),
-  userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
+  id: int("id").primaryKey().autoincrement(),
+  messageId: int("message_id").notNull().references(() => messages.id),
+  userId: int("user_id").notNull().references(() => users.id),
   icon: varchar("icon", { length: 10 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Notifications table
 export const notifications = mysqlTable("notifications", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
-  userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
+  id: int("id").primaryKey().autoincrement(),
+  userId: int("user_id").notNull().references(() => users.id),
   type: varchar("type", { length: 50 }).notNull(),
-  messageId: varchar("message_id", { length: 191 }).references(() => messages.id),
-  channelId: varchar("channel_id", { length: 191 }).references(() => channels.id),
-  fromUserId: varchar("from_user_id", { length: 191 }).references(() => users.id),
+  messageId: int("message_id").references(() => messages.id),
+  channelId: int("channel_id").references(() => channels.id),
+  fromUserId: int("from_user_id").references(() => users.id),
   content: text("content").notNull(),
   isRead: boolean("is_read").default(false),
   createdAt: timestamp("created_at").defaultNow(),
@@ -147,28 +148,28 @@ export const notifications = mysqlTable("notifications", {
 
 // Starred messages table
 export const starredMessages = mysqlTable("starred_messages", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
-  messageId: varchar("message_id", { length: 191 }).notNull().references(() => messages.id),
-  userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
+  id: int("id").primaryKey().autoincrement(),
+  messageId: int("message_id").notNull().references(() => messages.id),
+  userId: int("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Attachments table
 export const attachments = mysqlTable("attachments", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  id: int("id").primaryKey().autoincrement(),
   filename: varchar("filename", { length: 255 }).notNull(),
   originalName: varchar("original_name", { length: 255 }).notNull(),
   mimeType: varchar("mime_type", { length: 100 }).notNull(),
   size: varchar("size", { length: 20 }).notNull(),
   url: text("url").notNull(),
-  messageId: varchar("message_id", { length: 191 }).references(() => messages.id),
-  createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
+  messageId: int("message_id").references(() => messages.id),
+  createdBy: int("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Disciplines table
 export const disciplines = mysqlTable("disciplines", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  id: int("id").primaryKey().autoincrement(),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
   code: varchar("code", { length: 20 }),
@@ -178,28 +179,28 @@ export const disciplines = mysqlTable("disciplines", {
 
 // Projects table
 export const projects = mysqlTable("projects", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  id: int("id").primaryKey().autoincrement(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   status: varchar("status", { length: 50 }).default("active"),
-  createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
+  createdBy: int("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
 
 // Project members table
 export const projectMembers = mysqlTable("project_members", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
-  projectId: varchar("project_id", { length: 191 }).notNull().references(() => projects.id),
-  userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
+  id: int("id").primaryKey().autoincrement(),
+  projectId: int("project_id").notNull().references(() => projects.id),
+  userId: int("user_id").notNull().references(() => users.id),
   role: varchar("role", { length: 50 }).default("member"),
   joinedAt: timestamp("joined_at").defaultNow(),
 });
 
 // Drawing pages table
 export const drawingPages = mysqlTable("drawing_pages", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
-  revisionId: varchar("revision_id", { length: 191 }).notNull().references(() => drawingRevisions.id),
+  id: int("id").primaryKey().autoincrement(),
+  revisionId: int("revision_id").notNull().references(() => drawingRevisions.id),
   pageNumber: varchar("page_number", { length: 10 }).notNull(),
   imageUrl: text("image_url").notNull(),
   thumbnailUrl: text("thumbnail_url"),
@@ -213,19 +214,19 @@ export const drawingPages = mysqlTable("drawing_pages", {
 
 // Drawing annotations table
 export const drawingAnnotations = mysqlTable("drawing_annotations", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
-  drawingId: varchar("drawing_id", { length: 191 }).notNull().references(() => drawings.id),
-  pageId: varchar("page_id", { length: 191 }).references(() => drawingPages.id),
+  id: int("id").primaryKey().autoincrement(),
+  drawingId: int("drawing_id").notNull().references(() => drawings.id),
+  pageId: int("page_id").references(() => drawingPages.id),
   type: varchar("type", { length: 50 }).notNull(),
   data: json("data").notNull(),
-  createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
+  createdBy: int("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Drawing revisions table
 export const drawingRevisions = mysqlTable("drawing_revisions", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
-  drawingId: varchar("drawing_id", { length: 191 }).notNull().references(() => drawings.id),
+  id: int("id").primaryKey().autoincrement(),
+  drawingId: int("drawing_id").notNull().references(() => drawings.id),
   version: varchar("version", { length: 20 }).notNull(),
   changes: json("changes").notNull(),
   status: varchar("status", { length: 50 }).default("draft").notNull(),
@@ -235,42 +236,42 @@ export const drawingRevisions = mysqlTable("drawing_revisions", {
   fileType: varchar("file_type", { length: 100 }),
   fileSize: varchar("file_size", { length: 20 }),
   aiExtractedData: json("ai_extracted_data"),
-  uploadedBy: varchar("uploaded_by", { length: 191 }).references(() => users.id),
-  reviewedBy: varchar("reviewed_by", { length: 191 }).references(() => users.id),
+  uploadedBy: int("uploaded_by").references(() => users.id),
+  reviewedBy: int("reviewed_by").references(() => users.id),
   reviewNotes: text("review_notes"),
   uploadedAt: timestamp("uploaded_at").defaultNow(),
   reviewedAt: timestamp("reviewed_at"),
-  createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
+  createdBy: int("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Drawing comments table
 export const drawingComments = mysqlTable("drawing_comments", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
-  drawingId: varchar("drawing_id", { length: 191 }).notNull().references(() => drawings.id),
+  id: int("id").primaryKey().autoincrement(),
+  drawingId: int("drawing_id").notNull().references(() => drawings.id),
   content: text("content").notNull(),
   x: varchar("x", { length: 20 }),
   y: varchar("y", { length: 20 }),
-  createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
+  createdBy: int("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Floors table
 export const floors = mysqlTable("floors", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  id: int("id").primaryKey().autoincrement(),
   name: varchar("name", { length: 100 }).notNull(),
   level: varchar("level", { length: 20 }).notNull(),
   description: text("description"),
-  projectId: varchar("project_id", { length: 191 }).references(() => projects.id),
+  projectId: int("project_id").references(() => projects.id),
   sortOrder: varchar("sort_order", { length: 10 }).default("0"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Rooms table
 export const rooms = mysqlTable("rooms", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  id: int("id").primaryKey().autoincrement(),
   name: varchar("name", { length: 100 }).notNull(),
-  floorId: varchar("floor_id", { length: 191 }).notNull().references(() => floors.id),
+  floorId: int("floor_id").notNull().references(() => floors.id),
   area: varchar("area", { length: 20 }),
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -278,21 +279,21 @@ export const rooms = mysqlTable("rooms", {
 
 // Layers table
 export const layers = mysqlTable("layers", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  id: int("id").primaryKey().autoincrement(),
   name: varchar("name", { length: 100 }).notNull(),
   type: varchar("type", { length: 50 }).notNull(),
   data: json("data").notNull(),
-  drawingId: varchar("drawing_id", { length: 191 }).notNull().references(() => drawings.id),
+  drawingId: int("drawing_id").notNull().references(() => drawings.id),
   visible: boolean("visible").default(true),
-  createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
+  createdBy: int("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Drawing layers table
 export const drawingLayers = mysqlTable("drawing_layers", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
-  drawingId: varchar("drawing_id", { length: 191 }).notNull().references(() => drawings.id),
-  layerId: varchar("layer_id", { length: 191 }).notNull().references(() => layers.id),
+  id: int("id").primaryKey().autoincrement(),
+  drawingId: int("drawing_id").notNull().references(() => drawings.id),
+  layerId: int("layer_id").notNull().references(() => layers.id),
   order: varchar("order", { length: 10 }).notNull(),
   visible: boolean("visible").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -300,23 +301,23 @@ export const drawingLayers = mysqlTable("drawing_layers", {
 
 // Pins table
 export const pins = mysqlTable("pins", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  id: int("id").primaryKey().autoincrement(),
   name: varchar("name", { length: 100 }).notNull(),
   x: varchar("x", { length: 20 }).notNull(),
   y: varchar("y", { length: 20 }).notNull(),
   type: varchar("type", { length: 50 }).notNull(),
   data: json("data"),
-  drawingId: varchar("drawing_id", { length: 191 }).notNull().references(() => drawings.id),
-  layerId: varchar("layer_id", { length: 191 }).references(() => layers.id),
-  createdBy: varchar("created_by", { length: 191 }).notNull().references(() => users.id),
+  drawingId: int("drawing_id").notNull().references(() => drawings.id),
+  layerId: int("layer_id").references(() => layers.id),
+  createdBy: int("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Drawing pins table
 export const drawingPins = mysqlTable("drawing_pins", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
-  drawingId: varchar("drawing_id", { length: 191 }).notNull().references(() => drawings.id),
-  pinId: varchar("pin_id", { length: 191 }).notNull().references(() => pins.id),
+  id: int("id").primaryKey().autoincrement(),
+  drawingId: int("drawing_id").notNull().references(() => drawings.id),
+  pinId: int("pin_id").notNull().references(() => pins.id),
   x: varchar("x", { length: 20 }).notNull(),
   y: varchar("y", { length: 20 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -324,11 +325,11 @@ export const drawingPins = mysqlTable("drawing_pins", {
 
 // Saved views table
 export const savedViews = mysqlTable("saved_views", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  id: int("id").primaryKey().autoincrement(),
   name: varchar("name", { length: 100 }).notNull(),
   type: varchar("type", { length: 50 }).notNull(),
   data: json("data").notNull(),
-  userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
+  userId: int("user_id").notNull().references(() => users.id),
   isShared: boolean("is_shared").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),

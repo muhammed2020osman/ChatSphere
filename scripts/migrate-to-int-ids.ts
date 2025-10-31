@@ -36,7 +36,7 @@ const config = {
   protocol41: true,
 };
 
-// Complete table definitions based on schema.ts
+// Table definitions with INT AUTO_INCREMENT
 const tableDefinitions = {
   sessions: `
     CREATE TABLE IF NOT EXISTS sessions (
@@ -64,6 +64,42 @@ const tableDefinitions = {
     )
   `,
 
+  disciplines: `
+    CREATE TABLE IF NOT EXISTS disciplines (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      code VARCHAR(20),
+      color VARCHAR(20),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `,
+
+  floors: `
+    CREATE TABLE IF NOT EXISTS floors (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      level VARCHAR(20) NOT NULL,
+      description TEXT,
+      project_id INT,
+      sort_order VARCHAR(10) DEFAULT '0',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `,
+
+  projects: `
+    CREATE TABLE IF NOT EXISTS projects (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      status VARCHAR(50) DEFAULT 'active',
+      created_by INT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    )
+  `,
+
   channels: `
     CREATE TABLE IF NOT EXISTS channels (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -73,6 +109,17 @@ const tableDefinitions = {
       created_by INT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (created_by) REFERENCES users(id)
+    )
+  `,
+
+  channelMembers: `
+    CREATE TABLE IF NOT EXISTS channel_members (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      channel_id INT NOT NULL,
+      user_id INT NOT NULL,
+      joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (channel_id) REFERENCES channels(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
     )
   `,
 
@@ -96,55 +143,6 @@ const tableDefinitions = {
     )
   `,
 
-  drawings: `
-    CREATE TABLE IF NOT EXISTS drawings (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(255) NOT NULL,
-      description TEXT,
-      data JSON NOT NULL,
-      discipline_id INT,
-      floor_id INT,
-      created_by INT NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      FOREIGN KEY (discipline_id) REFERENCES disciplines(id),
-      FOREIGN KEY (floor_id) REFERENCES floors(id),
-      FOREIGN KEY (created_by) REFERENCES users(id)
-    )
-  `,
-
-  tickets: `
-    CREATE TABLE IF NOT EXISTS tickets (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      title VARCHAR(255) NOT NULL,
-      description TEXT,
-      type VARCHAR(50) DEFAULT 'issue' NOT NULL,
-      status VARCHAR(50) DEFAULT 'open' NOT NULL,
-      priority VARCHAR(50) DEFAULT 'medium' NOT NULL,
-      drawing_id INT,
-      discipline_id INT,
-      pin_id INT,
-      layer_id INT,
-      assigned_to INT,
-      created_by INT NOT NULL,
-      reporter INT,
-      channel_id INT,
-      sla_hours VARCHAR(10),
-      due_date TIMESTAMP,
-      tags JSON DEFAULT (JSON_ARRAY()),
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      FOREIGN KEY (drawing_id) REFERENCES drawings(id),
-      FOREIGN KEY (discipline_id) REFERENCES disciplines(id),
-      FOREIGN KEY (pin_id) REFERENCES pins(id),
-      FOREIGN KEY (layer_id) REFERENCES layers(id),
-      FOREIGN KEY (assigned_to) REFERENCES users(id),
-      FOREIGN KEY (created_by) REFERENCES users(id),
-      FOREIGN KEY (reporter) REFERENCES users(id),
-      FOREIGN KEY (channel_id) REFERENCES channels(id)
-    )
-  `,
-
   directMessages: `
     CREATE TABLE IF NOT EXISTS direct_messages (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -159,17 +157,6 @@ const tableDefinitions = {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (from_user_id) REFERENCES users(id),
       FOREIGN KEY (to_user_id) REFERENCES users(id)
-    )
-  `,
-
-  channelMembers: `
-    CREATE TABLE IF NOT EXISTS channel_members (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      channel_id INT NOT NULL,
-      user_id INT NOT NULL,
-      joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (channel_id) REFERENCES channels(id),
-      FOREIGN KEY (user_id) REFERENCES users(id)
     )
   `,
 
@@ -210,7 +197,8 @@ const tableDefinitions = {
       user_id INT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (message_id) REFERENCES messages(id),
-      FOREIGN KEY (user_id) REFERENCES users(id)
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      UNIQUE KEY unique_message_user (message_id, user_id)
     )
   `,
 
@@ -230,39 +218,47 @@ const tableDefinitions = {
     )
   `,
 
-  disciplines: `
-    CREATE TABLE IF NOT EXISTS disciplines (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(100) NOT NULL,
-      description TEXT,
-      code VARCHAR(20),
-      color VARCHAR(20),
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `,
-
-  projects: `
-    CREATE TABLE IF NOT EXISTS projects (
+  drawings: `
+    CREATE TABLE IF NOT EXISTS drawings (
       id INT AUTO_INCREMENT PRIMARY KEY,
       name VARCHAR(255) NOT NULL,
       description TEXT,
-      status VARCHAR(50) DEFAULT 'active',
+      data JSON NOT NULL,
+      discipline_id INT,
+      floor_id INT,
       created_by INT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (discipline_id) REFERENCES disciplines(id),
+      FOREIGN KEY (floor_id) REFERENCES floors(id),
       FOREIGN KEY (created_by) REFERENCES users(id)
     )
   `,
 
-  projectMembers: `
-    CREATE TABLE IF NOT EXISTS project_members (
+  drawingRevisions: `
+    CREATE TABLE IF NOT EXISTS drawing_revisions (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      project_id INT NOT NULL,
-      user_id INT NOT NULL,
-      role VARCHAR(50) DEFAULT 'member',
-      joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (project_id) REFERENCES projects(id),
-      FOREIGN KEY (user_id) REFERENCES users(id)
+      drawing_id INT NOT NULL,
+      version VARCHAR(20) NOT NULL,
+      changes JSON NOT NULL,
+      status VARCHAR(50) DEFAULT 'draft' NOT NULL,
+      file_url TEXT,
+      thumbnail_url TEXT,
+      file_name VARCHAR(255),
+      file_type VARCHAR(100),
+      file_size VARCHAR(20),
+      ai_extracted_data JSON,
+      uploaded_by INT,
+      reviewed_by INT,
+      review_notes TEXT,
+      uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      reviewed_at TIMESTAMP,
+      created_by INT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (drawing_id) REFERENCES drawings(id),
+      FOREIGN KEY (uploaded_by) REFERENCES users(id),
+      FOREIGN KEY (reviewed_by) REFERENCES users(id),
+      FOREIGN KEY (created_by) REFERENCES users(id)
     )
   `,
 
@@ -298,33 +294,6 @@ const tableDefinitions = {
     )
   `,
 
-  drawingRevisions: `
-    CREATE TABLE IF NOT EXISTS drawing_revisions (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      drawing_id INT NOT NULL,
-      version VARCHAR(20) NOT NULL,
-      changes JSON NOT NULL,
-      status VARCHAR(50) DEFAULT 'draft' NOT NULL,
-      file_url TEXT,
-      thumbnail_url TEXT,
-      file_name VARCHAR(255),
-      file_type VARCHAR(100),
-      file_size VARCHAR(20),
-      ai_extracted_data JSON,
-      uploaded_by INT,
-      reviewed_by INT,
-      review_notes TEXT,
-      uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      reviewed_at TIMESTAMP,
-      created_by INT NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (drawing_id) REFERENCES drawings(id),
-      FOREIGN KEY (uploaded_by) REFERENCES users(id),
-      FOREIGN KEY (reviewed_by) REFERENCES users(id),
-      FOREIGN KEY (created_by) REFERENCES users(id)
-    )
-  `,
-
   drawingComments: `
     CREATE TABLE IF NOT EXISTS drawing_comments (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -336,19 +305,6 @@ const tableDefinitions = {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (drawing_id) REFERENCES drawings(id),
       FOREIGN KEY (created_by) REFERENCES users(id)
-    )
-  `,
-
-  floors: `
-    CREATE TABLE IF NOT EXISTS floors (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(100) NOT NULL,
-      level VARCHAR(20) NOT NULL,
-      description TEXT,
-      project_id INT,
-      sort_order VARCHAR(10) DEFAULT '0',
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (project_id) REFERENCES projects(id)
     )
   `,
 
@@ -423,6 +379,38 @@ const tableDefinitions = {
     )
   `,
 
+  tickets: `
+    CREATE TABLE IF NOT EXISTS tickets (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
+      description TEXT,
+      type VARCHAR(50) DEFAULT 'issue' NOT NULL,
+      status VARCHAR(50) DEFAULT 'open' NOT NULL,
+      priority VARCHAR(50) DEFAULT 'medium' NOT NULL,
+      drawing_id INT,
+      discipline_id INT,
+      pin_id INT,
+      layer_id INT,
+      assigned_to INT,
+      created_by INT NOT NULL,
+      reporter INT,
+      channel_id INT,
+      sla_hours VARCHAR(10),
+      due_date TIMESTAMP,
+      tags JSON DEFAULT (JSON_ARRAY()),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (drawing_id) REFERENCES drawings(id),
+      FOREIGN KEY (discipline_id) REFERENCES disciplines(id),
+      FOREIGN KEY (pin_id) REFERENCES pins(id),
+      FOREIGN KEY (layer_id) REFERENCES layers(id),
+      FOREIGN KEY (assigned_to) REFERENCES users(id),
+      FOREIGN KEY (created_by) REFERENCES users(id),
+      FOREIGN KEY (reporter) REFERENCES users(id),
+      FOREIGN KEY (channel_id) REFERENCES channels(id)
+    )
+  `,
+
   savedViews: `
     CREATE TABLE IF NOT EXISTS saved_views (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -433,6 +421,18 @@ const tableDefinitions = {
       is_shared BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+  `,
+
+  projectMembers: `
+    CREATE TABLE IF NOT EXISTS project_members (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      project_id INT NOT NULL,
+      user_id INT NOT NULL,
+      role VARCHAR(50) DEFAULT 'member',
+      joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (project_id) REFERENCES projects(id),
       FOREIGN KEY (user_id) REFERENCES users(id)
     )
   `
@@ -484,9 +484,92 @@ const indexes = [
   'CREATE INDEX IF NOT EXISTS idx_revisions_uploaded_at ON drawing_revisions(uploaded_at)'
 ];
 
+// Order to drop tables (reverse dependency order)
+const dropOrder = [
+  'drawing_pins',
+  'drawing_layers',
+  'pins',
+  'layers',
+  'drawing_annotations',
+  'drawing_comments',
+  'drawing_pages',
+  'drawing_revisions',
+  'tickets',
+  'drawings',
+  'saved_views',
+  'attachments',
+  'starred_messages',
+  'notifications',
+  'reactions',
+  'direct_messages',
+  'messages',
+  'channel_members',
+  'channels',
+  'project_members',
+  'projects',
+  'rooms',
+  'floors',
+  'disciplines',
+  'users',
+  'sessions'
+];
+
+// Order to create tables (dependency order)
+const createOrder = [
+  'sessions',
+  'users', 
+  'disciplines',
+  'floors',
+  'projects',
+  'channels',
+  'channelMembers',
+  'messages',
+  'directMessages',
+  'reactions',
+  'notifications',
+  'starredMessages',
+  'attachments',
+  'drawings',
+  'drawingRevisions',
+  'drawingPages',
+  'drawingAnnotations',
+  'drawingComments',
+  'rooms',
+  'layers',
+  'drawingLayers',
+  'pins',
+  'drawingPins',
+  'tickets',
+  'savedViews',
+  'projectMembers'
+];
+
+async function dropAllTables(connection: mysql.Connection): Promise<void> {
+  console.log('\n🗑️  حذف جميع الجداول الموجودة...\n');
+  
+  // Disable foreign key checks temporarily
+  await connection.execute('SET FOREIGN_KEY_CHECKS = 0');
+  
+  let droppedCount = 0;
+  for (const tableName of dropOrder) {
+    try {
+      await connection.execute(`DROP TABLE IF EXISTS ${tableName}`);
+      console.log(`  ✅ تم حذف جدول: ${tableName}`);
+      droppedCount++;
+    } catch (error) {
+      console.log(`  ⚠️  جدول ${tableName} غير موجود أو لا يمكن حذفه`);
+    }
+  }
+  
+  // Re-enable foreign key checks
+  await connection.execute('SET FOREIGN_KEY_CHECKS = 1');
+  
+  console.log(`\n📊 تم حذف ${droppedCount} جدول\n`);
+}
+
 async function createTable(connection: mysql.Connection, tableName: string, definition: string): Promise<boolean> {
   try {
-    console.log(`  إنشاء جدول: ${tableName}...`);
+    console.log(`  📋 إنشاء جدول: ${tableName}...`);
     await connection.execute(definition);
     console.log(`  ✅ تم إنشاء جدول ${tableName}`);
     return true;
@@ -528,7 +611,8 @@ async function insertInitialData(connection: mysql.Connection): Promise<void> {
 }
 
 async function main() {
-  console.log('🔧 بدء عملية إصلاح قاعدة البيانات MySQL...\n');
+  console.log('🔧 بدء عملية تحويل قاعدة البيانات إلى INT AUTO_INCREMENT...\n');
+  console.log('⚠️  تحذير: سيتم حذف جميع الجداول والبيانات الموجودة!\n');
 
   let connection: mysql.Connection | null = null;
   
@@ -536,39 +620,14 @@ async function main() {
     connection = await mysql.createConnection(config);
     console.log('✅ تم الاتصال بقاعدة البيانات بنجاح\n');
 
-    // Create tables in dependency order
-    const tableOrder = [
-      'sessions',
-      'users', 
-      'disciplines',
-      'floors',
-      'projects',
-      'channels',
-      'channelMembers',
-      'messages',
-      'directMessages',
-      'reactions',
-      'notifications',
-      'starredMessages',
-      'attachments',
-      'drawings',
-      'drawingRevisions',
-      'drawingPages',
-      'drawingAnnotations',
-      'drawingComments',
-      'rooms',
-      'layers',
-      'drawingLayers',
-      'pins',
-      'drawingPins',
-      'tickets',
-      'savedViews'
-    ];
+    // Drop all existing tables
+    await dropAllTables(connection);
 
-    console.log('📋 إنشاء الجداول...');
+    // Create tables in dependency order
+    console.log('📋 إنشاء الجداول الجديدة...\n');
     let successCount = 0;
     
-    for (const tableName of tableOrder) {
+    for (const tableName of createOrder) {
       const definition = tableDefinitions[tableName as keyof typeof tableDefinitions];
       if (definition) {
         const success = await createTable(connection, tableName, definition);
@@ -576,7 +635,7 @@ async function main() {
       }
     }
 
-    console.log(`\n📊 تم إنشاء ${successCount} من ${tableOrder.length} جدول`);
+    console.log(`\n📊 تم إنشاء ${successCount} من ${createOrder.length} جدول`);
 
     // Create indexes
     await createIndexes(connection);
@@ -584,11 +643,11 @@ async function main() {
     // Insert initial data
     await insertInitialData(connection);
 
-    console.log('\n🎉 تم إصلاح قاعدة البيانات بنجاح!');
+    console.log('\n🎉 تم تحويل قاعدة البيانات بنجاح إلى INT AUTO_INCREMENT!');
     console.log('💡 يمكنك الآن تشغيل سكريبت التحقق: pnpm db:verify');
 
   } catch (error) {
-    console.error('❌ خطأ في إصلاح قاعدة البيانات:', error);
+    console.error('❌ خطأ في تحويل قاعدة البيانات:', error);
     process.exit(1);
   } finally {
     if (connection) {
@@ -601,3 +660,4 @@ async function main() {
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch(console.error);
 }
+

@@ -15,6 +15,7 @@
     "db:push": "drizzle-kit push",
     "db:verify": "tsx scripts/verify-db.ts",
     "db:migrate": "tsx scripts/migrate-db.ts",
+    "db:migrate-int": "tsx scripts/migrate-to-int-ids.ts",
     "db:fix": "tsx scripts/fix-database.ts",
     "db:fix-names": "tsx scripts/fix-table-names.ts",
     "db:fix-final": "tsx scripts/fix-final-issues.ts",

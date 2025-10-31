@@ -4,7 +4,7 @@ USE chatsphere_local;
 
 -- Create disciplines table
 CREATE TABLE IF NOT EXISTS disciplines (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   description TEXT,
   code VARCHAR(50),
@@ -15,11 +15,11 @@ CREATE TABLE IF NOT EXISTS disciplines (
 
 -- Create floors table
 CREATE TABLE IF NOT EXISTS floors (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   level VARCHAR(50),
   description TEXT,
-  projectId VARCHAR(191),
+  projectId INT,
   sortOrder INT DEFAULT 0,
   createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS floors (
 
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   email VARCHAR(255) NOT NULL,
   name VARCHAR(255) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Create channels table
 CREATE TABLE IF NOT EXISTS channels (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   description TEXT,
   createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -50,12 +50,12 @@ CREATE TABLE IF NOT EXISTS channels (
 
 -- Create messages table
 CREATE TABLE IF NOT EXISTS messages (
-  id VARCHAR(191) PRIMARY KEY,
+  id INT AUTO_INCREMENT PRIMARY KEY,
   content TEXT NOT NULL,
-  userId VARCHAR(191) NOT NULL,
-  channelId VARCHAR(191) NOT NULL,
-  replyToId VARCHAR(191),
-  threadParentId VARCHAR(191),
+  userId INT NOT NULL,
+  channelId INT NOT NULL,
+  replyToId INT,
+  threadParentId INT,
   attachmentUrl TEXT,
   attachmentType VARCHAR(100),
   attachmentName VARCHAR(255),
@@ -68,18 +68,18 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 -- Insert initial data
-INSERT INTO disciplines (id, name, description, code, color, createdAt) VALUES
-('disc-1', 'Architecture', 'Architectural drawings', 'ARCH', '#3B82F6', NOW()),
-('disc-2', 'Structural', 'Structural engineering', 'STR', '#10B981', NOW()),
-('disc-3', 'MEP', 'Mechanical, Electrical, Plumbing', 'MEP', '#F59E0B', NOW()),
-('disc-4', 'Civil', 'Civil engineering', 'CIV', '#8B5CF6', NOW()),
-('disc-5', 'Landscape', 'Landscape architecture', 'LAND', '#06B6D4', NOW())
+INSERT INTO disciplines (name, description, code, color, createdAt) VALUES
+('Architecture', 'Architectural drawings', 'ARCH', '#3B82F6', NOW()),
+('Structural', 'Structural engineering', 'STR', '#10B981', NOW()),
+('MEP', 'Mechanical, Electrical, Plumbing', 'MEP', '#F59E0B', NOW()),
+('Civil', 'Civil engineering', 'CIV', '#8B5CF6', NOW()),
+('Landscape', 'Landscape architecture', 'LAND', '#06B6D4', NOW())
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
-INSERT INTO floors (id, name, level, description, projectId, sortOrder, createdAt) VALUES
-('floor-1', 'Ground Floor', '0', 'Ground level', NULL, 1, NOW()),
-('floor-2', 'First Floor', '1', 'First level', NULL, 2, NOW()),
-('floor-3', 'Second Floor', '2', 'Second level', NULL, 3, NOW()),
-('floor-4', 'Third Floor', '3', 'Third level', NULL, 4, NOW()),
-('floor-5', 'Basement', '-1', 'Basement level', NULL, 0, NOW())
+INSERT INTO floors (name, level, description, projectId, sortOrder, createdAt) VALUES
+('Ground Floor', '0', 'Ground level', NULL, 1, NOW()),
+('First Floor', '1', 'First level', NULL, 2, NOW()),
+('Second Floor', '2', 'Second level', NULL, 3, NOW()),
+('Third Floor', '3', 'Third level', NULL, 4, NOW()),
+('Basement', '-1', 'Basement level', NULL, 0, NOW())
 ON DUPLICATE KEY UPDATE name = VALUES(name);
