@@ -153,8 +153,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   // User operations
-  async getUser(id: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  async getUser(id: string | number): Promise<User | undefined> {
+    // Convert "auth:1" format to number if needed
+    const userId = typeof id === 'string' ? this.getUserIdAsNumber(id) : id;
+    console.log('storage.getUser - input:', id, 'converted:', userId, 'type:', typeof userId);
+    const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    console.log('storage.getUser - found:', result[0] ? 'yes' : 'no');
     return result[0] || undefined;
   }
 
