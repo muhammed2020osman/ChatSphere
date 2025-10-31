@@ -32,13 +32,35 @@ router.post('/register', async (req, res) => {
     if (exists) return res.status(409).json({ error: 'Email already in use' });
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await createAuthUser({ email, passwordHash, name });
-    req.session.userId = user.id;
+    try {
+      req.session.userId = user.id as any;
+    } catch (sessErr) {
+      console.error('Session set error after registration:', (sessErr as any)?.message);
+    }
     res.status(201).json({ id: user.id, email: user.email, name: user.name });
   } catch (e: any) {
     const message = e?.message || 'Database unavailable';
+    // Log full error for debugging
+    console.error('Register error:', { code: e?.code, message: e?.message });
     // Map common network errors to 503 so client can show clear message
     if (message.includes('ETIMEDOUT') || message.includes('ENETUNREACH') || e?.code === 'DB_UNAVAILABLE') {
       return res.status(503).json({ message: 'Database unavailable. Please try again later.' });
+    }
+    // MySQL duplicate email
+    if (e?.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Email already in use', code: e.code });
+    }
+    // MySQL NOT NULL violation
+    if (e?.code === 'ER_NO_DEFAULT_FOR_FIELD' || e?.code === 'ER_BAD_NULL_ERROR') {
+      return res.status(400).json({ error: 'Missing required fields', code: e.code });
+    }
+    // Bad field (mismatched schema)
+    if (e?.code === 'ER_BAD_FIELD_ERROR') {
+      return res.status(500).json({ message: 'Database schema mismatch', code: e.code, error: e?.message });
+    }
+    // In development, surface the error code for faster diagnosis
+    if (process.env.NODE_ENV !== 'production') {
+      return res.status(500).json({ message: 'Registration failed', code: e?.code, error: e?.message });
     }
     return res.status(500).json({ message: 'Registration failed' });
   }

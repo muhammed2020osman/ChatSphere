@@ -28,8 +28,11 @@ export default function RegisterPage() {
     const cleaned = raw.replace(/^\d+:\s*/,'');
     try {
       const parsed = JSON.parse(cleaned);
-      // Prefer common keys
-      return parsed?.message || parsed?.error || cleaned;
+      // Prefer detailed server error when available
+      if (parsed?.error && parsed?.code) return `${parsed.error} (${parsed.code})`;
+      if (parsed?.error) return parsed.error;
+      if (parsed?.message && parsed?.code) return `${parsed.message} (${parsed.code})`;
+      return parsed?.message || cleaned;
     } catch {
       return cleaned || 'Registration failed. Please check inputs';
     }

@@ -5,12 +5,31 @@ import { pool } from '../db';
 export async function ensureUsersAuthColumns(): Promise<void> {
   const connection = await pool.getConnection();
   try {
+    // Add columns if they don't exist
     await connection.execute(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NULL;
     `);
     await connection.execute(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255) NULL;
     `);
+    
+    // Ensure all optional fields have defaults or are nullable
+    // Only name, email, and password_hash are required
+    await connection.execute(`
+      ALTER TABLE users MODIFY COLUMN role VARCHAR(20) DEFAULT 'member' NOT NULL;
+    `).catch(() => {}); // Ignore if already set
+    
+    await connection.execute(`
+      ALTER TABLE users MODIFY COLUMN is_online BOOLEAN DEFAULT FALSE;
+    `).catch(() => {}); // Ignore if already set
+    
+    await connection.execute(`
+      ALTER TABLE users MODIFY COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `).catch(() => {}); // Ignore if already set
+    
+    await connection.execute(`
+      ALTER TABLE users MODIFY COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
+    `).catch(() => {}); // Ignore if already set
   } finally {
     connection.release();
   }
@@ -26,7 +45,7 @@ export type AuthUser = {
 export async function findAuthUserByEmail(email: string): Promise<AuthUser | null> {
   try {
     const [rows] = await pool.query<mysql.RowDataPacket[]>(
-      'SELECT id, email, password_hash FROM users WHERE email = ? LIMIT 1',
+      'SELECT id, email, name, password_hash FROM users WHERE email = ? LIMIT 1',
       [email]
     );
     return rows[0] ? (rows[0] as unknown as AuthUser) : null;
@@ -51,8 +70,10 @@ export async function emailExists(email: string): Promise<boolean> {
 
 export async function createAuthUser(params: { email: string; passwordHash: string; name: string; }): Promise<AuthUser> {
   try {
+    // Only insert the 3 required fields: email, password_hash, name
+    // All other fields (id, role, is_online, created_at, updated_at) use their defaults
     await pool.execute<mysql.ResultSetHeader>(
-      'INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, "member")',
+      'INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)',
       [params.email, params.passwordHash, params.name]
     );
     // Fetch the inserted user to get id reliably (UUID PK has no insertId)
