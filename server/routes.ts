@@ -28,6 +28,25 @@ import { z } from "zod";
 // WebSocket client tracking with channel subscriptions
 const clients = new Map<string, { ws: WebSocket; userId: string; channels: Set<string> }>();
 
+// Helper function to extract numeric user ID from "auth:1" format
+function getUserIdAsNumber(userId: string): number {
+  // If userId is already a number string, parse it
+  if (/^\d+$/.test(userId)) {
+    return parseInt(userId, 10);
+  }
+  // If userId is in "auth:1" format, extract the number
+  if (userId.startsWith('auth:')) {
+    const numericId = userId.replace('auth:', '');
+    return parseInt(numericId, 10);
+  }
+  // Fallback: try to parse as number
+  const parsed = parseInt(userId, 10);
+  if (isNaN(parsed)) {
+    throw new Error(`Invalid user ID format: ${userId}`);
+  }
+  return parsed;
+}
+
 // Helper to get authenticated userId from WebSocket request
 async function getAuthenticatedUserId(req: IncomingMessage): Promise<string | null> {
   const sessionMiddleware = await getSession();
@@ -258,10 +277,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/channels', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const data = insertChannelSchema.parse({
+      const userIdAsNumber = getUserIdAsNumber(userId);
+      const parsed = insertChannelSchema.parse({
         ...req.body,
-        createdBy: userId,
+        createdBy: userIdAsNumber,
       });
+      // Explicitly remove id to ensure it's not passed (even if undefined)
+      const { id, ...data } = parsed;
       const channel = await storage.createChannel(data);
       
       // Auto-join creator to the channel
@@ -350,10 +372,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Extract mentions from content
       const mentions = req.body.content ? extractMentions(req.body.content) : [];
       
+      const userIdAsNumber = getUserIdAsNumber(userId);
       const data = insertMessageSchema.parse({
         ...req.body,
-        id: randomUUID(),
-        userId,
+        userId: userIdAsNumber,
         mentions,
       });
       
@@ -362,12 +384,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Channel ID is required" });
       }
       
-      const channel = await storage.getChannel(data.channelId);
+      const channel = await storage.getChannel(data.channelId.toString());
       if (!channel) {
         return res.status(404).json({ message: "Channel not found" });
       }
       
-      const isMember = await storage.isChannelMember(data.channelId, userId);
+      const isMember = await storage.isChannelMember(data.channelId.toString(), userId);
       if (!isMember && channel.isPrivate) {
         return res.status(403).json({ message: "Access denied - not a member of this channel" });
       }
@@ -387,12 +409,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         for (const mentionedUserId of mentionedUserIds) {
           if (mentionedUserId !== userId) {
             try {
+              const mentionedUserIdAsNumber = getUserIdAsNumber(mentionedUserId);
+              const userIdAsNumber = getUserIdAsNumber(userId);
               await storage.createNotification({
-                userId: mentionedUserId,
+                userId: mentionedUserIdAsNumber,
                 type: 'mention',
                 messageId: message.id,
                 channelId: message.channelId,
-                fromUserId: userId,
+                fromUserId: userIdAsNumber,
                 content: message.content || '',
                 isRead: false,
               });
@@ -461,10 +485,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/direct-messages', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const data = insertDirectMessageSchema.parse({
+      const userIdAsNumber = getUserIdAsNumber(userId);
+      const parsed = insertDirectMessageSchema.parse({
         ...req.body,
-        fromUserId: userId,
+        fromUserId: userIdAsNumber,
       });
+      // Explicitly remove id to ensure it's not passed
+      const { id, ...data } = parsed;
       const dm = await storage.createDirectMessage(data);
       
       // Get user info for the message
@@ -515,10 +542,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/reactions', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const data = insertReactionSchema.parse({
+      const userIdAsNumber = getUserIdAsNumber(userId);
+      const parsed = insertReactionSchema.parse({
         ...req.body,
-        userId,
+        userId: userIdAsNumber,
       });
+      // Explicitly remove id to ensure it's not passed
+      const { id, ...data } = parsed;
 
       // Get the message directly to verify it exists and get its channel
       const message = await storage.getMessage(data.messageId);
@@ -1208,7 +1238,8 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
       console.log('Request body:', JSON.stringify(req.body, null, 2));
       
       // Map drawingNo to sheetNo if provided (for backwards compatibility)
-      const { drawingNo, title, sheetNo, ...rest } = req.body;
+      const userIdAsNumber = getUserIdAsNumber(userId);
+      const { id, drawingNo, title, sheetNo, ...rest } = req.body;
       const drawingData = {
         name: title || sheetNo || drawingNo || rest.data?.title || rest.name, // Use title as name, fallback to sheetNo or drawingNo
         description: rest.description || '',
@@ -1220,7 +1251,7 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
           packageName: rest.packageName || rest.data?.packageName,
           ...rest.data || {},
         },
-        createdBy: userId,
+        createdBy: userIdAsNumber,
       };
       
       // Validate required fields
@@ -1267,10 +1298,12 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
   app.post('/api/drawings/:id/revisions', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      const userIdAsNumber = getUserIdAsNumber(userId);
+      const { id, ...bodyWithoutId } = req.body;
       const revisionData = {
-        ...req.body,
-        drawingId: req.params.id,
-        createdBy: userId,
+        ...bodyWithoutId,
+        drawingId: parseInt(req.params.id, 10),
+        createdBy: userIdAsNumber,
         version: req.body.version || req.body.revisionNo || '1.0', // Use version if provided, fallback to revisionNo
         changes: req.body.changes || {}, // Add changes field
       };
@@ -1465,12 +1498,13 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
       const thumbnailUrl = await localStorage.uploadFile(imagePath, fileBuffer, fileType);
 
       // Create drawing revision
+      const userIdAsNumber = getUserIdAsNumber(userId);
       const revisionData = {
-        drawingId,
+        drawingId: parseInt(drawingId, 10),
         revisionNo,
         version: revisionNo, // Map revisionNo to version
         changes: {}, // Add changes field
-        createdBy: userId,
+        createdBy: userIdAsNumber,
         status: 'draft' as const,
         fileUrl: isPdfFile ? pdfUrl : thumbnailUrl, // PDF URL or image URL
         thumbnailUrl,
@@ -1478,7 +1512,7 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
         fileType: isPdfFile ? 'application/pdf' : fileType,
         fileSize,
         aiExtractedData: extractedTextData as any, // Store PDF text extraction in revision
-        uploadedBy: userId,
+        uploadedBy: userIdAsNumber,
       };
 
       const revision = await storage.createDrawingRevision(revisionData);
@@ -1582,6 +1616,7 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
       console.log('Version type:', versionType);
       if (versionType === 'new') {
         // Create new drawing
+        const userIdAsNumber = getUserIdAsNumber(userId);
         const drawingData = {
           name: title, // Add required name field
           description: '', // Add required description field
@@ -1591,7 +1626,7 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
             disciplineId,
             floorId: floorId || null,
           },
-          createdBy: userId,
+          createdBy: userIdAsNumber,
         };
         console.log('Creating drawing with data:', drawingData);
         const drawing = await storage.createDrawing(drawingData);
@@ -1634,8 +1669,9 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
       console.log('Manual PDF upload completed - no AI processing');
 
       // Create Revision with uploadMethod='manual'
+      const userIdAsNumber = getUserIdAsNumber(userId);
       const revisionData = {
-        drawingId: drawingId, // This will be mapped to drawing_id by Drizzle
+        drawingId: parseInt(drawingId, 10), // This will be mapped to drawing_id by Drizzle
         version: revisionNo, // Map revisionNo to version
         changes: {
           fileUrl: pdfSignedUrl,
@@ -1644,7 +1680,7 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
           fileSize: fileSize,
           status: 'draft',
         }, // Add changes field with file info
-        createdBy: userId,
+        createdBy: userIdAsNumber,
       };
 
       console.log('Creating revision with data:', revisionData);
@@ -1720,9 +1756,10 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
         return res.status(401).json({ message: "User not authenticated" });
       }
       
+      const userIdAsNumber = getUserIdAsNumber(userId);
       const layerData = {
         ...req.body,
-        createdBy: userId,
+        createdBy: userIdAsNumber,
       };
       
       console.log('Creating layer with data:', layerData);
@@ -1769,11 +1806,12 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
   app.post('/api/pins', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      const userIdAsNumber = getUserIdAsNumber(userId);
       const pinData = {
         ...req.body,
         // Convert empty string to null for layerId (optional field)
-        layerId: req.body.layerId && req.body.layerId.trim() !== '' ? req.body.layerId : null,
-        createdBy: userId,
+        layerId: req.body.layerId && req.body.layerId.trim() !== '' ? parseInt(req.body.layerId, 10) : null,
+        createdBy: userIdAsNumber,
       };
       const pin = await storage.createPin(pinData);
       res.json(pin);
@@ -1855,12 +1893,14 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
   app.post('/api/tickets', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      const userIdAsNumber = getUserIdAsNumber(userId);
+      const { id, ...bodyWithoutId } = req.body;
       const ticketData = {
-        ...req.body,
+        ...bodyWithoutId,
         // Convert empty strings to null for optional fields
-        layerId: req.body.layerId && req.body.layerId.trim() !== '' ? req.body.layerId : null,
-        assignedTo: req.body.assignedTo && req.body.assignedTo.trim() !== '' ? req.body.assignedTo : null,
-        createdBy: userId,
+        layerId: req.body.layerId && req.body.layerId.trim() !== '' ? parseInt(req.body.layerId, 10) : null,
+        assignedTo: req.body.assignedTo && req.body.assignedTo.trim() !== '' ? parseInt(req.body.assignedTo, 10) : null,
+        createdBy: userIdAsNumber,
       };
       const ticket = await storage.createTicket(ticketData);
       res.json(ticket);

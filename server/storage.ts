@@ -40,10 +40,10 @@ export interface IStorage {
   // Channel operations
   getChannels(): Promise<Channel[]>;
   getUserChannels(userId: string): Promise<Channel[]>;
-  getChannel(id: string): Promise<Channel | undefined>;
+  getChannel(id: string | number): Promise<Channel | undefined>;
   createChannel(channel: any): Promise<Channel>;
-  joinChannel(channelId: string, userId: string): Promise<void>;
-  isChannelMember(channelId: string, userId: string): Promise<boolean>;
+  joinChannel(channelId: string | number, userId: string | number): Promise<void>;
+  isChannelMember(channelId: string | number, userId: string | number): Promise<boolean>;
   
   // Message operations
   getChannelMessages(channelId: string): Promise<any[]>;
@@ -213,36 +213,65 @@ export class DatabaseStorage implements IStorage {
     return allChannels;
   }
 
-  async getChannel(id: string): Promise<Channel | undefined> {
-    const result = await db.select().from(channels).where(eq(channels.id, id)).limit(1);
+  async getChannel(id: string | number): Promise<Channel | undefined> {
+    const channelId = typeof id === 'string' ? parseInt(id, 10) : id;
+    const result = await db.select().from(channels).where(eq(channels.id, channelId)).limit(1);
     return result[0] || undefined;
   }
 
   async createChannel(channelData: any): Promise<Channel> {
-    // Generate ID if not provided
-    if (!channelData.id) {
-      channelData.id = randomUUID();
-    }
+    // Remove id if provided since it's AUTO_INCREMENT
+    const { id, ...dataWithoutId } = channelData;
     
-    await db.insert(channels).values(channelData);
-    const result = await db.select().from(channels).where(eq(channels.id, channelData.id)).limit(1);
-    if (!result[0]) {
+    // Insert and get the inserted ID from MySQL
+    const result = await db.insert(channels).values(dataWithoutId);
+    
+    // Get the last inserted ID
+    const insertedRows = await db.select().from(channels)
+      .where(eq(channels.createdBy, channelData.createdBy))
+      .orderBy(desc(channels.createdAt))
+      .limit(1);
+    
+    if (!insertedRows[0]) {
       throw new Error('Failed to create channel');
     }
-    return result[0];
+    return insertedRows[0];
   }
 
-  async joinChannel(channelId: string, userId: string): Promise<void> {
+  async joinChannel(channelId: string | number, userId: string | number): Promise<void> {
+    // Remove id from data since it's AUTO_INCREMENT
+    const channelIdNum = typeof channelId === 'string' ? parseInt(channelId, 10) : channelId;
+    const userIdNum = typeof userId === 'string' ? getUserIdAsNumber(userId) : userId;
     await db.insert(channelMembers).values({
-      id: randomUUID(),
-      channelId,
-      userId,
+      channelId: channelIdNum,
+      userId: userIdNum,
     });
   }
+  
+  // Helper function to extract numeric user ID from "auth:1" format
+  function getUserIdAsNumber(userId: string): number {
+    // If userId is already a number string, parse it
+    if (/^\d+$/.test(userId)) {
+      return parseInt(userId, 10);
+    }
+    // If userId is in "auth:1" format, extract the number
+    if (userId.startsWith('auth:')) {
+      const numericId = userId.replace('auth:', '');
+      return parseInt(numericId, 10);
+    }
+    // Fallback: try to parse as number
+    const parsed = parseInt(userId, 10);
+    if (isNaN(parsed)) {
+      throw new Error(`Invalid user ID format: ${userId}`);
+    }
+    return parsed;
+  }
 
-  async isChannelMember(channelId: string, userId: string): Promise<boolean> {
+  async isChannelMember(channelId: string | number, userId: string | number): Promise<boolean> {
+    const channelIdNum = typeof channelId === 'string' ? parseInt(channelId, 10) : channelId;
+    const userIdNum = typeof userId === 'string' ? getUserIdAsNumber(userId) : userId;
     const result = await db.select().from(channelMembers)
-      .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.userId, userId)))
+      .where(and(eq(channelMembers.channelId, channelIdNum), eq(channelMembers.userId, userIdNum)))
       .limit(1);
     return result.length > 0;
   }
@@ -271,8 +300,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createMessage(messageData: any): Promise<Message> {
-    await db.insert(messages).values(messageData);
-    const result = await db.select().from(messages).where(eq(messages.id, messageData.id)).limit(1);
+    // Remove id if provided since it's AUTO_INCREMENT
+    const { id, ...dataWithoutId } = messageData;
+    
+    await db.insert(messages).values(dataWithoutId);
+    
+    // Get the last inserted message
+    const result = await db.select().from(messages)
+      .where(eq(messages.userId, messageData.userId))
+      .orderBy(desc(messages.createdAt))
+      .limit(1);
+    
+    if (!result[0]) {
+      throw new Error('Failed to create message');
+    }
     return result[0];
   }
 
@@ -380,8 +421,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createDirectMessage(dmData: any): Promise<any> {
-    await db.insert(directMessages).values(dmData);
-    const result = await db.select().from(directMessages).where(eq(directMessages.id, dmData.id)).limit(1);
+    // Remove id if provided since it's AUTO_INCREMENT
+    const { id, ...dataWithoutId } = dmData;
+    
+    await db.insert(directMessages).values(dataWithoutId);
+    
+    // Get the last inserted direct message
+    const result = await db.select().from(directMessages)
+      .where(eq(directMessages.fromUserId, dmData.fromUserId))
+      .orderBy(desc(directMessages.createdAt))
+      .limit(1);
+    
+    if (!result[0]) {
+      throw new Error('Failed to create direct message');
+    }
     return result[0];
   }
 
@@ -403,12 +456,11 @@ export class DatabaseStorage implements IStorage {
       return existing[0];
     }
 
-    // Ensure we have a primary key for MySQL UUID PK tables
-    const reactionId = reactionData.id ?? randomUUID();
-    const toInsert = { ...reactionData, id: reactionId };
+    // Remove id if provided since it's AUTO_INCREMENT
+    const { id, ...dataWithoutId } = reactionData;
 
     try {
-      await db.insert(reactions).values(toInsert);
+      await db.insert(reactions).values(dataWithoutId);
     } catch (error: any) {
       // If a unique constraint is later added and we hit a race, return the existing row
       if (error?.code === 'ER_DUP_ENTRY') {
@@ -475,8 +527,20 @@ export class DatabaseStorage implements IStorage {
 
   // Notification operations
   async createNotification(notificationData: any): Promise<any> {
-    await db.insert(notifications).values(notificationData);
-    const result = await db.select().from(notifications).where(eq(notifications.id, notificationData.id)).limit(1);
+    // Remove id if provided since it's AUTO_INCREMENT
+    const { id, ...dataWithoutId } = notificationData;
+    
+    await db.insert(notifications).values(dataWithoutId);
+    
+    // Get the last inserted notification
+    const result = await db.select().from(notifications)
+      .where(eq(notifications.userId, notificationData.userId))
+      .orderBy(desc(notifications.createdAt))
+      .limit(1);
+    
+    if (!result[0]) {
+      throw new Error('Failed to create notification');
+    }
     return result[0];
   }
 
@@ -655,12 +719,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createDrawing(drawingData: any): Promise<any> {
-    await db.insert(drawings).values(drawingData);
-    console.log('MySQL insert result:', JSON.stringify(drawingData));
-    // For MySQL with UUID primary keys, insertId is 0
-    // We need to query the last inserted record
-    const lastInserted = await db.select().from(drawings).where(eq(drawings.createdBy, drawingData.createdBy)).orderBy(desc(drawings.createdAt)).limit(1);
+    // Remove id if provided since it's AUTO_INCREMENT
+    const { id, ...dataWithoutId } = drawingData;
+    
+    await db.insert(drawings).values(dataWithoutId);
+    console.log('MySQL insert result:', JSON.stringify(dataWithoutId));
+    
+    // Get the last inserted record
+    const lastInserted = await db.select().from(drawings)
+      .where(eq(drawings.createdBy, drawingData.createdBy))
+      .orderBy(desc(drawings.createdAt))
+      .limit(1);
+    
     console.log('Last inserted drawing:', lastInserted[0]);
+    
+    if (!lastInserted[0]) {
+      throw new Error('Failed to create drawing');
+    }
     return lastInserted[0];
   }
 
@@ -673,10 +748,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createDrawingRevision(revisionData: any): Promise<any> {
-    await db.insert(drawingRevisions).values(revisionData);
-    // For MySQL, we need to get the inserted ID from the result
-    const insertedId = revisionData.id || randomUUID();
-    return { id: insertedId };
+    // Remove id if provided since it's AUTO_INCREMENT
+    const { id, ...dataWithoutId } = revisionData;
+    
+    await db.insert(drawingRevisions).values(dataWithoutId);
+    
+    // Get the last inserted revision
+    const result = await db.select().from(drawingRevisions)
+      .where(eq(drawingRevisions.drawingId, revisionData.drawingId))
+      .orderBy(desc(drawingRevisions.createdAt))
+      .limit(1);
+    
+    if (!result[0]) {
+      throw new Error('Failed to create drawing revision');
+    }
+    return result[0];
   }
 
   async getDrawingRevisions(drawingId: string): Promise<any[]> {
@@ -700,8 +786,20 @@ export class DatabaseStorage implements IStorage {
 
   // Drawing Pages operations
   async createDrawingPage(pageData: any): Promise<any> {
-    await db.insert(drawingPages).values(pageData);
-    const result = await db.select().from(drawingPages).where(eq(drawingPages.revisionId, pageData.revisionId)).orderBy(desc(drawingPages.createdAt)).limit(1);
+    // Remove id if provided since it's AUTO_INCREMENT
+    const { id, ...dataWithoutId } = pageData;
+    
+    await db.insert(drawingPages).values(dataWithoutId);
+    
+    // Get the last inserted page
+    const result = await db.select().from(drawingPages)
+      .where(eq(drawingPages.revisionId, pageData.revisionId))
+      .orderBy(desc(drawingPages.createdAt))
+      .limit(1);
+    
+    if (!result[0]) {
+      throw new Error('Failed to create drawing page');
+    }
     return result[0];
   }
 
@@ -720,19 +818,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createLayer(layerData: any): Promise<any> {
-    // Generate a UUID for the layer
-    const layerId = randomUUID();
-    const layerWithId = {
-      ...layerData,
-      id: layerId,
-    };
+    // Remove id if provided since it's AUTO_INCREMENT
+    const { id, ...dataWithoutId } = layerData;
     
-    console.log('Creating layer with data:', layerWithId);
+    console.log('Creating layer with data:', dataWithoutId);
     
     try {
-      await db.insert(layers).values(layerWithId);
-      const result = await db.select().from(layers).where(eq(layers.id, layerId)).limit(1);
+      await db.insert(layers).values(dataWithoutId);
+      
+      // Get the last inserted layer
+      const result = await db.select().from(layers)
+        .where(eq(layers.drawingId, layerData.drawingId))
+        .orderBy(desc(layers.createdAt))
+        .limit(1);
+      
       console.log('Layer created successfully:', result[0]);
+      
+      if (!result[0]) {
+        throw new Error('Failed to create layer');
+      }
       return result[0];
     } catch (error) {
       console.error('Error creating layer:', error);
@@ -859,8 +963,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTicket(ticketData: any): Promise<Ticket> {
-    await db.insert(tickets).values(ticketData);
-    const result = await db.select().from(tickets).where(eq(tickets.id, ticketData.id)).limit(1);
+    // Remove id if provided since it's AUTO_INCREMENT
+    const { id, ...dataWithoutId } = ticketData;
+    
+    await db.insert(tickets).values(dataWithoutId);
+    
+    // Get the last inserted ticket
+    const result = await db.select().from(tickets)
+      .where(eq(tickets.createdBy, ticketData.createdBy))
+      .orderBy(desc(tickets.createdAt))
+      .limit(1);
+    
+    if (!result[0]) {
+      throw new Error('Failed to create ticket');
+    }
     return result[0];
   }
 

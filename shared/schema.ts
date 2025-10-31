@@ -400,31 +400,32 @@ export const attachmentsRelations = relations(attachments, ({ one }) => ({
 }));
 
 // Zod schemas
-export const insertUserSchema = createInsertSchema(users);
-export const insertChannelSchema = createInsertSchema(channels);
-export const insertMessageSchema = createInsertSchema(messages);
-export const insertDirectMessageSchema = createInsertSchema(directMessages);
-export const insertDrawingSchema = createInsertSchema(drawings);
-export const insertTicketSchema = createInsertSchema(tickets);
-export const insertAttachmentSchema = createInsertSchema(attachments);
-export const insertDrawingPageSchema = createInsertSchema(drawingPages);
-export const insertDrawingRevisionSchema = createInsertSchema(drawingRevisions);
-export const insertDrawingAnnotationSchema = createInsertSchema(drawingAnnotations);
-export const insertDrawingCommentSchema = createInsertSchema(drawingComments);
-export const insertDisciplineSchema = createInsertSchema(disciplines);
-export const insertProjectSchema = createInsertSchema(projects);
-export const insertFloorSchema = createInsertSchema(floors);
-export const insertRoomSchema = createInsertSchema(rooms);
-export const insertLayerSchema = createInsertSchema(layers);
-export const insertPinSchema = createInsertSchema(pins);
-export const insertSavedViewSchema = createInsertSchema(savedViews);
-export const insertReactionSchema = createInsertSchema(reactions);
-export const insertNotificationSchema = createInsertSchema(notifications);
-export const insertStarredMessageSchema = createInsertSchema(starredMessages);
-export const insertChannelMemberSchema = createInsertSchema(channelMembers);
-export const insertProjectMemberSchema = createInsertSchema(projectMembers);
-export const insertDrawingLayerSchema = createInsertSchema(drawingLayers);
-export const insertDrawingPinSchema = createInsertSchema(drawingPins);
+// Remove 'id' from all insert schemas since all tables use AUTO_INCREMENT
+export const insertUserSchema = createInsertSchema(users).omit({ id: true });
+export const insertChannelSchema = createInsertSchema(channels).omit({ id: true });
+export const insertMessageSchema = createInsertSchema(messages).omit({ id: true });
+export const insertDirectMessageSchema = createInsertSchema(directMessages).omit({ id: true });
+export const insertDrawingSchema = createInsertSchema(drawings).omit({ id: true });
+export const insertTicketSchema = createInsertSchema(tickets).omit({ id: true });
+export const insertAttachmentSchema = createInsertSchema(attachments).omit({ id: true });
+export const insertDrawingPageSchema = createInsertSchema(drawingPages).omit({ id: true });
+export const insertDrawingRevisionSchema = createInsertSchema(drawingRevisions).omit({ id: true });
+export const insertDrawingAnnotationSchema = createInsertSchema(drawingAnnotations).omit({ id: true });
+export const insertDrawingCommentSchema = createInsertSchema(drawingComments).omit({ id: true });
+export const insertDisciplineSchema = createInsertSchema(disciplines).omit({ id: true });
+export const insertProjectSchema = createInsertSchema(projects).omit({ id: true });
+export const insertFloorSchema = createInsertSchema(floors).omit({ id: true });
+export const insertRoomSchema = createInsertSchema(rooms).omit({ id: true });
+export const insertLayerSchema = createInsertSchema(layers).omit({ id: true });
+export const insertPinSchema = createInsertSchema(pins).omit({ id: true });
+export const insertSavedViewSchema = createInsertSchema(savedViews).omit({ id: true });
+export const insertReactionSchema = createInsertSchema(reactions).omit({ id: true });
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true });
+export const insertStarredMessageSchema = createInsertSchema(starredMessages).omit({ id: true });
+export const insertChannelMemberSchema = createInsertSchema(channelMembers).omit({ id: true });
+export const insertProjectMemberSchema = createInsertSchema(projectMembers).omit({ id: true });
+export const insertDrawingLayerSchema = createInsertSchema(drawingLayers).omit({ id: true });
+export const insertDrawingPinSchema = createInsertSchema(drawingPins).omit({ id: true });
 
 export type User = typeof users.$inferSelect;
 export type UpsertUser = typeof users.$inferInsert;
