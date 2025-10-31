@@ -198,15 +198,15 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
 
   const isOwnMessage = currentUser?.id === message.userId;
   const getUserInitials = () => {
-    if (message.user?.firstName && message.user?.lastName) {
-      return `${message.user.firstName[0]}${message.user.lastName[0]}`.toUpperCase();
+    if (message.user?.name) {
+      return `${message.user.name[0]}`.toUpperCase();
     }
     return message.user?.email?.[0]?.toUpperCase() || "?";
   };
 
   const getUserName = () => {
-    if (message.user?.firstName && message.user?.lastName) {
-      return `${message.user.firstName} ${message.user.lastName}`;
+    if (message.user?.name ) {
+      return `${message.user.name}`;
     }
     return message.user?.email || "Unknown";
   };

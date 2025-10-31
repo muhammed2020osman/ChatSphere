@@ -134,6 +134,24 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // Helper function to extract numeric user ID from "auth:1" format
+  private getUserIdAsNumber(userId: string): number {
+    // If userId is already a number string, parse it
+    if (/^\d+$/.test(userId)) {
+      return parseInt(userId, 10);
+    }
+    // If userId is in "auth:1" format, extract the number
+    if (userId.startsWith('auth:')) {
+      const numericId = userId.replace('auth:', '');
+      return parseInt(numericId, 10);
+    }
+    const parsed = parseInt(userId, 10);
+    if (isNaN(parsed)) {
+      throw new Error(`Invalid user ID format: ${userId}`);
+    }
+    return parsed;
+  }
+
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
@@ -241,35 +259,16 @@ export class DatabaseStorage implements IStorage {
   async joinChannel(channelId: string | number, userId: string | number): Promise<void> {
     // Remove id from data since it's AUTO_INCREMENT
     const channelIdNum = typeof channelId === 'string' ? parseInt(channelId, 10) : channelId;
-    const userIdNum = typeof userId === 'string' ? getUserIdAsNumber(userId) : userId;
+    const userIdNum = typeof userId === 'string' ? this.getUserIdAsNumber(userId) : userId;
     await db.insert(channelMembers).values({
       channelId: channelIdNum,
       userId: userIdNum,
     });
   }
-  
-  // Helper function to extract numeric user ID from "auth:1" format
-  function getUserIdAsNumber(userId: string): number {
-    // If userId is already a number string, parse it
-    if (/^\d+$/.test(userId)) {
-      return parseInt(userId, 10);
-    }
-    // If userId is in "auth:1" format, extract the number
-    if (userId.startsWith('auth:')) {
-      const numericId = userId.replace('auth:', '');
-      return parseInt(numericId, 10);
-    }
-    // Fallback: try to parse as number
-    const parsed = parseInt(userId, 10);
-    if (isNaN(parsed)) {
-      throw new Error(`Invalid user ID format: ${userId}`);
-    }
-    return parsed;
-  }
 
   async isChannelMember(channelId: string | number, userId: string | number): Promise<boolean> {
     const channelIdNum = typeof channelId === 'string' ? parseInt(channelId, 10) : channelId;
-    const userIdNum = typeof userId === 'string' ? getUserIdAsNumber(userId) : userId;
+    const userIdNum = typeof userId === 'string' ? this.getUserIdAsNumber(userId) : userId;
     const result = await db.select().from(channelMembers)
       .where(and(eq(channelMembers.channelId, channelIdNum), eq(channelMembers.userId, userIdNum)))
       .limit(1);

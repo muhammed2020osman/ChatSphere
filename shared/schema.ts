@@ -399,33 +399,274 @@ export const attachmentsRelations = relations(attachments, ({ one }) => ({
   }),
 }));
 
+// Helper function to convert string IDs to numbers
+function convertStringIdToNumber(value: any): number | null | undefined {
+  if (value == null || value === undefined || value === '') {
+    return value === null ? null : undefined;
+  }
+  if (typeof value === 'number') {
+    if (isNaN(value)) {
+      return null;
+    }
+    return value;
+  }
+  if (typeof value === 'string') {
+    // Handle "auth:1" format
+    const match = value.match(/^auth:(\d+)$/) || value.match(/^(\d+)$/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (isNaN(num)) {
+        return null;
+      }
+      return num;
+    }
+    // Try direct parse
+    const parsed = parseInt(value, 10);
+    if (isNaN(parsed)) {
+      return null;
+    }
+    return parsed;
+  }
+  return null;
+}
+
+// Helper to create preprocessed field schema
+function preprocessNumberField(required: boolean = false) {
+  if (required) {
+    return z.preprocess(
+      (val) => {
+        if (val == null) throw new Error('Field is required');
+        const converted = convertStringIdToNumber(val);
+        if (converted == null) throw new Error(`Invalid number: ${val}`);
+        return converted;
+      },
+      z.number()
+    );
+  }
+  return z.preprocess(
+    (val) => convertStringIdToNumber(val),
+    z.number().nullable().optional()
+  );
+}
+
 // Zod schemas
 // Remove 'id' from all insert schemas since all tables use AUTO_INCREMENT
+// Convert all foreign key fields from string to number using preprocess
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
-export const insertChannelSchema = createInsertSchema(channels).omit({ id: true });
-export const insertMessageSchema = createInsertSchema(messages).omit({ id: true });
-export const insertDirectMessageSchema = createInsertSchema(directMessages).omit({ id: true });
-export const insertDrawingSchema = createInsertSchema(drawings).omit({ id: true });
-export const insertTicketSchema = createInsertSchema(tickets).omit({ id: true });
-export const insertAttachmentSchema = createInsertSchema(attachments).omit({ id: true });
-export const insertDrawingPageSchema = createInsertSchema(drawingPages).omit({ id: true });
-export const insertDrawingRevisionSchema = createInsertSchema(drawingRevisions).omit({ id: true });
-export const insertDrawingAnnotationSchema = createInsertSchema(drawingAnnotations).omit({ id: true });
-export const insertDrawingCommentSchema = createInsertSchema(drawingComments).omit({ id: true });
+
+export const insertChannelSchema = createInsertSchema(channels)
+  .omit({ id: true })
+  .extend({
+    createdBy: z.preprocess(
+      (val) => {
+        if (val == null) return val;
+        return convertStringIdToNumber(val);
+      },
+      z.number()
+    ),
+  });
+
+export const insertMessageSchema = createInsertSchema(messages)
+  .omit({ id: true })
+  .extend({
+    userId: z.preprocess(
+      (val) => {
+        if (val == null) throw new Error('userId is required');
+        const converted = convertStringIdToNumber(val);
+        if (converted == null) throw new Error(`Invalid userId: ${val}`);
+        return converted;
+      },
+      z.number()
+    ),
+    channelId: z.preprocess(
+      (val) => convertStringIdToNumber(val),
+      z.number().nullable().optional()
+    ),
+    replyToId: z.preprocess(
+      (val) => convertStringIdToNumber(val),
+      z.number().nullable().optional()
+    ),
+    threadParentId: z.preprocess(
+      (val) => convertStringIdToNumber(val),
+      z.number().nullable().optional()
+    ),
+  });
+
+export const insertDirectMessageSchema = createInsertSchema(directMessages)
+  .omit({ id: true })
+  .extend({
+    fromUserId: z.preprocess(
+      (val) => {
+        if (val == null) throw new Error('fromUserId is required');
+        const converted = convertStringIdToNumber(val);
+        if (converted == null) throw new Error(`Invalid fromUserId: ${val}`);
+        return converted;
+      },
+      z.number()
+    ),
+    toUserId: z.preprocess(
+      (val) => {
+        if (val == null) throw new Error('toUserId is required');
+        const converted = convertStringIdToNumber(val);
+        if (converted == null) throw new Error(`Invalid toUserId: ${val}`);
+        return converted;
+      },
+      z.number()
+    ),
+    replyToId: z.preprocess(
+      (val) => convertStringIdToNumber(val),
+      z.number().nullable().optional()
+    ),
+  });
+
+export const insertDrawingSchema = createInsertSchema(drawings)
+  .omit({ id: true })
+  .extend({
+    createdBy: preprocessNumberField(true),
+    disciplineId: preprocessNumberField(false),
+    floorId: preprocessNumberField(false),
+  });
+
+export const insertTicketSchema = createInsertSchema(tickets)
+  .omit({ id: true })
+  .extend({
+    createdBy: preprocessNumberField(true),
+    assignedTo: preprocessNumberField(false),
+    reporter: preprocessNumberField(false),
+    channelId: preprocessNumberField(false),
+    drawingId: preprocessNumberField(false),
+    disciplineId: preprocessNumberField(false),
+    pinId: preprocessNumberField(false),
+    layerId: preprocessNumberField(false),
+  });
+export const insertAttachmentSchema = createInsertSchema(attachments)
+  .omit({ id: true })
+  .extend({
+    messageId: preprocessNumberField(false),
+    createdBy: preprocessNumberField(true),
+  });
+
+export const insertDrawingPageSchema = createInsertSchema(drawingPages)
+  .omit({ id: true })
+  .extend({
+    revisionId: preprocessNumberField(true),
+  });
+
+export const insertDrawingRevisionSchema = createInsertSchema(drawingRevisions)
+  .omit({ id: true })
+  .extend({
+    drawingId: preprocessNumberField(true),
+    createdBy: preprocessNumberField(true),
+    uploadedBy: preprocessNumberField(false),
+    reviewedBy: preprocessNumberField(false),
+  });
+
+export const insertDrawingAnnotationSchema = createInsertSchema(drawingAnnotations)
+  .omit({ id: true })
+  .extend({
+    drawingId: preprocessNumberField(true),
+    pageId: preprocessNumberField(false),
+    createdBy: preprocessNumberField(true),
+  });
+
+export const insertDrawingCommentSchema = createInsertSchema(drawingComments)
+  .omit({ id: true })
+  .extend({
+    drawingId: preprocessNumberField(true),
+    createdBy: preprocessNumberField(true),
+  });
+
 export const insertDisciplineSchema = createInsertSchema(disciplines).omit({ id: true });
-export const insertProjectSchema = createInsertSchema(projects).omit({ id: true });
-export const insertFloorSchema = createInsertSchema(floors).omit({ id: true });
-export const insertRoomSchema = createInsertSchema(rooms).omit({ id: true });
-export const insertLayerSchema = createInsertSchema(layers).omit({ id: true });
-export const insertPinSchema = createInsertSchema(pins).omit({ id: true });
-export const insertSavedViewSchema = createInsertSchema(savedViews).omit({ id: true });
-export const insertReactionSchema = createInsertSchema(reactions).omit({ id: true });
-export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true });
-export const insertStarredMessageSchema = createInsertSchema(starredMessages).omit({ id: true });
-export const insertChannelMemberSchema = createInsertSchema(channelMembers).omit({ id: true });
-export const insertProjectMemberSchema = createInsertSchema(projectMembers).omit({ id: true });
-export const insertDrawingLayerSchema = createInsertSchema(drawingLayers).omit({ id: true });
-export const insertDrawingPinSchema = createInsertSchema(drawingPins).omit({ id: true });
+
+export const insertProjectSchema = createInsertSchema(projects)
+  .omit({ id: true })
+  .extend({
+    createdBy: preprocessNumberField(true),
+  });
+
+export const insertFloorSchema = createInsertSchema(floors)
+  .omit({ id: true })
+  .extend({
+    projectId: preprocessNumberField(false),
+  });
+
+export const insertRoomSchema = createInsertSchema(rooms)
+  .omit({ id: true })
+  .extend({
+    floorId: preprocessNumberField(false),
+  });
+
+export const insertLayerSchema = createInsertSchema(layers)
+  .omit({ id: true })
+  .extend({
+    drawingId: preprocessNumberField(false),
+    createdBy: preprocessNumberField(true),
+  });
+
+export const insertPinSchema = createInsertSchema(pins)
+  .omit({ id: true })
+  .extend({
+    drawingId: preprocessNumberField(false),
+    layerId: preprocessNumberField(false),
+    createdBy: preprocessNumberField(true),
+  });
+
+export const insertSavedViewSchema = createInsertSchema(savedViews)
+  .omit({ id: true })
+  .extend({
+    userId: preprocessNumberField(true),
+  });
+
+export const insertReactionSchema = createInsertSchema(reactions)
+  .omit({ id: true })
+  .extend({
+    messageId: preprocessNumberField(false),
+    userId: preprocessNumberField(true),
+  });
+
+export const insertNotificationSchema = createInsertSchema(notifications)
+  .omit({ id: true })
+  .extend({
+    userId: preprocessNumberField(true),
+    messageId: preprocessNumberField(false),
+    channelId: preprocessNumberField(false),
+    fromUserId: preprocessNumberField(false),
+  });
+
+export const insertStarredMessageSchema = createInsertSchema(starredMessages)
+  .omit({ id: true })
+  .extend({
+    messageId: preprocessNumberField(false),
+    userId: preprocessNumberField(true),
+  });
+
+export const insertChannelMemberSchema = createInsertSchema(channelMembers)
+  .omit({ id: true })
+  .extend({
+    channelId: preprocessNumberField(true),
+    userId: preprocessNumberField(true),
+  });
+
+export const insertProjectMemberSchema = createInsertSchema(projectMembers)
+  .omit({ id: true })
+  .extend({
+    projectId: preprocessNumberField(true),
+    userId: preprocessNumberField(true),
+  });
+
+export const insertDrawingLayerSchema = createInsertSchema(drawingLayers)
+  .omit({ id: true })
+  .extend({
+    drawingId: preprocessNumberField(true),
+    layerId: preprocessNumberField(true),
+  });
+
+export const insertDrawingPinSchema = createInsertSchema(drawingPins)
+  .omit({ id: true })
+  .extend({
+    drawingId: preprocessNumberField(true),
+    pinId: preprocessNumberField(true),
+  });
 
 export type User = typeof users.$inferSelect;
 export type UpsertUser = typeof users.$inferInsert;
