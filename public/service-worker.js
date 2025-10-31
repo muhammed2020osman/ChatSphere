@@ -14,27 +14,21 @@ self.addEventListener('install', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   
-  // Don't cache API requests - they need fresh data and credentials
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      fetch(event.request.clone(), {
-        credentials: 'include',
-        // Preserve request mode and cache settings
-        mode: event.request.mode,
-        cache: 'no-store',
-      })
-    );
+  // CRITICAL: Completely bypass service worker for ALL API requests
+  // This is the ONLY way to ensure cookies, credentials, and headers work correctly
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')) {
+    // Don't call event.respondWith() at all - let browser handle natively
+    // This ensures 100% native request handling with all credentials
     return;
   }
   
-  // For non-API requests, try cache first, then fetch
+  // For non-API static assets only, use cache-first strategy
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
         if (response) {
           return response;
         }
-        // For non-API requests, fetch without credentials (static assets)
         return fetch(event.request);
       })
   );

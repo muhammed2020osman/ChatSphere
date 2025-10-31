@@ -158,6 +158,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
+      // CRITICAL: Set headers to prevent caching and ensure credentials work
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      
       const userId = req.user.claims.sub;
       console.log('GET /api/auth/user - userId:', userId, 'type:', typeof userId);
       const user = await storage.getUser(userId);
