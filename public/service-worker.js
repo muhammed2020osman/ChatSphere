@@ -12,12 +12,29 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  
+  // Don't cache API requests - they need fresh data and credentials
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(
+      fetch(event.request.clone(), {
+        credentials: 'include',
+        // Preserve request mode and cache settings
+        mode: event.request.mode,
+        cache: 'no-store',
+      })
+    );
+    return;
+  }
+  
+  // For non-API requests, try cache first, then fetch
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
         if (response) {
           return response;
         }
+        // For non-API requests, fetch without credentials (static assets)
         return fetch(event.request);
       })
   );
