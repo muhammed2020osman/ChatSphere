@@ -77,21 +77,46 @@ router.post('/login', async (req, res) => {
     if (!user || !user.password_hash) return res.status(401).json({ error: 'Invalid email or password' });
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
-    req.session.userId = user.id;
+    // CRITICAL: Convert user.id to string for session (sessions may expect strings)
+    const userIdString = String(user.id);
+    req.session.userId = userIdString;
+    
+    // Log before saving
+    console.log('Login successful - Setting session:', {
+      userEmail: email,
+      userId: user.id,
+      userIdType: typeof user.id,
+      userIdString: userIdString,
+      sessionId: req.sessionID,
+      hasSession: !!req.session,
+    });
+    
     // Ensure session is saved before sending response
     req.session.save((err) => {
       if (err) {
         console.error('Error saving session after login:', err);
         return res.status(500).json({ message: 'Failed to save session' });
       }
-      // Log session info for debugging (only in production or when DEBUG_SESSIONS is set)
-      if (process.env.NODE_ENV === 'production' || process.env.DEBUG_SESSIONS === 'true') {
-        console.log('Session saved after login:', {
-          userId: user.id,
-          sessionId: req.sessionID,
-          sessionUserId: req.session.userId,
-        });
-      }
+      
+      // ALWAYS log session info for debugging (critical for production issues)
+      console.log('Session saved successfully after login:', {
+        userId: user.id,
+        userIdString: userIdString,
+        sessionId: req.sessionID,
+        sessionUserId: req.session.userId,
+        sessionUserIdType: typeof req.session.userId,
+        cookieName: 'sid',
+      });
+      
+      // Set cookie headers explicitly to ensure they're sent
+      res.cookie('sid', req.sessionID, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === 'true',
+        sameSite: (process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === 'true') ? 'none' : 'lax',
+        path: '/',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
+      });
+      
       res.json({ id: user.id, email: user.email, name: user.name });
     });
   } catch (e: any) {

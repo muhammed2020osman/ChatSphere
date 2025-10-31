@@ -23,7 +23,8 @@
     "test:messages": "tsx scripts/test-messages.ts",
     "add:message": "tsx scripts/add-test-message.ts",
     "test:api": "tsx scripts/test-api-message.ts",
-    "test:channel-actions": "tsx scripts/test-channel-actions.ts"
+    "test:channel-actions": "tsx scripts/test-channel-actions.ts",
+    "create:admin": "tsx scripts/create-admin.ts"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.17.2",

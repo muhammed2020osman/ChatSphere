@@ -249,35 +249,39 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  // Log session info for debugging (only in production or when DEBUG_SESSIONS is set)
-  if (process.env.NODE_ENV === 'production' || process.env.DEBUG_SESSIONS === 'true') {
-    console.log('isAuthenticated - Session check:', {
-      hasSession: !!req.session,
-      hasSessionId: !!req.sessionID,
-      sessionUserId: req.session?.userId,
-      sessionUserIdType: typeof req.session?.userId,
-      cookies: req.headers.cookie ? 'present' : 'missing',
-      cookieName: req.headers.cookie?.includes('sid') ? 'sid' : 'none',
-      path: req.path,
-      hostname: req.hostname,
-    });
-  }
+  // ALWAYS log session info for debugging (critical for production issues)
+  console.log('isAuthenticated - Session check:', {
+    hasSession: !!req.session,
+    hasSessionId: !!req.sessionID,
+    sessionID: req.sessionID,
+    sessionUserId: req.session?.userId,
+    sessionUserIdType: typeof req.session?.userId,
+    cookies: req.headers.cookie ? 'present' : 'missing',
+    cookieHeader: req.headers.cookie?.substring(0, 200), // First 200 chars
+    cookieName: req.headers.cookie?.includes('sid') ? 'sid' : 'none',
+    path: req.path,
+    hostname: req.hostname,
+    origin: req.headers.origin,
+  });
 
   // Prefer local email/password session
   if (req.session?.userId) {
     try {
       // Map to a claims-like shape expected by downstream code
+      const userId = req.session.userId;
       req.user = {
         claims: {
-          sub: `auth:${req.session.userId}`,
+          sub: `auth:${userId}`,
           email: undefined,
           name: undefined,
           profile_image_url: null,
         },
       } as any;
-      if (process.env.NODE_ENV === 'production' || process.env.DEBUG_SESSIONS === 'true') {
-        console.log('isAuthenticated - Session authenticated:', req.session.userId);
-      }
+      console.log('isAuthenticated - Session authenticated successfully:', {
+        sessionUserId: userId,
+        userIdType: typeof userId,
+        mappedSub: req.user.claims.sub,
+      });
       return next();
     } catch (error) {
       console.error('Error mapping session userId to user:', error);
