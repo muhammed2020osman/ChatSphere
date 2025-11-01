@@ -1500,23 +1500,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/messages/threads', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const threads = await storage.getUserThreads(userId);
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      
+      // Get all threads (messages with replies) instead of user-specific threads
+      console.log("Fetching all threads for companyId:", companyId);
+      const threads = await storage.getAllThreads(companyId);
+      console.log("Found threads:", threads.length);
 
       // Ensure each thread has user and channel info for the UI
       const enriched = [] as any[];
       for (const t of threads as any[]) {
         let user = (t as any).user;
         if (!user && t.userId) {
-          user = await storage.getUser(t.userId);
+          user = await storage.getUser(t.userId, companyId);
         }
         let channelInfo = (t as any).channel;
         if (!channelInfo && t.channelId) {
-          const ch = await storage.getChannel(t.channelId);
+          const ch = await storage.getChannel(t.channelId, companyId);
           if (ch) channelInfo = { id: ch.id, name: ch.name };
         }
         enriched.push({ ...t, user, channel: channelInfo, replyCount: (t as any).replyCount ?? 0 });
       }
 
+      console.log("Returning enriched threads:", enriched.length);
       res.json(enriched);
     } catch (error) {
       // Fail-soft to avoid breaking the Threads page
@@ -1524,6 +1530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         code: (error as any)?.code,
         message: (error as any)?.message,
         sqlMessage: (error as any)?.sqlMessage,
+        stack: (error as any)?.stack,
       });
       res.status(200).json([]);
     }

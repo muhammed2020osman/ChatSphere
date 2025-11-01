@@ -55,6 +55,7 @@ export interface IStorage {
   createMessage(message: any, companyId?: number): Promise<Message>;
   searchMessages(query: string, userId: string, companyId?: number): Promise<any[]>;
   getUserThreads(userId: string, companyId?: number): Promise<any[]>;
+  getAllThreads(companyId?: number): Promise<any[]>;
   getAllMessages(userId: string, companyId?: number): Promise<any[]>;
   
   // Direct message operations
@@ -621,6 +622,90 @@ export class DatabaseStorage implements IStorage {
     }
 
     return threads;
+  }
+
+  async getAllThreads(companyId?: number): Promise<any[]> {
+    try {
+      // Build where condition for companyId filter
+      let whereCondition: any = sql`${messages.threadParentId} IS NOT NULL`;
+      if (companyId !== undefined && companyId !== null) {
+        whereCondition = and(
+          sql`${messages.threadParentId} IS NOT NULL`,
+          eq(messages.companyId, companyId)
+        );
+      }
+      
+      // Get unique thread_parent_id values from messages
+      // First, get all messages that have thread_parent_id
+      const messagesWithThreadParent = await db
+        .select({ threadParentId: messages.threadParentId })
+        .from(messages)
+        .where(whereCondition);
+
+      console.log("Messages with thread_parent_id:", messagesWithThreadParent.length);
+
+      // Extract unique thread parent IDs
+      const uniqueThreadParentIds = new Set<number>();
+      for (const row of messagesWithThreadParent) {
+        if (row.threadParentId !== null && row.threadParentId !== undefined) {
+          uniqueThreadParentIds.add(row.threadParentId);
+        }
+      }
+
+      const threadParentIds = Array.from(uniqueThreadParentIds);
+      console.log("Unique thread parent IDs:", threadParentIds);
+
+      if (threadParentIds.length === 0) {
+        console.log("No thread parent IDs found");
+        return [];
+      }
+
+      // Get parent messages with user and channel info
+      // Filter by companyId if provided
+      let parentMessagesWhere: any = inArray(messages.id, threadParentIds);
+      if (companyId !== undefined && companyId !== null) {
+        parentMessagesWhere = and(
+          inArray(messages.id, threadParentIds),
+          eq(messages.companyId, companyId)
+        );
+      }
+      
+      const parentMessages = await db
+        .select({
+          message: messages,
+          user: users,
+          channel: channels,
+        })
+        .from(messages)
+        .innerJoin(users, eq(messages.userId, users.id))
+        .leftJoin(channels, eq(messages.channelId, channels.id))
+        .where(parentMessagesWhere)
+        .orderBy(desc(messages.createdAt));
+
+      console.log("Parent messages found:", parentMessages.length);
+
+      // Count replies for each parent message
+      const threads: any[] = [];
+      for (const row of parentMessages as any[]) {
+        const countResult = await db.select({ count: sql<number>`count(*)` })
+          .from(messages)
+          .where(eq(messages.threadParentId, row.message.id));
+        const replyCount = Number(countResult[0]?.count || 0);
+
+        threads.push({
+          ...row.message,
+          user: row.user,
+          replyCount,
+          channel: row.channel ? { id: row.channel.id, name: row.channel.name } : undefined,
+        });
+      }
+
+      console.log("Final threads count:", threads.length);
+      return threads;
+    } catch (error) {
+      console.error("Error in getAllThreads:", error);
+      throw error;
+    }
   }
 
   async getAllMessages(userId: string): Promise<any[]> {

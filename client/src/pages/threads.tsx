@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { MessagesSquare, MessageSquare } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ interface ThreadMessage extends Message {
 }
 
 export default function ThreadsPage() {
+  const [, setLocation] = useLocation();
   const { data: currentUser } = useQuery<{ id: string; firstName?: string; lastName?: string; email?: string }>({
     queryKey: ["/api/auth/user"],
   });
@@ -22,6 +23,10 @@ export default function ThreadsPage() {
     queryKey: ["/api/messages/threads"],
     retry: 1,
   });
+
+  const handleThreadClick = (thread: ThreadMessage) => {
+    setLocation(`/channel/${thread.channelId}?messageId=${thread.id}`);
+  };
 
   const getUserInitials = (user?: User) => {
     if (!user) return "?";
@@ -76,14 +81,12 @@ export default function ThreadsPage() {
         ) : threads && threads.length > 0 ? (
           <div className="space-y-3">
             {threads.map((thread) => (
-              <Link
+              <Card 
                 key={thread.id}
-                href={`/channel/${thread.channelId}?thread=${thread.id}`}
+                className="p-4 hover-elevate cursor-pointer"
+                onClick={() => handleThreadClick(thread)}
+                data-testid={`thread-${thread.id}`}
               >
-                <Card 
-                  className="p-4 hover-elevate cursor-pointer"
-                  data-testid={`thread-${thread.id}`}
-                >
                   <div className="flex gap-3">
                     <Avatar className="w-10 h-10">
                       <AvatarImage src={thread.user?.profileImageUrl || undefined} />
@@ -115,7 +118,6 @@ export default function ThreadsPage() {
                     </div>
                   </div>
                 </Card>
-              </Link>
             ))}
           </div>
         ) : (
