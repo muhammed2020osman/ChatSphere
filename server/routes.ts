@@ -95,11 +95,174 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Tenant resolver middleware - Must be before auth
+  const { tenantResolver } = await import('./middleware/tenantResolver');
+  app.use(tenantResolver);
+
   // Auth middleware
   await setupAuth(app);
 
   // Local auth routes (email/password session-based)
   app.use('/api/auth', authRoutes);
+
+  // Company routes (no auth required for creation)
+  app.post('/api/companies', async (req, res) => {
+    try {
+      const { name, domain, planType = 'basic', invitationCode, adminEmail, adminPassword, adminName } = req.body;
+      
+      // Validate required fields
+      if (!name || !adminEmail || !adminPassword || !adminName) {
+        return res.status(400).json({ error: 'Missing required fields: name, adminEmail, adminPassword, adminName' });
+      }
+
+      const { z } = await import('zod');
+      const { insertCompanySchema } = await import('@shared/schema');
+      
+      // Validate company data
+      const companyData = { name, domain, planType };
+      const companyValidation = insertCompanySchema.safeParse(companyData);
+      if (!companyValidation.success) {
+        return res.status(400).json({ error: 'Invalid company data', details: companyValidation.error });
+      }
+
+      const { db } = await import('./db');
+      const { companies } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const bcrypt = await import('bcryptjs');
+      const { generateToken } = await import('./auth/jwt');
+      const { createAuthUser } = await import('./auth/user.model');
+
+      // Create company using MySQL pool directly for reliable insertId
+      const { pool } = await import('./db');
+      const mysql = await import('mysql2/promise');
+      
+      // Check if invitation code already exists (if provided)
+      if (invitationCode) {
+        const [existing] = await pool.execute<mysql.RowDataPacket[]>(
+          'SELECT id FROM companies WHERE invitation_code = ?',
+          [invitationCode]
+        );
+        if (existing.length > 0) {
+          return res.status(409).json({ error: 'Invitation code already exists' });
+        }
+      }
+      
+      const [result] = await pool.execute<mysql.ResultSetHeader>(
+        'INSERT INTO companies (name, domain, plan_type, invitation_code) VALUES (?, ?, ?, ?)',
+        [name, domain || null, planType, invitationCode || null]
+      );
+      const companyId = result.insertId;
+      
+      if (!companyId) {
+        throw new Error('Failed to create company');
+      }
+
+      // Create admin user for the company
+      const passwordHash = await bcrypt.hash(adminPassword, 12);
+      const adminUser = await createAuthUser({
+        email: adminEmail,
+        passwordHash,
+        name: adminName,
+        companyId: companyId as number,
+      });
+
+      // Set admin role
+      const { pool } = await import('./db');
+      await pool.execute(
+        'UPDATE users SET role = ? WHERE id = ?',
+        ['admin', adminUser.id]
+      );
+
+      // Generate JWT token for the admin user
+      const token = generateToken({
+        userId: String(adminUser.id),
+        email: adminUser.email,
+        id: adminUser.id as number,
+        companyId: adminUser.companyId,
+      });
+
+      console.log('Company created successfully:', {
+        companyId,
+        companyName: name,
+        adminEmail,
+        adminUserId: adminUser.id,
+      });
+
+      res.status(201).json({
+        company: {
+          id: companyId,
+          name,
+          domain,
+          planType,
+        },
+        user: {
+          id: adminUser.id,
+          email: adminUser.email,
+          name: adminUser.name,
+          companyId: adminUser.companyId,
+        },
+        token,
+      });
+    } catch (error: any) {
+      console.error('Error creating company:', error);
+      
+      // Handle duplicate company name
+      if (error?.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({ error: 'Company name already exists' });
+      }
+      
+      res.status(500).json({ error: 'Failed to create company', message: error?.message });
+    }
+  });
+
+  // Find company by invitation code or name (no auth required)
+  app.post('/api/companies/find', async (req, res) => {
+    try {
+      const { invitationCode, companyName } = req.body;
+      
+      if (!invitationCode && !companyName) {
+        return res.status(400).json({ error: 'Either invitationCode or companyName is required' });
+      }
+
+      const { db } = await import('./db');
+      const { companies } = await import('@shared/schema');
+      const { eq, or } = await import('drizzle-orm');
+
+      let company;
+      
+      if (invitationCode) {
+        // Find by invitation code
+        const results = await db
+          .select()
+          .from(companies)
+          .where(eq(companies.invitationCode, invitationCode))
+          .limit(1);
+        company = results[0];
+      } else if (companyName) {
+        // Find by company name
+        const results = await db
+          .select()
+          .from(companies)
+          .where(eq(companies.name, companyName))
+          .limit(1);
+        company = results[0];
+      }
+
+      if (!company) {
+        return res.status(404).json({ error: 'Company not found' });
+      }
+
+      res.json({
+        id: company.id,
+        name: company.name,
+        domain: company.domain,
+        planType: company.planType,
+      });
+    } catch (error: any) {
+      console.error('Error finding company:', error);
+      res.status(500).json({ error: 'Failed to find company', message: error?.message });
+    }
+  });
 
   // Access code verification (no auth required)
   app.post('/api/verify-access-code', async (req, res) => {
@@ -186,6 +349,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('User not found for userId:', userId, 'actualUserId:', actualUserId);
         return res.status(404).json({ message: 'User not found' });
       }
+
+      // Verify user belongs to the company (if companyId is set)
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (companyId && (user as any).companyId && (user as any).companyId !== companyId) {
+        console.error('User company mismatch:', {
+          userId: user.id,
+          userCompanyId: (user as any).companyId,
+          requestCompanyId: companyId,
+        });
+        return res.status(403).json({ message: 'User does not belong to this company' });
+      }
       
       console.log('User found:', user.id, user.email);
       
@@ -194,6 +368,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id: user.id,
         email: user.email,
         name: user.name || null,
+        companyId: (user as any).companyId || companyId,
       });
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -202,9 +377,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User routes
-  app.get('/api/users', isAuthenticated, async (req, res) => {
+  app.get('/api/users', isAuthenticated, async (req: any, res) => {
     try {
-      const users = await storage.getAllUsers();
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+      const users = await storage.getAllUsers(companyId);
       res.json(users);
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -212,9 +391,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/users/:id', isAuthenticated, async (req, res) => {
+  app.get('/api/users/:id', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.params.id);
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+      const user = await storage.getUser(req.params.id, companyId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -276,7 +459,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/channels', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const channels = await storage.getUserChannels(userId);
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+      const channels = await storage.getUserChannels(userId, companyId);
       res.json(channels);
     } catch (error) {
       console.error("Error fetching channels:", error);
@@ -287,7 +474,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/channels/:id', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const channel = await storage.getChannel(req.params.id);
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+      const channel = await storage.getChannel(req.params.id, companyId);
       
       if (!channel) {
         return res.status(404).json({ message: "Channel not found" });
@@ -311,14 +502,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/channels', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
       const userIdAsNumber = getUserIdAsNumber(userId);
       const parsed = insertChannelSchema.parse({
         ...req.body,
         createdBy: userIdAsNumber,
+        companyId,
       });
       // Explicitly remove id to ensure it's not passed (even if undefined)
       const { id, ...data } = parsed;
-      const channel = await storage.createChannel(data);
+      const channel = await storage.createChannel(data, companyId);
       
       // Auto-join creator to the channel
       await storage.joinChannel(channel.id, userId);
@@ -348,7 +544,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/channels/:id/join', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const channel = await storage.getChannel(req.params.id);
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+      const channel = await storage.getChannel(req.params.id, companyId);
       
       if (!channel) {
         return res.status(404).json({ message: "Channel not found" });
@@ -377,7 +577,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/channels/:id/messages', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const channel = await storage.getChannel(req.params.id);
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+      const channel = await storage.getChannel(req.params.id, companyId);
       
       if (!channel) {
         return res.status(404).json({ message: "Channel not found" });
@@ -391,7 +595,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      const messages = await storage.getChannelMessages(req.params.id);
+      const messages = await storage.getChannelMessages(req.params.id, companyId);
       res.json(messages);
     } catch (error) {
       console.error("Error fetching messages:", error);
@@ -402,6 +606,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/messages', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
       
       // Extract mentions from content
       const mentions = req.body.content ? extractMentions(req.body.content) : [];
@@ -411,6 +619,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         userId: userIdAsNumber,
         mentions,
+        companyId,
       });
       
       // Verify user is a member of the channel
@@ -418,7 +627,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Channel ID is required" });
       }
       
-      const channel = await storage.getChannel(data.channelId.toString());
+      const channel = await storage.getChannel(data.channelId.toString(), companyId);
       if (!channel) {
         return res.status(404).json({ message: "Channel not found" });
       }
@@ -428,15 +637,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied - not a member of this channel" });
       }
       
-      const message = await storage.createMessage(data);
+      const message = await storage.createMessage(data, companyId);
       
       // Get user info for the message
-      const user = await storage.getUser(userId);
+      const user = await storage.getUser(userId, companyId);
       const messageWithUser = { ...message, user };
       
       // Create notifications for mentioned users
       if (mentions.length > 0) {
-        const allUsers = await storage.getAllUsers();
+        const allUsers = await storage.getAllUsers(companyId);
         const mentionedUserIds = await findUserIdsByUsernames(mentions, allUsers);
         
         // Create notifications for each mentioned user (except the sender)

@@ -19,11 +19,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const u = await apiRequest<User>("/api/auth/user");
+      const u = await apiRequest<User & { companyId?: number }>("/api/auth/user");
+      // Update companyId in localStorage if present
+      if (u.companyId) {
+        localStorage.setItem('company_id', String(u.companyId));
+      }
       setUser(u);
     } catch {
-      // If refresh fails, clear token (might be expired)
+      // If refresh fails, clear token and companyId (might be expired)
       localStorage.removeItem('auth_token');
+      localStorage.removeItem('company_id');
       setUser(null);
     } finally {
       setLoading(false);
@@ -34,25 +39,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refresh();
   }, [refresh]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const response = await apiRequest<{ id: number; email: string; name: string; token: string }>("/api/auth/login", { method: "POST", body: { email, password } });
-    // Save token to localStorage
+  const login = useCallback(async (email: string, password: string, companyId?: number) => {
+    const response = await apiRequest<{ id: number; email: string; name: string; companyId: number; token: string }>("/api/auth/login", { 
+      method: "POST", 
+      body: { email, password, ...(companyId ? { companyId } : {}) } 
+    });
+    // Save token and companyId to localStorage
     if (response.token) {
       localStorage.setItem('auth_token', response.token);
+      if (response.companyId) {
+        localStorage.setItem('company_id', String(response.companyId));
+      }
       // Set user immediately from response to avoid delay
-      setUser({ id: response.id, email: response.email, name: response.name || null } as User);
+      setUser({ id: response.id, email: response.email, name: response.name || null, companyId: response.companyId } as User);
     }
     // Refresh to ensure we have the latest user data
     await refresh();
   }, [refresh]);
 
-  const register = useCallback(async (name: string, email: string, password: string) => {
-    const response = await apiRequest<{ id: number; email: string; name: string; token: string }>("/api/auth/register", { method: "POST", body: { name, email, password } });
-    // Save token to localStorage
+  const register = useCallback(async (name: string, email: string, password: string, companyId?: number) => {
+    const response = await apiRequest<{ id: number; email: string; name: string; companyId: number; token: string }>("/api/auth/register", { 
+      method: "POST", 
+      body: { name, email, password, ...(companyId ? { companyId } : {}) } 
+    });
+    // Save token and companyId to localStorage
     if (response.token) {
       localStorage.setItem('auth_token', response.token);
+      if (response.companyId) {
+        localStorage.setItem('company_id', String(response.companyId));
+      }
       // Set user immediately from response to avoid delay
-      setUser({ id: response.id, email: response.email, name: response.name || null } as User);
+      setUser({ id: response.id, email: response.email, name: response.name || null, companyId: response.companyId } as User);
     }
     // Refresh to ensure we have the latest user data
     await refresh();
@@ -60,8 +77,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     try { await apiRequest("/api/auth/logout", { method: "POST" }); } catch {}
-    // Clear token from localStorage
+    // Clear token and companyId from localStorage
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('company_id');
     setUser(null);
     setLoading(false);
   }, []);

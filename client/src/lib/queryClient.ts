@@ -17,11 +17,15 @@ export async function apiRequest<T = any>(
 ): Promise<T> {
   const { method = "GET", body, headers = {} } = options || {};
   
-  // Get token from localStorage and add to Authorization header
+  // Get token and companyId from localStorage and add to headers
   const token = localStorage.getItem('auth_token');
+  const companyId = localStorage.getItem('company_id');
   const authHeaders: Record<string, string> = { ...headers };
   if (token) {
     authHeaders['Authorization'] = `Bearer ${token}`;
+  }
+  if (companyId) {
+    authHeaders['x-company-id'] = companyId;
   }
   
   // Don't set Content-Type for FormData, let the browser set it with boundary
@@ -92,11 +96,15 @@ export const getQueryFn: <T>(options: {
       }
     }
     
-    // Get token from localStorage and add to Authorization header
+    // Get token and companyId from localStorage and add to headers
     const token = localStorage.getItem('auth_token');
+    const companyId = localStorage.getItem('company_id');
     const headers: Record<string, string> = {};
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    }
+    if (companyId) {
+      headers['x-company-id'] = companyId;
     }
     
     const res = await fetch(url, {

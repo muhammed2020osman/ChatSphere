@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { queryClient } from "@/lib/queryClient";
+import { Switch } from "@/components/ui/switch";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import AuthLayout from "@/components/auth/AuthLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthContext } from "@/contexts/AuthContext";
@@ -13,6 +14,9 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [useInvitationCode, setUseInvitationCode] = useState(true); // true = invitation code, false = company name
+  const [invitationCode, setInvitationCode] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -48,9 +52,45 @@ export default function RegisterPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    
+    // Validate: either invitation code or company name must be provided
+    if (useInvitationCode && !invitationCode.trim()) {
+      setError('Please enter an invitation code');
+      return;
+    }
+    if (!useInvitationCode && !companyName.trim()) {
+      setError('Please enter a company name');
+      return;
+    }
+    
     setLoading(true);
     try {
-      await registerUser(name, email, password);
+      // First, find the company by invitation code or name
+      let companyId: number | undefined;
+      
+      try {
+        const company = await apiRequest<{ id: number; name: string }>('/api/companies/find', {
+          method: 'POST',
+          body: useInvitationCode 
+            ? { invitationCode: invitationCode.trim() }
+            : { companyName: companyName.trim() }
+        });
+        companyId = company.id;
+      } catch (findErr: any) {
+        const findError = normalizeError(findErr);
+        setError(`Company not found: ${findError}`);
+        setLoading(false);
+        return;
+      }
+      
+      if (!companyId) {
+        setError('Company ID not found');
+        setLoading(false);
+        return;
+      }
+      
+      // Register user with the found company
+      await registerUser(name, email, password, companyId);
       // Don't navigate manually - GuestOnly component will handle redirect
       // navigate("/");
     } catch (err: any) {
@@ -78,6 +118,48 @@ export default function RegisterPage() {
           <label className="block text-sm mb-1">Password</label>
           <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </div>
+        
+        {/* Toggle between invitation code and company name */}
+        <div className="flex items-center justify-between p-3 border rounded-md bg-muted/50">
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={useInvitationCode}
+              onCheckedChange={setUseInvitationCode}
+              id="invitation-toggle"
+            />
+            <label htmlFor="invitation-toggle" className="text-sm font-medium cursor-pointer">
+              {useInvitationCode ? 'Using Invitation Code' : 'Using Company Name'}
+            </label>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {useInvitationCode ? 'Switch to Company Name' : 'Switch to Invitation Code'}
+          </span>
+        </div>
+        
+        {/* Invitation Code or Company Name Field */}
+        {useInvitationCode ? (
+          <div>
+            <label className="block text-sm mb-1">Invitation Code *</label>
+            <Input 
+              type="text" 
+              value={invitationCode} 
+              onChange={(e) => setInvitationCode(e.target.value)} 
+              placeholder="Enter invitation code"
+              required
+            />
+          </div>
+        ) : (
+          <div>
+            <label className="block text-sm mb-1">Company Name *</label>
+            <Input 
+              type="text" 
+              value={companyName} 
+              onChange={(e) => setCompanyName(e.target.value)} 
+              placeholder="Enter company name"
+              required
+            />
+          </div>
+        )}
         {error && <p className="text-sm text-red-500">{error}</p>}
         <Button type="submit" className="w-full" disabled={loading}>
           {loading ? "..." : "Sign Up"}

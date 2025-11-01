@@ -30,28 +30,28 @@ import { db } from "./db";
 
 export interface IStorage {
   // User operations (Required for Replit Auth)
-  getUser(id: string): Promise<User | undefined>;
+  getUser(id: string, companyId?: number): Promise<User | undefined>;
   upsertUser(user: any): Promise<User>;
-  getAllUsers(): Promise<User[]>;
+  getAllUsers(companyId?: number): Promise<User[]>;
   updateUserOnlineStatus(userId: string, isOnline: boolean): Promise<void>;
   updateUserRole(userId: string, role: string): Promise<User>;
   deleteUser(userId: string): Promise<void>;
   
   // Channel operations
-  getChannels(): Promise<Channel[]>;
-  getUserChannels(userId: string): Promise<Channel[]>;
-  getChannel(id: string | number): Promise<Channel | undefined>;
-  createChannel(channel: any): Promise<Channel>;
+  getChannels(companyId?: number): Promise<Channel[]>;
+  getUserChannels(userId: string, companyId?: number): Promise<Channel[]>;
+  getChannel(id: string | number, companyId?: number): Promise<Channel | undefined>;
+  createChannel(channel: any, companyId?: number): Promise<Channel>;
   joinChannel(channelId: string | number, userId: string | number): Promise<void>;
   isChannelMember(channelId: string | number, userId: string | number): Promise<boolean>;
   
   // Message operations
-  getChannelMessages(channelId: string): Promise<any[]>;
-  getMessage(messageId: string): Promise<Message | undefined>;
-  createMessage(message: any): Promise<Message>;
-  searchMessages(query: string, userId: string): Promise<any[]>;
-  getUserThreads(userId: string): Promise<any[]>;
-  getAllMessages(userId: string): Promise<any[]>;
+  getChannelMessages(channelId: string, companyId?: number): Promise<any[]>;
+  getMessage(messageId: string, companyId?: number): Promise<Message | undefined>;
+  createMessage(message: any, companyId?: number): Promise<Message>;
+  searchMessages(query: string, userId: string, companyId?: number): Promise<any[]>;
+  getUserThreads(userId: string, companyId?: number): Promise<any[]>;
+  getAllMessages(userId: string, companyId?: number): Promise<any[]>;
   
   // Direct message operations
   getDirectMessages(userId1: string, userId2: string): Promise<any[]>;
@@ -153,11 +153,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   // User operations
-  async getUser(id: string | number): Promise<User | undefined> {
+  async getUser(id: string | number, companyId?: number): Promise<User | undefined> {
     // Convert "auth:1" format to number if needed
     const userId = typeof id === 'string' ? this.getUserIdAsNumber(id) : id;
-    console.log('storage.getUser - input:', id, 'converted:', userId, 'type:', typeof userId);
-    const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    console.log('storage.getUser - input:', id, 'converted:', userId, 'type:', typeof userId, 'companyId:', companyId);
+    let query = db.select().from(users).where(eq(users.id, userId));
+    if (companyId) {
+      query = query.where(and(eq(users.id, userId), eq(users.companyId, companyId))) as any;
+    }
+    const result = await query.limit(1);
     console.log('storage.getUser - found:', result[0] ? 'yes' : 'no');
     return result[0] || undefined;
   }
@@ -190,7 +194,10 @@ export class DatabaseStorage implements IStorage {
     return result[0] || null;
   }
 
-  async getAllUsers(): Promise<User[]> {
+  async getAllUsers(companyId?: number): Promise<User[]> {
+    if (companyId) {
+      return await db.select().from(users).where(eq(users.companyId, companyId));
+    }
     return await db.select().from(users);
   }
 
@@ -216,34 +223,55 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Channel operations
-  async getChannels(): Promise<Channel[]> {
+  async getChannels(companyId?: number): Promise<Channel[]> {
+    if (companyId) {
+      return await db.select().from(channels).where(eq(channels.companyId, companyId)).orderBy(channels.createdAt);
+    }
     return await db.select().from(channels).orderBy(channels.createdAt);
   }
 
-  async getUserChannels(userId: string): Promise<Channel[]> {
-    // Get all public channels and channels where user is a member
-    const publicChannels = await db.select().from(channels).where(eq(channels.isPrivate, false));
+  async getUserChannels(userId: string, companyId?: number): Promise<Channel[]> {
+    const userIdNum = this.getUserIdAsNumber(userId);
+    // Get all public channels and channels where user is a member, filtered by company
+    let publicChannelsQuery = db.select().from(channels).where(eq(channels.isPrivate, false));
+    if (companyId) {
+      publicChannelsQuery = publicChannelsQuery.where(and(eq(channels.isPrivate, false), eq(channels.companyId, companyId))) as any;
+    }
+    const publicChannels = await publicChannelsQuery;
     
     // Get user's private channels
-    const userPrivateChannels = await db.select()
+    let privateQuery = db.select()
       .from(channels)
       .innerJoin(channelMembers, eq(channels.id, channelMembers.channelId))
-      .where(and(eq(channelMembers.userId, userId), eq(channels.isPrivate, true)));
+      .where(and(eq(channelMembers.userId, userIdNum), eq(channels.isPrivate, true)));
+    if (companyId) {
+      privateQuery = privateQuery.where(and(eq(channelMembers.userId, userIdNum), eq(channels.isPrivate, true), eq(channels.companyId, companyId))) as any;
+    }
+    const userPrivateChannels = await privateQuery;
     
     // Combine and return unique channels
     const allChannels = [...publicChannels, ...userPrivateChannels.map((c: any) => c.channels)];
     return allChannels;
   }
 
-  async getChannel(id: string | number): Promise<Channel | undefined> {
+  async getChannel(id: string | number, companyId?: number): Promise<Channel | undefined> {
     const channelId = typeof id === 'string' ? parseInt(id, 10) : id;
-    const result = await db.select().from(channels).where(eq(channels.id, channelId)).limit(1);
+    let query = db.select().from(channels).where(eq(channels.id, channelId));
+    if (companyId) {
+      query = query.where(and(eq(channels.id, channelId), eq(channels.companyId, companyId))) as any;
+    }
+    const result = await query.limit(1);
     return result[0] || undefined;
   }
 
-  async createChannel(channelData: any): Promise<Channel> {
+  async createChannel(channelData: any, companyId?: number): Promise<Channel> {
     // Remove id if provided since it's AUTO_INCREMENT
     const { id, ...dataWithoutId } = channelData;
+    
+    // Add companyId if provided
+    if (companyId) {
+      dataWithoutId.companyId = companyId;
+    }
     
     // Insert and get the inserted ID from MySQL
     const result = await db.insert(channels).values(dataWithoutId);
@@ -280,16 +308,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Message operations
-  async getChannelMessages(channelId: string): Promise<any[]> {
-    const result = await db
+  async getChannelMessages(channelId: string, companyId?: number): Promise<any[]> {
+    let query = db
       .select({
         message: messages,
         user: users,
       })
       .from(messages)
       .innerJoin(users, eq(messages.userId, users.id))
-      .where(eq(messages.channelId, channelId))
-      .orderBy(asc(messages.createdAt));
+      .where(eq(messages.channelId, channelId));
+    
+    if (companyId) {
+      query = query.where(and(eq(messages.channelId, channelId), eq(messages.companyId, companyId))) as any;
+    }
+    
+    const result = await query.orderBy(asc(messages.createdAt));
     
     return result.map(r => ({
       ...r.message,
@@ -297,14 +330,23 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getMessage(messageId: string): Promise<Message | undefined> {
-    const result = await db.select().from(messages).where(eq(messages.id, messageId)).limit(1);
+  async getMessage(messageId: string, companyId?: number): Promise<Message | undefined> {
+    let query = db.select().from(messages).where(eq(messages.id, messageId));
+    if (companyId) {
+      query = query.where(and(eq(messages.id, messageId), eq(messages.companyId, companyId))) as any;
+    }
+    const result = await query.limit(1);
     return result[0] || undefined;
   }
 
-  async createMessage(messageData: any): Promise<Message> {
+  async createMessage(messageData: any, companyId?: number): Promise<Message> {
     // Remove id if provided since it's AUTO_INCREMENT
     const { id, ...dataWithoutId } = messageData;
+    
+    // Add companyId if provided
+    if (companyId) {
+      dataWithoutId.companyId = companyId;
+    }
     
     await db.insert(messages).values(dataWithoutId);
     

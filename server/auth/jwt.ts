@@ -7,13 +7,15 @@ export interface JWTPayload {
   userId: string;
   email: string;
   id: number;
+  companyId: number;
 }
 
-export function generateToken(payload: { userId: string | number; email: string; id: number }): string {
+export function generateToken(payload: { userId: string | number; email: string; id: number; companyId: number }): string {
   const tokenPayload: JWTPayload = {
     userId: String(payload.userId),
     email: payload.email,
     id: payload.id,
+    companyId: payload.companyId,
   };
   return jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 }

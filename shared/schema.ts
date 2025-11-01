@@ -24,10 +24,25 @@ export const sessions = mysqlTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
+// Companies table - Multi-Tenant SaaS
+export const companies = mysqlTable("companies", {
+  id: int("id").primaryKey().autoincrement(),
+  name: varchar("name", { length: 255 }).notNull(),
+  domain: varchar("domain", { length: 255 }),
+  invitationCode: varchar("invitation_code", { length: 50 }),
+  planType: varchar("plan_type", { length: 50 }).default("basic").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
+}, (table) => [
+  index("idx_companies_domain").on(table.domain),
+  index("idx_companies_invitation_code").on(table.invitationCode),
+]);
+
 // User storage table - Required for Replit Auth
 export const users = mysqlTable("users", {
   id: int("id").primaryKey().autoincrement(),
-  email: varchar("email", { length: 255 }).notNull().unique(),
+  companyId: int("company_id").notNull().references(() => companies.id),
+  email: varchar("email", { length: 255 }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   profileImageUrl: text("profile_image_url"),
@@ -37,21 +52,28 @@ export const users = mysqlTable("users", {
   role: varchar("role", { length: 20 }).default("member").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
-});
+}, (table) => [
+  uniqueIndex("idx_users_email_company").on(table.email, table.companyId),
+  index("idx_users_company").on(table.companyId),
+]);
 
 // Channels table
 export const channels = mysqlTable("channels", {
   id: int("id").primaryKey().autoincrement(),
+  companyId: int("company_id").notNull().references(() => companies.id),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
   isPrivate: boolean("is_private").default(false).notNull(),
   createdBy: int("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_channels_company").on(table.companyId),
+]);
 
 // Messages table
 export const messages = mysqlTable("messages", {
   id: int("id").primaryKey().autoincrement(),
+  companyId: int("company_id").notNull().references(() => companies.id),
   content: text("content").notNull(),
   channelId: int("channel_id").references(() => channels.id),
   userId: int("user_id").notNull().references(() => users.id),
@@ -64,11 +86,14 @@ export const messages = mysqlTable("messages", {
   editedAt: timestamp("edited_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
-});
+}, (table) => [
+  index("idx_messages_company").on(table.companyId),
+]);
 
 // Drawings table
 export const drawings = mysqlTable("drawings", {
   id: int("id").primaryKey().autoincrement(),
+  companyId: int("company_id").notNull().references(() => companies.id),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   data: json("data").notNull(),
@@ -77,11 +102,14 @@ export const drawings = mysqlTable("drawings", {
   createdBy: int("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
-});
+}, (table) => [
+  index("idx_drawings_company").on(table.companyId),
+]);
 
 // Tickets table
 export const tickets = mysqlTable("tickets", {
   id: int("id").primaryKey().autoincrement(),
+  companyId: int("company_id").notNull().references(() => companies.id),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   type: varchar("type", { length: 50 }).default("issue").notNull(),
@@ -100,11 +128,14 @@ export const tickets = mysqlTable("tickets", {
   tags: json("tags").default([]),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
-});
+}, (table) => [
+  index("idx_tickets_company").on(table.companyId),
+]);
 
 // Direct messages table
 export const directMessages = mysqlTable("direct_messages", {
   id: int("id").primaryKey().autoincrement(),
+  companyId: int("company_id").notNull().references(() => companies.id),
   content: text("content").notNull(),
   fromUserId: int("from_user_id").notNull().references(() => users.id),
   toUserId: int("to_user_id").notNull().references(() => users.id),
@@ -114,7 +145,9 @@ export const directMessages = mysqlTable("direct_messages", {
   attachmentName: varchar("attachment_name", { length: 255 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
-});
+}, (table) => [
+  index("idx_direct_messages_company").on(table.companyId),
+]);
 
 // Channel members table
 export const channelMembers = mysqlTable("channel_members", {
@@ -127,15 +160,19 @@ export const channelMembers = mysqlTable("channel_members", {
 // Reactions table
 export const reactions = mysqlTable("reactions", {
   id: int("id").primaryKey().autoincrement(),
+  companyId: int("company_id").notNull().references(() => companies.id),
   messageId: int("message_id").notNull().references(() => messages.id),
   userId: int("user_id").notNull().references(() => users.id),
   icon: varchar("icon", { length: 10 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_reactions_company").on(table.companyId),
+]);
 
 // Notifications table
 export const notifications = mysqlTable("notifications", {
   id: int("id").primaryKey().autoincrement(),
+  companyId: int("company_id").notNull().references(() => companies.id),
   userId: int("user_id").notNull().references(() => users.id),
   type: varchar("type", { length: 50 }).notNull(),
   messageId: int("message_id").references(() => messages.id),
@@ -144,19 +181,25 @@ export const notifications = mysqlTable("notifications", {
   content: text("content").notNull(),
   isRead: boolean("is_read").default(false),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_notifications_company").on(table.companyId),
+]);
 
 // Starred messages table
 export const starredMessages = mysqlTable("starred_messages", {
   id: int("id").primaryKey().autoincrement(),
+  companyId: int("company_id").notNull().references(() => companies.id),
   messageId: int("message_id").notNull().references(() => messages.id),
   userId: int("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_starred_messages_company").on(table.companyId),
+]);
 
 // Attachments table
 export const attachments = mysqlTable("attachments", {
   id: int("id").primaryKey().autoincrement(),
+  companyId: int("company_id").notNull().references(() => companies.id),
   filename: varchar("filename", { length: 255 }).notNull(),
   originalName: varchar("original_name", { length: 255 }).notNull(),
   mimeType: varchar("mime_type", { length: 100 }).notNull(),
@@ -165,28 +208,36 @@ export const attachments = mysqlTable("attachments", {
   messageId: int("message_id").references(() => messages.id),
   createdBy: int("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_attachments_company").on(table.companyId),
+]);
 
 // Disciplines table
 export const disciplines = mysqlTable("disciplines", {
   id: int("id").primaryKey().autoincrement(),
+  companyId: int("company_id").notNull().references(() => companies.id),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
   code: varchar("code", { length: 20 }),
   color: varchar("color", { length: 20 }),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_disciplines_company").on(table.companyId),
+]);
 
 // Projects table
 export const projects = mysqlTable("projects", {
   id: int("id").primaryKey().autoincrement(),
+  companyId: int("company_id").notNull().references(() => companies.id),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   status: varchar("status", { length: 50 }).default("active"),
   createdBy: int("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
-});
+}, (table) => [
+  index("idx_projects_company").on(table.companyId),
+]);
 
 // Project members table
 export const projectMembers = mysqlTable("project_members", {
@@ -259,13 +310,16 @@ export const drawingComments = mysqlTable("drawing_comments", {
 // Floors table
 export const floors = mysqlTable("floors", {
   id: int("id").primaryKey().autoincrement(),
+  companyId: int("company_id").notNull().references(() => companies.id),
   name: varchar("name", { length: 100 }).notNull(),
   level: varchar("level", { length: 20 }).notNull(),
   description: text("description"),
   projectId: int("project_id").references(() => projects.id),
   sortOrder: varchar("sort_order", { length: 10 }).default("0"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_floors_company").on(table.companyId),
+]);
 
 // Rooms table
 export const rooms = mysqlTable("rooms", {
@@ -326,6 +380,7 @@ export const drawingPins = mysqlTable("drawing_pins", {
 // Saved views table
 export const savedViews = mysqlTable("saved_views", {
   id: int("id").primaryKey().autoincrement(),
+  companyId: int("company_id").notNull().references(() => companies.id),
   name: varchar("name", { length: 100 }).notNull(),
   type: varchar("type", { length: 50 }).notNull(),
   data: json("data").notNull(),
@@ -333,11 +388,26 @@ export const savedViews = mysqlTable("saved_views", {
   isShared: boolean("is_shared").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
-});
+}, (table) => [
+  index("idx_saved_views_company").on(table.companyId),
+]);
 
 
 // Relations
-export const usersRelations = relations(users, ({ many }) => ({
+export const companiesRelations = relations(companies, ({ many }) => ({
+  users: many(users),
+  channels: many(channels),
+  messages: many(messages),
+  drawings: many(drawings),
+  tickets: many(tickets),
+  projects: many(projects),
+}));
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+  company: one(companies, {
+    fields: [users.companyId],
+    references: [companies.id],
+  }),
   channels: many(channels),
   messages: many(messages),
   drawings: many(drawings),
@@ -346,6 +416,10 @@ export const usersRelations = relations(users, ({ many }) => ({
 }));
 
 export const channelsRelations = relations(channels, ({ one, many }) => ({
+  company: one(companies, {
+    fields: [channels.companyId],
+    references: [companies.id],
+  }),
   createdBy: one(users, {
     fields: [channels.createdBy],
     references: [users.id],
@@ -355,6 +429,10 @@ export const channelsRelations = relations(channels, ({ one, many }) => ({
 }));
 
 export const messagesRelations = relations(messages, ({ one, many }) => ({
+  company: one(companies, {
+    fields: [messages.companyId],
+    references: [companies.id],
+  }),
   channel: one(channels, {
     fields: [messages.channelId],
     references: [channels.id],
@@ -452,11 +530,18 @@ function preprocessNumberField(required: boolean = false) {
 // Zod schemas
 // Remove 'id' from all insert schemas since all tables use AUTO_INCREMENT
 // Convert all foreign key fields from string to number using preprocess
-export const insertUserSchema = createInsertSchema(users).omit({ id: true });
+export const insertCompanySchema = createInsertSchema(companies).omit({ id: true, createdAt: true, updatedAt: true });
+
+export const insertUserSchema = createInsertSchema(users)
+  .omit({ id: true })
+  .extend({
+    companyId: preprocessNumberField(true),
+  });
 
 export const insertChannelSchema = createInsertSchema(channels)
   .omit({ id: true })
   .extend({
+    companyId: preprocessNumberField(true),
     createdBy: z.preprocess(
       (val) => {
         if (val == null) return val;
@@ -469,6 +554,7 @@ export const insertChannelSchema = createInsertSchema(channels)
 export const insertMessageSchema = createInsertSchema(messages)
   .omit({ id: true })
   .extend({
+    companyId: preprocessNumberField(true),
     userId: z.preprocess(
       (val) => {
         if (val == null) throw new Error('userId is required');
@@ -495,6 +581,7 @@ export const insertMessageSchema = createInsertSchema(messages)
 export const insertDirectMessageSchema = createInsertSchema(directMessages)
   .omit({ id: true })
   .extend({
+    companyId: preprocessNumberField(true),
     fromUserId: z.preprocess(
       (val) => {
         if (val == null) throw new Error('fromUserId is required');
@@ -522,6 +609,7 @@ export const insertDirectMessageSchema = createInsertSchema(directMessages)
 export const insertDrawingSchema = createInsertSchema(drawings)
   .omit({ id: true })
   .extend({
+    companyId: preprocessNumberField(true),
     createdBy: preprocessNumberField(true),
     disciplineId: preprocessNumberField(false),
     floorId: preprocessNumberField(false),
@@ -530,6 +618,7 @@ export const insertDrawingSchema = createInsertSchema(drawings)
 export const insertTicketSchema = createInsertSchema(tickets)
   .omit({ id: true })
   .extend({
+    companyId: preprocessNumberField(true),
     createdBy: preprocessNumberField(true),
     assignedTo: preprocessNumberField(false),
     reporter: preprocessNumberField(false),
@@ -542,6 +631,7 @@ export const insertTicketSchema = createInsertSchema(tickets)
 export const insertAttachmentSchema = createInsertSchema(attachments)
   .omit({ id: true })
   .extend({
+    companyId: preprocessNumberField(true),
     messageId: preprocessNumberField(false),
     createdBy: preprocessNumberField(true),
   });
@@ -576,17 +666,23 @@ export const insertDrawingCommentSchema = createInsertSchema(drawingComments)
     createdBy: preprocessNumberField(true),
   });
 
-export const insertDisciplineSchema = createInsertSchema(disciplines).omit({ id: true });
+export const insertDisciplineSchema = createInsertSchema(disciplines)
+  .omit({ id: true })
+  .extend({
+    companyId: preprocessNumberField(true),
+  });
 
 export const insertProjectSchema = createInsertSchema(projects)
   .omit({ id: true })
   .extend({
+    companyId: preprocessNumberField(true),
     createdBy: preprocessNumberField(true),
   });
 
 export const insertFloorSchema = createInsertSchema(floors)
   .omit({ id: true })
   .extend({
+    companyId: preprocessNumberField(true),
     projectId: preprocessNumberField(false),
   });
 
@@ -614,12 +710,14 @@ export const insertPinSchema = createInsertSchema(pins)
 export const insertSavedViewSchema = createInsertSchema(savedViews)
   .omit({ id: true })
   .extend({
+    companyId: preprocessNumberField(true),
     userId: preprocessNumberField(true),
   });
 
 export const insertReactionSchema = createInsertSchema(reactions)
   .omit({ id: true })
   .extend({
+    companyId: preprocessNumberField(true),
     messageId: preprocessNumberField(false),
     userId: preprocessNumberField(true),
   });
@@ -627,6 +725,7 @@ export const insertReactionSchema = createInsertSchema(reactions)
 export const insertNotificationSchema = createInsertSchema(notifications)
   .omit({ id: true })
   .extend({
+    companyId: preprocessNumberField(true),
     userId: preprocessNumberField(true),
     messageId: preprocessNumberField(false),
     channelId: preprocessNumberField(false),
@@ -636,6 +735,7 @@ export const insertNotificationSchema = createInsertSchema(notifications)
 export const insertStarredMessageSchema = createInsertSchema(starredMessages)
   .omit({ id: true })
   .extend({
+    companyId: preprocessNumberField(true),
     messageId: preprocessNumberField(false),
     userId: preprocessNumberField(true),
   });
@@ -668,6 +768,8 @@ export const insertDrawingPinSchema = createInsertSchema(drawingPins)
     pinId: preprocessNumberField(true),
   });
 
+export type Company = typeof companies.$inferSelect;
+export type InsertCompany = typeof companies.$inferInsert;
 export type User = typeof users.$inferSelect;
 export type UpsertUser = typeof users.$inferInsert;
 export type Channel = typeof channels.$inferSelect;

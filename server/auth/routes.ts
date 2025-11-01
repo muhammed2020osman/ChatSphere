@@ -21,6 +21,7 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   name: z.string().min(1),
+  companyId: z.number().optional(), // Optional - can be from tenantResolver
 });
 
 router.post('/register', async (req, res) => {
@@ -29,21 +30,30 @@ router.post('/register', async (req, res) => {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input' });
     const { email, password, name } = parsed.data;
-    const exists = await emailExists(email);
-    if (exists) return res.status(409).json({ error: 'Email already in use' });
+    
+    // Get companyId from request body, tenantResolver, or throw error
+    const companyId = parsed.data.companyId || req.companyId;
+    if (!companyId) {
+      return res.status(400).json({ error: 'Company ID is required. Provide x-company-id header or companyId in body.' });
+    }
+    
+    const exists = await emailExists(email, companyId);
+    if (exists) return res.status(409).json({ error: 'Email already in use for this company' });
     const passwordHash = await bcrypt.hash(password, 12);
-    const user = await createAuthUser({ email, passwordHash, name });
+    const user = await createAuthUser({ email, passwordHash, name, companyId });
     
     // Generate JWT token instead of using session
     const token = generateToken({
       userId: String(user.id),
       email: user.email,
       id: user.id as number,
+      companyId: user.companyId,
     });
     
     console.log('Registration successful - Generating JWT token:', {
       userEmail: email,
       userId: user.id,
+      companyId: user.companyId,
     });
     
     // Return user data and token (client will store token in localStorage)
@@ -51,6 +61,7 @@ router.post('/register', async (req, res) => {
       id: user.id, 
       email: user.email, 
       name: user.name,
+      companyId: user.companyId,
       token 
     });
   } catch (e: any) {
@@ -81,28 +92,46 @@ router.post('/register', async (req, res) => {
   }
 });
 
-const loginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
+const loginSchema = z.object({ 
+  email: z.string().email(), 
+  password: z.string().min(8),
+  companyId: z.number().optional(), // Optional - can be from tenantResolver
+});
 router.post('/login', async (req, res) => {
   try {
     await ensureUsersAuthColumns();
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input' });
     const { email, password } = parsed.data;
-    const user = await findAuthUserByEmail(email);
+    
+    // Get companyId from request body or tenantResolver
+    const companyId = parsed.data.companyId || req.companyId;
+    if (!companyId) {
+      return res.status(400).json({ error: 'Company ID is required. Provide x-company-id header or companyId in body.' });
+    }
+    
+    const user = await findAuthUserByEmail(email, companyId);
     if (!user || !user.password_hash) return res.status(401).json({ error: 'Invalid email or password' });
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
+    
+    // Verify user belongs to the requested company
+    if (user.companyId !== companyId) {
+      return res.status(403).json({ error: 'User does not belong to this company' });
+    }
     
     // Generate JWT token instead of using session
     const token = generateToken({
       userId: String(user.id),
       email: user.email,
       id: user.id as number,
+      companyId: user.companyId,
     });
     
     console.log('Login successful - Generating JWT token:', {
       userEmail: email,
       userId: user.id,
+      companyId: user.companyId,
     });
     
     // Return user data and token (client will store token in localStorage)
@@ -110,6 +139,7 @@ router.post('/login', async (req, res) => {
       id: user.id, 
       email: user.email, 
       name: user.name,
+      companyId: user.companyId,
       token 
     });
   } catch (e: any) {

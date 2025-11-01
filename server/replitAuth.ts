@@ -273,6 +273,21 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
       const { verifyToken } = await import('./auth/jwt');
       const payload = verifyToken(token);
       if (payload) {
+        // Verify companyId from token matches request companyId (if set)
+        if (req.companyId && payload.companyId !== req.companyId) {
+          console.error('Company ID mismatch:', {
+            tokenCompanyId: payload.companyId,
+            requestCompanyId: req.companyId,
+            userId: payload.userId,
+          });
+          return res.status(403).json({ message: 'Forbidden: User does not belong to this company' });
+        }
+
+        // Set companyId from token if not already set from tenantResolver
+        if (!req.companyId && payload.companyId) {
+          req.companyId = payload.companyId;
+        }
+
         // Map to a claims-like shape expected by downstream code
         req.user = {
           claims: {
@@ -281,10 +296,12 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
             name: undefined,
             profile_image_url: null,
           },
+          companyId: payload.companyId,
         } as any;
         console.log('isAuthenticated - JWT token authenticated successfully:', {
           userId: payload.userId,
           email: payload.email,
+          companyId: payload.companyId,
           mappedSub: req.user.claims.sub,
         });
         return next();
