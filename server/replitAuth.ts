@@ -259,12 +259,44 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     cookies: req.headers.cookie ? 'present' : 'missing',
     cookieHeader: req.headers.cookie?.substring(0, 200), // First 200 chars
     cookieName: req.headers.cookie?.includes('sid') ? 'sid' : 'none',
+    hasAuthHeader: !!req.headers.authorization,
     path: req.path,
     hostname: req.hostname,
     origin: req.headers.origin,
   });
 
-  // Prefer local email/password session
+  // Prefer JWT token from Authorization header
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.substring(7);
+      const { verifyToken } = await import('./auth/jwt');
+      const payload = verifyToken(token);
+      if (payload) {
+        // Map to a claims-like shape expected by downstream code
+        req.user = {
+          claims: {
+            sub: `auth:${payload.userId}`,
+            email: payload.email,
+            name: undefined,
+            profile_image_url: null,
+          },
+        } as any;
+        console.log('isAuthenticated - JWT token authenticated successfully:', {
+          userId: payload.userId,
+          email: payload.email,
+          mappedSub: req.user.claims.sub,
+        });
+        return next();
+      } else {
+        console.error('Invalid JWT token provided');
+      }
+    } catch (error) {
+      console.error('Error verifying JWT token:', error);
+    }
+  }
+
+  // Fallback to local email/password session
   if (req.session?.userId) {
     try {
       // Map to a claims-like shape expected by downstream code
@@ -315,6 +347,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     hasSession: !!req.session,
     hasSessionId: !!req.sessionID,
     hasSessionUserId: !!req.session?.userId,
+    hasAuthHeader: !!req.headers.authorization,
     hasUser: !!req.user,
     hasUserClaims: !!(req.user as any)?.claims,
     path: req.path,

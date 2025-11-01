@@ -17,11 +17,18 @@ export async function apiRequest<T = any>(
 ): Promise<T> {
   const { method = "GET", body, headers = {} } = options || {};
   
+  // Get token from localStorage and add to Authorization header
+  const token = localStorage.getItem('auth_token');
+  const authHeaders: Record<string, string> = { ...headers };
+  if (token) {
+    authHeaders['Authorization'] = `Bearer ${token}`;
+  }
+  
   // Don't set Content-Type for FormData, let the browser set it with boundary
   const isFormData = body instanceof FormData;
   const requestHeaders = isFormData 
-    ? headers 
-    : body ? { "Content-Type": "application/json", ...headers } : headers;
+    ? authHeaders 
+    : body ? { "Content-Type": "application/json", ...authHeaders } : authHeaders;
   
   const res = await fetch(url, {
     method,
@@ -85,8 +92,16 @@ export const getQueryFn: <T>(options: {
       }
     }
     
+    // Get token from localStorage and add to Authorization header
+    const token = localStorage.getItem('auth_token');
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     const res = await fetch(url, {
       credentials: "include",
+      headers,
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

@@ -166,13 +166,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const userId = req.user.claims.sub;
       console.log('GET /api/auth/user - userId:', userId, 'type:', typeof userId);
-      const user = await storage.getUser(userId);
+      
+      // Extract user ID from 'auth:123' format or use directly
+      let actualUserId: string = userId;
+      if (userId.startsWith('auth:')) {
+        actualUserId = userId.substring(5);
+      }
+      
+      // Try to get user from auth system first (for email/password auth)
+      const { findAuthUserById } = await import('./auth/user.model');
+      let user = await findAuthUserById(actualUserId);
+      
+      // If not found in auth system, try storage.getUser (for OIDC users)
       if (!user) {
-        console.error('User not found for userId:', userId);
+        user = await storage.getUser(userId);
+      }
+      
+      if (!user) {
+        console.error('User not found for userId:', userId, 'actualUserId:', actualUserId);
         return res.status(404).json({ message: 'User not found' });
       }
+      
       console.log('User found:', user.id, user.email);
-      res.json(user);
+      
+      // Return user data in expected format
+      res.json({
+        id: user.id,
+        email: user.email,
+        name: user.name || null,
+      });
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });

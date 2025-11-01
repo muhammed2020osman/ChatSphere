@@ -2,6 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { ensureUsersAuthColumns, createAuthUser, findAuthUserByEmail, findAuthUserById, emailExists } from './user.model';
+import { generateToken } from './jwt';
 
 declare module 'express-session' {
   interface SessionData {
@@ -32,12 +33,26 @@ router.post('/register', async (req, res) => {
     if (exists) return res.status(409).json({ error: 'Email already in use' });
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await createAuthUser({ email, passwordHash, name });
-    try {
-      req.session.userId = user.id as any;
-    } catch (sessErr) {
-      console.error('Session set error after registration:', (sessErr as any)?.message);
-    }
-    res.status(201).json({ id: user.id, email: user.email, name: user.name });
+    
+    // Generate JWT token instead of using session
+    const token = generateToken({
+      userId: String(user.id),
+      email: user.email,
+      id: user.id as number,
+    });
+    
+    console.log('Registration successful - Generating JWT token:', {
+      userEmail: email,
+      userId: user.id,
+    });
+    
+    // Return user data and token (client will store token in localStorage)
+    res.status(201).json({ 
+      id: user.id, 
+      email: user.email, 
+      name: user.name,
+      token 
+    });
   } catch (e: any) {
     const message = e?.message || 'Database unavailable';
     // Log full error for debugging
@@ -77,47 +92,25 @@ router.post('/login', async (req, res) => {
     if (!user || !user.password_hash) return res.status(401).json({ error: 'Invalid email or password' });
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
-    // CRITICAL: Convert user.id to string for session (sessions may expect strings)
-    const userIdString = String(user.id);
-    req.session.userId = userIdString;
     
-    // Log before saving
-    console.log('Login successful - Setting session:', {
-      userEmail: email,
-      userId: user.id,
-      userIdType: typeof user.id,
-      userIdString: userIdString,
-      sessionId: req.sessionID,
-      hasSession: !!req.session,
+    // Generate JWT token instead of using session
+    const token = generateToken({
+      userId: String(user.id),
+      email: user.email,
+      id: user.id as number,
     });
     
-    // Ensure session is saved before sending response
-    req.session.save((err) => {
-      if (err) {
-        console.error('Error saving session after login:', err);
-        return res.status(500).json({ message: 'Failed to save session' });
-      }
-      
-      // ALWAYS log session info for debugging (critical for production issues)
-      console.log('Session saved successfully after login:', {
-        userId: user.id,
-        userIdString: userIdString,
-        sessionId: req.sessionID,
-        sessionUserId: req.session.userId,
-        sessionUserIdType: typeof req.session.userId,
-        cookieName: 'sid',
-      });
-      
-      // Set cookie headers explicitly to ensure they're sent
-      res.cookie('sid', req.sessionID, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === 'true',
-        sameSite: (process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === 'true') ? 'none' : 'lax',
-        path: '/',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
-      });
-      
-      res.json({ id: user.id, email: user.email, name: user.name });
+    console.log('Login successful - Generating JWT token:', {
+      userEmail: email,
+      userId: user.id,
+    });
+    
+    // Return user data and token (client will store token in localStorage)
+    res.json({ 
+      id: user.id, 
+      email: user.email, 
+      name: user.name,
+      token 
     });
   } catch (e: any) {
     const message = e?.message || '';
@@ -146,6 +139,19 @@ router.post('/logout', (req, res) => {
 });
 
 router.get('/me', async (req, res) => {
+  // Support both JWT token and session for backward compatibility
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    const { verifyToken } = await import('./jwt');
+    const payload = verifyToken(token);
+    if (!payload) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await findAuthUserById(payload.userId);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    return res.json(user);
+  }
+  
+  // Fallback to session-based auth
   if (!req.session.userId) return res.status(401).json({ error: 'Unauthorized' });
   const user = await findAuthUserById(req.session.userId);
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -154,6 +160,19 @@ router.get('/me', async (req, res) => {
 
 // Backwards-compatible alias for clients expecting /user
 router.get('/user', async (req, res) => {
+  // Support both JWT token and session for backward compatibility
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    const { verifyToken } = await import('./jwt');
+    const payload = verifyToken(token);
+    if (!payload) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await findAuthUserById(payload.userId);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    return res.json(user);
+  }
+  
+  // Fallback to session-based auth
   if (!req.session.userId) return res.status(401).json({ error: 'Unauthorized' });
   const user = await findAuthUserById(req.session.userId);
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
