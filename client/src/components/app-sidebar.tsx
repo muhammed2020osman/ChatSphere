@@ -45,16 +45,16 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
 
   const getUserInitials = (u: User | undefined) => {
     if (!u) return "?";
-    if (u.firstName && u.lastName) {
-      return `${u.firstName[0]}${u.lastName[0]}`.toUpperCase();
+    if (u.name ) {
+      return `${u.name[0]}`.toUpperCase();
     }
     return u.email?.[0]?.toUpperCase() || "?";
   };
 
   const getUserName = (u: User | undefined) => {
     if (!u) return "Unknown";
-    if (u.firstName && u.lastName) {
-      return `${u.firstName} ${u.lastName}`;
+    if (u.name) {
+      return `${u.name}`;
     }
     return u.email || "Unknown";
   };
