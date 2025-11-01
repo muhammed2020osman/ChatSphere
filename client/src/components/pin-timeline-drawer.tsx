@@ -47,8 +47,7 @@ interface PinWithDetails extends Pin {
   };
   creator?: {
     id: string;
-    firstName: string | null;
-    lastName: string | null;
+    name: string | null;
   };
 }
 
@@ -59,8 +58,7 @@ interface TimelineEvent {
   description?: string;
   timestamp: string;
   user?: {
-    firstName: string | null;
-    lastName: string | null;
+    name: string | null;
   };
   ticketId?: string;
 }
@@ -314,7 +312,7 @@ export function PinTimelineDrawer({
                               <div className="flex items-center gap-2 mt-2">
                                 <User className="h-3 w-3 text-muted-foreground" />
                                 <span className="text-xs text-muted-foreground" data-testid={`text-event-user-${index}`}>
-                                  {event.user.firstName} {event.user.lastName}
+                                  {event.user.name || 'Unknown'}
                                 </span>
                               </div>
                             )}

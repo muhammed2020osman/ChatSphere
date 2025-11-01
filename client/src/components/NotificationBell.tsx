@@ -72,7 +72,7 @@ export function NotificationBell() {
           // Show toast for new notification
           toast({
             title: "New Mention",
-            description: `${data.notification.fromUser.firstName} mentioned you in #${data.notification.channel?.name || 'a channel'}`,
+            description: `${data.notification.fromUser.name || data.notification.fromUser.email} mentioned you in #${data.notification.channel?.name || 'a channel'}`,
           });
 
           // Refresh notifications
@@ -147,7 +147,7 @@ export function NotificationBell() {
                     <div className="flex-1">
                       <p className="text-sm">
                         <span className="font-semibold">
-                          {notification.fromUser.firstName} {notification.fromUser.lastName}
+                          {notification.fromUser.name || notification.fromUser.email}
                         </span>
                         {' '}mentioned you in{' '}
                         <span className="font-semibold">

@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { User } from "@shared/schema";
+import { getUserInitials, getUserName } from "@/lib/utils";
 
 interface MessageComposerProps {
   channelId?: string;
@@ -200,9 +201,7 @@ export function MessageComposer({
   };
 
   const insertMention = (user: User) => {
-    const userName = user.firstName && user.lastName 
-      ? `${user.firstName} ${user.lastName}` 
-      : user.email || "Unknown";
+    const userName = getUserName(user);
     
     const before = content.slice(0, mentionStartPos);
     const after = content.slice(mentionStartPos + mentionSearch.length + 1);
@@ -224,9 +223,7 @@ export function MessageComposer({
   const filteredUsers = users.filter(user => {
     if (!mentionSearch) return true;
     const search = mentionSearch.toLowerCase();
-    const name = user.firstName && user.lastName 
-      ? `${user.firstName || ""} ${user.lastName || ""}`.toLowerCase()
-      : (user.email || "").toLowerCase();
+    const name = (user.name || user.email || "").toLowerCase();
     return name.includes(search);
   }).slice(0, 5);
 
@@ -268,16 +265,14 @@ export function MessageComposer({
                   <Avatar className="w-6 h-6">
                     <AvatarImage src={user.profileImageUrl || undefined} />
                     <AvatarFallback className="text-xs">
-                      {user.firstName?.[0]}{user.lastName?.[0]}
+                      {getUserInitials(user)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">
-                      {user.firstName && user.lastName 
-                        ? `${user.firstName} ${user.lastName}` 
-                        : user.email}
+                      {getUserName(user)}
                     </div>
-                    {user.email && user.firstName && (
+                    {user.email && user.name && (
                       <div className="text-xs text-muted-foreground truncate">
                         {user.email}
                       </div>

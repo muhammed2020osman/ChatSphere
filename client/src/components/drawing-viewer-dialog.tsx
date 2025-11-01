@@ -159,9 +159,7 @@ export function DrawingViewerDialog({ drawingId, open, onOpenChange }: DrawingVi
                 <div>
                   <p className="text-sm text-muted-foreground">Created By</p>
                   <p className="mt-1" data-testid="text-drawing-creator">
-                    {drawing.creator?.firstName && drawing.creator?.lastName
-                      ? `${drawing.creator.firstName} ${drawing.creator.lastName}`
-                      : drawing.creator?.email || 'Unknown'}
+                    {drawing.creator?.name || drawing.creator?.email || 'Unknown'}
                   </p>
                 </div>
               </div>
@@ -308,17 +306,13 @@ export function DrawingViewerDialog({ drawingId, open, onOpenChange }: DrawingVi
                             </div>
                             <p className="text-sm text-muted-foreground">
                               Uploaded by{" "}
-                              {revision.uploader?.firstName && revision.uploader?.lastName
-                                ? `${revision.uploader.firstName} ${revision.uploader.lastName}`
-                                : revision.uploader?.email || 'Unknown'}{" "}
+                              {revision.uploader?.name || revision.uploader?.email || 'Unknown'}{" "}
                               {(revision.uploadedAt || revision.createdAt) && `on ${format(new Date(revision.uploadedAt || revision.createdAt), "MMM d, yyyy 'at' h:mm a")}`}
                             </p>
                             {revision.reviewedBy && revision.reviewedAt && (
                               <p className="text-sm text-muted-foreground">
                                 Reviewed by{" "}
-                                {revision.reviewer?.firstName && revision.reviewer?.lastName
-                                  ? `${revision.reviewer.firstName} ${revision.reviewer.lastName}`
-                                  : revision.reviewer?.email || 'Unknown'}{" "}
+                                {revision.reviewer?.name || revision.reviewer?.email || 'Unknown'}{" "}
                                 on {format(new Date(revision.reviewedAt), "MMM d, yyyy 'at' h:mm a")}
                               </p>
                             )}

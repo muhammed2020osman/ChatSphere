@@ -73,8 +73,7 @@ export function BulkActionsDialog({
   // Fetch users for assignee dropdown
   const { data: users, isLoading: isLoadingUsers } = useQuery<Array<{
     id: string;
-    firstName: string;
-    lastName: string;
+    name: string;
     email: string;
   }>>({
     queryKey: ['/api/users'],
@@ -306,7 +305,7 @@ export function BulkActionsDialog({
                   <SelectContent>
                     {users?.map((user) => (
                       <SelectItem key={user.id} value={user.id} data-testid={`select-item-assignee-${user.id}`}>
-                        {user.firstName} {user.lastName}
+                        {user.name || user.email || 'Unknown'}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -315,7 +314,7 @@ export function BulkActionsDialog({
               {assignedTo && (
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" data-testid="badge-selected-assignee">
-                    Assignee: {users?.find((u) => u.id === assignedTo)?.firstName} {users?.find((u) => u.id === assignedTo)?.lastName}
+                    Assignee: {users?.find((u) => u.id === assignedTo)?.name || users?.find((u) => u.id === assignedTo)?.email || 'Unknown'}
                   </Badge>
                   <Button
                     size="sm"

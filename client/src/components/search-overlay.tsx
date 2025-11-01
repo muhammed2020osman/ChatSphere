@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Channel, MessageWithUser } from "@shared/schema";
 import { useLocation } from "wouter";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getUserInitials, getUserName } from "@/lib/utils";
 
 interface SearchOverlayProps {
   open: boolean;
@@ -37,13 +38,6 @@ export function SearchOverlay({ open, onOpenChange }: SearchOverlayProps) {
     setLocation(`/channel/${channelId}`);
     onOpenChange(false);
     setQuery("");
-  };
-
-  const getUserInitials = (user: any) => {
-    if (user.firstName && user.lastName) {
-      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
-    }
-    return user.email?.[0]?.toUpperCase() || "?";
   };
 
   return (
@@ -105,7 +99,7 @@ export function SearchOverlay({ open, onOpenChange }: SearchOverlayProps) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-medium text-sm">
-                          {message.user?.firstName || ''} {message.user?.lastName || ''}
+                          {getUserName(message.user)}
                         </span>
                         <MessageSquare className="w-3 h-3 text-muted-foreground" />
                       </div>

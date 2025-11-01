@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Message, User } from "@shared/schema";
+import { getUserInitials, getUserName } from "@/lib/utils";
 
 interface ThreadMessage extends Message {
   user?: User;
@@ -16,7 +17,7 @@ interface ThreadMessage extends Message {
 
 export default function ThreadsPage() {
   const [, setLocation] = useLocation();
-  const { data: currentUser } = useQuery<{ id: string; firstName?: string; lastName?: string; email?: string }>({
+  const { data: currentUser } = useQuery<{ id: string; name?: string; email?: string }>({
     queryKey: ["/api/auth/user"],
   });
   const { data: threads, isLoading, isError } = useQuery<ThreadMessage[]>({
@@ -28,22 +29,10 @@ export default function ThreadsPage() {
     setLocation(`/channel/${thread.channelId}?messageId=${thread.id}`);
   };
 
-  const getUserInitials = (user?: User) => {
-    if (!user) return "?";
-    if (user.firstName && user.lastName) {
-      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
-    }
-    return user.email?.[0]?.toUpperCase() || "?";
-  };
-
-  const getUserName = (user?: User) => {
-    if (!user) return currentUser?.id ? ("You") : "Unknown";
-    if (user.firstName && user.lastName) {
-      return `${user.firstName} ${user.lastName}`;
-    }
-    if (user.email) return user.email;
+  const getDisplayName = (user?: User) => {
+    if (!user) return currentUser?.id ? "You" : "Unknown";
     if (currentUser?.id && user.id === currentUser.id) return "You";
-    return user.id || "Unknown";
+    return getUserName(user);
   };
 
   return (
@@ -96,7 +85,7 @@ export default function ThreadsPage() {
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-semibold">{getUserName(thread.user)}</span>
+                        <span className="font-semibold">{getDisplayName(thread.user)}</span>
                         {thread.channel && (
                           <span className="text-xs text-muted-foreground">
                             in #{thread.channel.name}

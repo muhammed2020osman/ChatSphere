@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { getUserInitials, getUserName } from "@/lib/utils";
 
 interface MessageItemProps {
   message: MessageWithUser;
@@ -214,19 +215,6 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
   };
 
   const isOwnMessage = currentUser?.id === message.userId;
-  const getUserInitials = () => {
-    if (message.user?.name) {
-      return `${message.user.name[0]}`.toUpperCase();
-    }
-    return message.user?.email?.[0]?.toUpperCase() || "?";
-  };
-
-  const getUserName = () => {
-    if (message.user?.name ) {
-      return `${message.user.name}`;
-    }
-    return message.user?.email || "Unknown";
-  };
 
   const formatTime = (date: Date | string) => {
     const d = typeof date === "string" ? new Date(date) : date;
@@ -286,12 +274,12 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
       <div className="flex gap-3">
         <Avatar className="w-10 h-10">
           <AvatarImage src={message.user?.profileImageUrl || undefined} />
-          <AvatarFallback>{getUserInitials()}</AvatarFallback>
+          <AvatarFallback>{getUserInitials(message.user)}</AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 mb-1">
             <span className="font-semibold text-[15px]" data-testid={`text-message-author-${message.id}`}>
-              {getUserName()}
+              {getUserName(message.user)}
             </span>
             <span className="text-xs text-muted-foreground" data-testid={`text-message-time-${message.id}`}>
               {formatTime(message.createdAt!)}

@@ -62,6 +62,7 @@ import type { TicketFilters } from "./tickets-filters-panel";
 import type { TicketWithDetails } from "@shared/schema";
 import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { getUserInitials, getUserName } from "@/lib/utils";
 
 interface TicketsTableViewProps {
   filters: TicketFilters;
@@ -252,11 +253,6 @@ export function TicketsTableView({
     }
   };
 
-  // Get user initials
-  const getUserInitials = (firstName?: string, lastName?: string) => {
-    if (!firstName && !lastName) return "?";
-    return `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase();
-  };
 
   // Render pagination
   const renderPagination = () => {
@@ -611,14 +607,11 @@ export function TicketsTableView({
                         <Avatar className="h-8 w-8">
                           <AvatarImage src={ticket.assignee.profileImageUrl || undefined} />
                           <AvatarFallback className="text-xs">
-                            {getUserInitials(
-                              ticket.assignee.firstName || undefined,
-                              ticket.assignee.lastName || undefined
-                            )}
+                            {getUserInitials(ticket.assignee)}
                           </AvatarFallback>
                         </Avatar>
                         <span className="text-sm" data-testid={`text-ticket-assignee-${ticket.id}`}>
-                          {ticket.assignee?.firstName || ''} {ticket.assignee?.lastName || ''}
+                          {getUserName(ticket.assignee)}
                         </span>
                       </div>
                     ) : (

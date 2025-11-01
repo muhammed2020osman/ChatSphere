@@ -336,9 +336,7 @@ export function CreateTicketModal({
                     </FormControl>
                     <SelectContent>
                       {users.map((user) => {
-                        const displayName = user.firstName && user.lastName 
-                          ? `${user.firstName} ${user.lastName}`
-                          : user.email;
+                        const displayName = user.name || user.email;
                         
                         return (
                           <SelectItem
@@ -348,7 +346,7 @@ export function CreateTicketModal({
                           >
                             <div className="flex flex-col">
                               <span>{displayName}</span>
-                              {user.firstName && user.lastName && (
+                              {user.name && user.email && (
                                 <span className="text-xs text-muted-foreground">{user.email}</span>
                               )}
                             </div>

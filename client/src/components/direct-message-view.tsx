@@ -7,6 +7,7 @@ import { MessageComposer } from "./message-composer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
+import { getUserInitials, getUserName } from "@/lib/utils";
 
 export function DirectMessageView() {
   const { userId } = useParams();
@@ -28,22 +29,6 @@ export function DirectMessageView() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
-
-  const getUserInitials = (user: User | undefined) => {
-    if (!user) return "?";
-    if (user.firstName && user.lastName) {
-      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
-    }
-    return user.email?.[0]?.toUpperCase() || "?";
-  };
-
-  const getUserName = (user: User | undefined) => {
-    if (!user) return "Unknown";
-    if (user.firstName && user.lastName) {
-      return `${user.firstName} ${user.lastName}`;
-    }
-    return user.email || "Unknown";
-  };
 
   const formatTime = (date: Date | string) => {
     const d = typeof date === "string" ? new Date(date) : date;

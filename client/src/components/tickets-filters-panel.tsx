@@ -133,8 +133,7 @@ export function TicketsFiltersPanel({
   // Fetch users
   const { data: users, isLoading: isLoadingUsers } = useQuery<Array<{
     id: string;
-    firstName: string;
-    lastName: string;
+    name: string;
     email: string;
   }>>({
     queryKey: ['/api/users'],
@@ -526,7 +525,7 @@ export function TicketsFiltersPanel({
                             htmlFor={`assignee-${user.id}`}
                             className="text-sm font-normal cursor-pointer"
                           >
-                            {user.firstName || ''} {user.lastName || ''}
+                            {user.name || user.email || 'Unknown'}
                           </Label>
                         </div>
                       ))}

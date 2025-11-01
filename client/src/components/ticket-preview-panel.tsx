@@ -48,6 +48,7 @@ import type { TicketWithDetails } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { getUserInitials, getUserName } from "@/lib/utils";
 
 interface TicketPreviewPanelProps {
   ticketId: string | null;
@@ -134,10 +135,6 @@ export function TicketPreviewPanel({
     }
   };
 
-  const getUserInitials = (firstName?: string, lastName?: string) => {
-    if (!firstName && !lastName) return "?";
-    return `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase();
-  };
 
   const getSLABadge = (ticket: TicketWithDetails) => {
     if (!ticket.dueDate) return null;
@@ -313,11 +310,11 @@ export function TicketPreviewPanel({
                               <Avatar className="h-6 w-6">
                                 <AvatarImage src={ticket.assignee.profileImageUrl || undefined} />
                                 <AvatarFallback className="text-xs">
-                                  {getUserInitials(ticket.assignee.firstName || undefined, ticket.assignee.lastName || undefined)}
+                                  {getUserInitials(ticket.assignee)}
                                 </AvatarFallback>
                               </Avatar>
                               <span className="text-sm" data-testid="text-assignee-name">
-                                {ticket.assignee?.firstName || ''} {ticket.assignee?.lastName || ''}
+                                {getUserName(ticket.assignee)}
                               </span>
                             </div>
                           ) : (
@@ -336,11 +333,11 @@ export function TicketPreviewPanel({
                               <Avatar className="h-6 w-6">
                                 <AvatarImage src={ticket.reporter.profileImageUrl || undefined} />
                                 <AvatarFallback className="text-xs">
-                                  {getUserInitials(ticket.reporter.firstName || undefined, ticket.reporter.lastName || undefined)}
+                                  {getUserInitials(ticket.reporter)}
                                 </AvatarFallback>
                               </Avatar>
                               <span className="text-sm" data-testid="text-reporter-name">
-                                {ticket.reporter.firstName} {ticket.reporter.lastName}
+                                {getUserName(ticket.reporter)}
                               </span>
                             </div>
                           </div>

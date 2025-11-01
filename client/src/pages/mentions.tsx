@@ -10,6 +10,7 @@ import type { Notification, User } from "@shared/schema";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 import { useMutation } from "@tanstack/react-query";
+import { getUserInitials, getUserName } from "@/lib/utils";
 
 export default function MentionsPage() {
   const { data: notifications, isLoading } = useQuery<(Notification & { mentionedBy: User })[]>({
@@ -26,20 +27,6 @@ export default function MentionsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
     },
   });
-
-  const getUserInitials = (user: User) => {
-    if (user.firstName && user.lastName) {
-      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
-    }
-    return user.email?.[0]?.toUpperCase() || "?";
-  };
-
-  const getUserName = (user: User) => {
-    if (user.firstName && user.lastName) {
-      return `${user.firstName} ${user.lastName}`;
-    }
-    return user.email || "Unknown";
-  };
 
   const handleNotificationClick = (notification: Notification) => {
     if (!notification.isRead) {

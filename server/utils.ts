@@ -22,15 +22,16 @@ export async function findUserIdsByUsernames(usernames: string[], allUsers: any[
   const userIds: string[] = [];
   
   for (const username of usernames) {
-    // Try to find user by email prefix or full name
+    // Try to find user by email prefix or name
     const user = allUsers.find(u => {
       const emailPrefix = u.email?.split('@')[0]?.toLowerCase();
-      const fullName = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase().replace(/\s+/g, '');
-      const firstLast = `${u.firstName || ''}${u.lastName || ''}`.toLowerCase();
+      const name = (u.name || '').toLowerCase().replace(/\s+/g, '');
+      const nameWithSpaces = (u.name || '').toLowerCase();
       
       return emailPrefix === username.toLowerCase() || 
-             fullName === username.toLowerCase() ||
-             firstLast === username.toLowerCase();
+             name === username.toLowerCase() ||
+             nameWithSpaces === username.toLowerCase() ||
+             nameWithSpaces.includes(username.toLowerCase());
     });
     
     if (user && !userIds.includes(user.id)) {
