@@ -925,6 +925,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserStarredMessages(userId: string): Promise<any[]> {
+    const userIdNum = this.getUserIdAsNumber(userId);
+    
     const result = await db
       .select({
         message: messages,
@@ -933,12 +935,31 @@ export class DatabaseStorage implements IStorage {
       .from(starredMessages)
       .innerJoin(messages, eq(starredMessages.messageId, messages.id))
       .innerJoin(users, eq(messages.userId, users.id))
-      .where(eq(starredMessages.userId, userId))
+      .where(eq(starredMessages.userId, userIdNum))
       .orderBy(desc(starredMessages.createdAt));
+
+    // Get reactions for all starred messages in batch
+    const messageIds = result.map(r => r.message.id);
+    const allReactions = messageIds.length > 0 ? await this.getMessageReactionsBatch(messageIds) : [];
+    
+    // Group reactions by messageId
+    const reactionsByMessageId = allReactions.reduce((acc: any, reaction: any) => {
+      const msgId = reaction.reaction.messageId;
+      if (!acc[msgId]) {
+        acc[msgId] = [];
+      }
+      acc[msgId].push({
+        ...reaction.reaction,
+        user: reaction.user,
+      });
+      return acc;
+    }, {});
 
     return result.map(r => ({
       ...r.message,
       user: r.user,
+      isStarred: true, // All messages here are starred
+      reactions: reactionsByMessageId[r.message.id] || [],
     }));
   }
 
