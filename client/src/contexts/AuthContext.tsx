@@ -39,7 +39,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Save token to localStorage
     if (response.token) {
       localStorage.setItem('auth_token', response.token);
+      // Set user immediately from response to avoid delay
+      setUser({ id: response.id, email: response.email, name: response.name || null } as User);
     }
+    // Refresh to ensure we have the latest user data
     await refresh();
   }, [refresh]);
 
@@ -48,7 +51,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Save token to localStorage
     if (response.token) {
       localStorage.setItem('auth_token', response.token);
+      // Set user immediately from response to avoid delay
+      setUser({ id: response.id, email: response.email, name: response.name || null } as User);
     }
+    // Refresh to ensure we have the latest user data
     await refresh();
   }, [refresh]);
 

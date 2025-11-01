@@ -22,6 +22,13 @@ export default function LoginPage() {
     // Do NOT auto-logout here to avoid logging the user out after a successful login
   }, []);
 
+  // Auto-redirect when authenticated (backup for GuestOnly component)
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      navigate("/");
+    }
+  }, [isAuthenticated, isLoading, navigate]);
+
   const { login } = useAuthContext();
   const normalizeError = (e: any) => {
     const raw = (e && (e.message || e.toString())) || '';
@@ -39,7 +46,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate("/");
+      // Don't navigate manually - GuestOnly component will handle redirect
+      // navigate("/");
     } catch (err: any) {
       setError(normalizeError(err));
     } finally {

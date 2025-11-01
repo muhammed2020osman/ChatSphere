@@ -53,8 +53,8 @@ function Router() {
       <Route path="/tickets" component={TicketsHub} />
       
       {/* Login route */}
-      <Route path="/login" component={LoginPage} />
-      <Route path="/register" component={RegisterPage} />
+      <Route path="/login" component={() => <GuestOnly component={LoginPage} />} />
+      <Route path="/register" component={() => <GuestOnly component={RegisterPage} />} />
 
       {/* Protected app routes */}
       <Route path="/" component={() => <Protected component={Home} />} />

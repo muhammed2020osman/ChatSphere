@@ -21,6 +21,13 @@ export default function RegisterPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
   }, []);
 
+  // Auto-redirect when authenticated (backup for GuestOnly component)
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      navigate("/");
+    }
+  }, [isAuthenticated, isLoading, navigate]);
+
   const { register: registerUser } = useAuthContext();
   const normalizeError = (e: any) => {
     const raw = (e && (e.message || e.toString())) || '';
@@ -44,7 +51,8 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await registerUser(name, email, password);
-      navigate("/");
+      // Don't navigate manually - GuestOnly component will handle redirect
+      // navigate("/");
     } catch (err: any) {
       setError(normalizeError(err));
     } finally {
