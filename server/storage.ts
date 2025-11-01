@@ -78,7 +78,7 @@ export interface IStorage {
   deleteMessage(messageId: string): Promise<void>;
   
   // Starred messages operations
-  starMessage(messageId: string, userId: string): Promise<any>;
+  starMessage(messageId: string, userId: string, companyId?: number): Promise<any>;
   unstarMessage(messageId: string, userId: string): Promise<void>;
   isMessageStarred(messageId: string, userId: string): Promise<boolean>;
   getUserStarredMessages(userId: string): Promise<any[]>;
@@ -739,23 +739,43 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Starred messages operations
-  async starMessage(messageId: string, userId: string): Promise<any> {
+  async starMessage(messageId: string, userId: string, companyId?: number): Promise<any> {
     try {
+      // Get companyId from message if not provided
+      let finalCompanyId = companyId;
+      if (!finalCompanyId) {
+        const message = await this.getMessage(messageId);
+        if (!message) {
+          throw new Error('Message not found');
+        }
+        finalCompanyId = message.companyId;
+      }
+
+      if (!finalCompanyId) {
+        throw new Error('Company ID is required');
+      }
+
+      const messageIdNum = typeof messageId === 'string' ? parseInt(messageId, 10) : messageId;
+      const userIdNum = this.getUserIdAsNumber(userId);
+      const companyIdNum = typeof finalCompanyId === 'number' ? finalCompanyId : parseInt(finalCompanyId, 10);
+
       // Try to insert new star
       await db
         .insert(starredMessages)
-        .values({ messageId, userId });
+        .values({ messageId: messageIdNum, userId: userIdNum, companyId: companyIdNum });
       
       // Get the inserted record
       const result = await db.select().from(starredMessages)
-        .where(and(eq(starredMessages.messageId, messageId), eq(starredMessages.userId, userId)))
+        .where(and(eq(starredMessages.messageId, messageIdNum), eq(starredMessages.userId, userIdNum)))
         .limit(1);
       return result[0];
     } catch (error: any) {
       // If duplicate key error, return existing record
       if (error.code === 'ER_DUP_ENTRY' || error.code === 'ER_DUP_KEYNAME') {
+        const messageIdNum = typeof messageId === 'string' ? parseInt(messageId, 10) : messageId;
+        const userIdNum = this.getUserIdAsNumber(userId);
         const existing = await db.select().from(starredMessages)
-          .where(and(eq(starredMessages.messageId, messageId), eq(starredMessages.userId, userId)))
+          .where(and(eq(starredMessages.messageId, messageIdNum), eq(starredMessages.userId, userIdNum)))
           .limit(1);
         return existing[0];
       }
@@ -764,24 +784,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   async unstarMessage(messageId: string, userId: string): Promise<void> {
+    const messageIdNum = typeof messageId === 'string' ? parseInt(messageId, 10) : messageId;
+    const userIdNum = this.getUserIdAsNumber(userId);
+    
     await db
       .delete(starredMessages)
       .where(
         and(
-          eq(starredMessages.messageId, messageId),
-          eq(starredMessages.userId, userId)
+          eq(starredMessages.messageId, messageIdNum),
+          eq(starredMessages.userId, userIdNum)
         )
       );
   }
 
   async isMessageStarred(messageId: string, userId: string): Promise<boolean> {
+    const messageIdNum = typeof messageId === 'string' ? parseInt(messageId, 10) : messageId;
+    const userIdNum = this.getUserIdAsNumber(userId);
+    
     const result = await db
       .select()
       .from(starredMessages)
       .where(
         and(
-          eq(starredMessages.messageId, messageId),
-          eq(starredMessages.userId, userId)
+          eq(starredMessages.messageId, messageIdNum),
+          eq(starredMessages.userId, userIdNum)
         )
       );
     

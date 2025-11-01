@@ -1556,6 +1556,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // Get companyId
+      const companyId = (req.user as any)?.companyId || req.companyId || message.companyId;
+      
       // Check if already starred
       const isStarred = await storage.isMessageStarred(id, userId);
       
@@ -1565,7 +1568,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json({ isStarred: false, message: "Message unstarred" });
       } else {
         // If not starred, star it
-        const starred = await storage.starMessage(id, userId);
+        const starred = await storage.starMessage(id, userId, companyId);
         res.json({ isStarred: true, ...starred });
       }
     } catch (error) {
