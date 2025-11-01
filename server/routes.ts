@@ -867,7 +867,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get channel members endpoint (company_manager only)
+  // Get channel members endpoint (available to channel members)
   app.get('/api/channels/:id/members', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -876,28 +876,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Company ID is required' });
       }
 
-      // Get user to check role
-      const user = await storage.getUser(userId, companyId);
-      if (!user) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-
-      // Check if user is company_manager
-      try {
-        requireCompanyManager(user);
-      } catch (error: any) {
-        return res.status(403).json({ message: error.message || 'Company manager access required' });
-      }
-
       const channelId = req.params.id;
-      const members = await storage.getChannelMembers(channelId, companyId);
       
-      res.json(members);
+      // Get channel to check if it's private
+      const channel = await storage.getChannel(channelId, companyId);
+      if (!channel) {
+        return res.status(404).json({ message: 'Channel not found' });
+      }
+
+      // If channel is private, check if user is a member
+      if (channel.isPrivate) {
+        const isMember = await storage.isChannelMember(channelId, userId);
+        if (!isMember) {
+          return res.status(403).json({ message: 'You must be a member of this channel to view members' });
+        }
+        // For private channels, return only members
+        const members = await storage.getChannelMembers(channelId, companyId);
+        res.json(members);
+      } else {
+        // For public channels, return all company users as potential mentions
+        const allUsers = await storage.getAllUsers(companyId);
+        const members = allUsers.map(user => ({
+          user: user,
+        }));
+        res.json(members);
+      }
     } catch (error: any) {
       console.error("Error fetching channel members:", error);
-      if (error.message === 'Company manager access required') {
-        return res.status(403).json({ message: error.message });
-      }
       res.status(500).json({ message: "Failed to fetch channel members" });
     }
   });

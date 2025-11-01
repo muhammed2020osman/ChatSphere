@@ -35,9 +35,21 @@ export function MessageComposer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const { data: users = [] } = useQuery<User[]>({
-    queryKey: ["/api/users"],
+  // Fetch channel members if channelId exists, otherwise fetch all users (for DM)
+  const { data: channelMembersData } = useQuery<Array<{ user: User }>>({
+    queryKey: ["/api/channels", channelId, "members"],
+    enabled: !!channelId,
   });
+
+  const { data: allUsers = [] } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+    enabled: !channelId, // Only fetch all users for DM
+  });
+
+  // Extract users from channel members or use all users for DM
+  const users: User[] = channelId 
+    ? (channelMembersData?.filter(member => member && member.user).map(member => member.user).filter((user): user is User => user !== undefined && user !== null && user.id !== undefined) || [])
+    : allUsers;
 
   const sendMessageMutation = useMutation({
     mutationFn: async () => {
@@ -127,20 +139,38 @@ export function MessageComposer({
         method: "POST",
       });
 
-      // Upload file
-      await fetch(uploadResponse.uploadURL, {
+      // Upload file using FormData (multer expects 'file' field name)
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Get authentication credentials
+      const token = localStorage.getItem('auth_token');
+      const companyId = localStorage.getItem('company_id');
+
+      // Upload file with authentication
+      const uploadFileResponse = await fetch(uploadResponse.uploadURL, {
         method: "PUT",
-        body: file,
+        body: formData,
+        credentials: "include",
         headers: {
-          "Content-Type": file.type || "application/octet-stream",
+          // Don't set Content-Type - browser will set it with boundary for FormData
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          ...(companyId ? { 'x-company-id': companyId } : {}),
         },
       });
+
+      if (!uploadFileResponse.ok) {
+        const errorText = await uploadFileResponse.text();
+        throw new Error(`Upload failed: ${uploadFileResponse.status} ${errorText}`);
+      }
+
+      const uploadResult = await uploadFileResponse.json();
 
       // Set ACL policy
       const aclResponse = await apiRequest<{ objectPath: string }>("/api/attachments", {
         method: "PUT",
         body: {
-          attachmentURL: uploadResponse.uploadURL,
+          attachmentURL: uploadResult.fileUrl,
           fileName: file.name,
         },
       });
@@ -221,6 +251,7 @@ export function MessageComposer({
   };
 
   const filteredUsers = users.filter(user => {
+    if (!user || !user.id) return false;
     if (!mentionSearch) return true;
     const search = mentionSearch.toLowerCase();
     const name = (user.name || user.email || "").toLowerCase();

@@ -265,17 +265,18 @@ export class DatabaseStorage implements IStorage {
   async getMemberChannels(userId: string, companyId?: number): Promise<Channel[]> {
     const userIdNum = this.getUserIdAsNumber(userId);
     // Get only channels where user is a member (from channel_members table)
-    let query = db
+    // Build where condition - combine userId and companyId if provided
+    const whereCondition = companyId 
+      ? and(eq(channelMembers.userId, userIdNum), eq(channels.companyId, companyId))
+      : eq(channelMembers.userId, userIdNum);
+    
+    const result = await db
       .select()
       .from(channels)
       .innerJoin(channelMembers, eq(channels.id, channelMembers.channelId))
-      .where(eq(channelMembers.userId, userIdNum));
+      .where(whereCondition)
+      .orderBy(channels.createdAt);
     
-    if (companyId) {
-      query = query.where(and(eq(channelMembers.userId, userIdNum), eq(channels.companyId, companyId))) as any;
-    }
-    
-    const result = await query.orderBy(channels.createdAt);
     // Extract channels from the join result
     return result.map((row: any) => row.channels).filter(Boolean);
   }
@@ -336,7 +337,12 @@ export class DatabaseStorage implements IStorage {
   async getChannelMembers(channelId: string | number, companyId?: number): Promise<any[]> {
     const channelIdNum = typeof channelId === 'string' ? parseInt(channelId, 10) : channelId;
     
-    let query = db
+    // Build where condition - combine channelId and companyId if provided
+    const whereCondition = companyId 
+      ? and(eq(channelMembers.channelId, channelIdNum), eq(users.companyId, companyId))
+      : eq(channelMembers.channelId, channelIdNum);
+    
+    const result = await db
       .select({
         id: channelMembers.id,
         userId: channelMembers.userId,
@@ -346,14 +352,8 @@ export class DatabaseStorage implements IStorage {
       })
       .from(channelMembers)
       .innerJoin(users, eq(channelMembers.userId, users.id))
-      .where(eq(channelMembers.channelId, channelIdNum));
+      .where(whereCondition);
     
-    // If companyId is provided, filter by company
-    if (companyId) {
-      query = query.where(and(eq(channelMembers.channelId, channelIdNum), eq(users.companyId, companyId))) as any;
-    }
-    
-    const result = await query;
     return result.map(row => ({
       id: row.id,
       userId: row.userId,
