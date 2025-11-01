@@ -1007,7 +1007,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      const messages = await storage.getChannelMessages(req.params.id, companyId);
+      const messages = await storage.getChannelMessages(req.params.id, companyId, userId);
       res.json(messages);
     } catch (error) {
       console.error("Error fetching messages:", error);

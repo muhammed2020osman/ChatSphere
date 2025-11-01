@@ -50,7 +50,7 @@ export interface IStorage {
   removeChannelMember(channelId: string | number, userId: string | number, companyId?: number): Promise<void>;
   
   // Message operations
-  getChannelMessages(channelId: string, companyId?: number): Promise<any[]>;
+  getChannelMessages(channelId: string, companyId?: number, userId?: string): Promise<any[]>;
   getMessage(messageId: string, companyId?: number): Promise<Message | undefined>;
   createMessage(message: any, companyId?: number): Promise<Message>;
   searchMessages(query: string, userId: string, companyId?: number): Promise<any[]>;
@@ -403,26 +403,63 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Message operations
-  async getChannelMessages(channelId: string, companyId?: number): Promise<any[]> {
-    let query = db
-      .select({
-        message: messages,
-        user: users,
-      })
-      .from(messages)
-      .innerJoin(users, eq(messages.userId, users.id))
-      .where(eq(messages.channelId, channelId));
+  async getChannelMessages(channelId: string, companyId?: number, userId?: string): Promise<any[]> {
+    const channelIdNum = typeof channelId === 'string' ? parseInt(channelId, 10) : channelId;
     
-    if (companyId) {
-      query = query.where(and(eq(messages.channelId, channelId), eq(messages.companyId, companyId))) as any;
+    if (userId) {
+      // Use LEFT JOIN to get starred status efficiently
+      const userIdNum = this.getUserIdAsNumber(userId);
+      let query = db
+        .select({
+          message: messages,
+          user: users,
+          starred: starredMessages,
+        })
+        .from(messages)
+        .innerJoin(users, eq(messages.userId, users.id))
+        .leftJoin(
+          starredMessages,
+          and(
+            eq(starredMessages.messageId, messages.id),
+            eq(starredMessages.userId, userIdNum)
+          )
+        )
+        .where(eq(messages.channelId, channelIdNum));
+      
+      if (companyId) {
+        query = query.where(and(eq(messages.channelId, channelIdNum), eq(messages.companyId, companyId))) as any;
+      }
+      
+      const result = await query.orderBy(asc(messages.createdAt));
+      
+      return result.map(r => ({
+        ...r.message,
+        user: r.user,
+        isStarred: !!r.starred, // If starred exists, message is starred
+      }));
+    } else {
+      // No userId, just return messages without starred status
+      let query = db
+        .select({
+          message: messages,
+          user: users,
+        })
+        .from(messages)
+        .innerJoin(users, eq(messages.userId, users.id))
+        .where(eq(messages.channelId, channelIdNum));
+      
+      if (companyId) {
+        query = query.where(and(eq(messages.channelId, channelIdNum), eq(messages.companyId, companyId))) as any;
+      }
+      
+      const result = await query.orderBy(asc(messages.createdAt));
+      
+      return result.map(r => ({
+        ...r.message,
+        user: r.user,
+        isStarred: false,
+      }));
     }
-    
-    const result = await query.orderBy(asc(messages.createdAt));
-    
-    return result.map(r => ({
-      ...r.message,
-      user: r.user,
-    }));
   }
 
   async getMessage(messageId: string, companyId?: number): Promise<Message | undefined> {

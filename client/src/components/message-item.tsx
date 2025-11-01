@@ -50,12 +50,16 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
     enabled: !!message.id,
   });
 
+  // Use isStarred from message if available, otherwise fetch it
+  const isStarredFromMessage = (message as any)?.isStarred;
   const { data: starredStatus, isLoading: isStarredLoading } = useQuery<{ isStarred: boolean }>({
     queryKey: ["/api/messages", message.id, "starred"],
-    enabled: !!message.id,
+    enabled: !!message.id && isStarredFromMessage === undefined,
     retry: 3,
     staleTime: 0,
   });
+  
+  const isStarred = isStarredFromMessage !== undefined ? isStarredFromMessage : starredStatus?.isStarred || false;
 
   const toggleStarMutation = useMutation({
     mutationFn: async () => {
@@ -66,6 +70,7 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/messages", message.id, "starred"] });
       queryClient.invalidateQueries({ queryKey: ["/api/starred"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/channels/${message.channelId}/messages`] });
     },
     onError: (error: Error) => {
       toast({
@@ -411,10 +416,10 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
               size="sm"
               className="hover-elevate p-2"
               onClick={() => toggleStarMutation.mutate()}
-              disabled={isStarredLoading || toggleStarMutation.isPending}
+              disabled={(isStarredFromMessage === undefined && isStarredLoading) || toggleStarMutation.isPending}
               data-testid={`button-star-${message.id}`}
             >
-              <Star className={`w-4 h-4 ${starredStatus?.isStarred ? 'fill-current text-yellow-500' : 'text-white'}`} />
+              <Star className={`w-4 h-4 ${isStarred ? 'fill-current text-yellow-500' : 'text-white'}`} />
             </Button>
             
             {channelId && (
