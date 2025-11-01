@@ -387,12 +387,12 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
                     key={iconName}
                     variant={hasUserReacted ? "default" : "outline"}
                     size="sm"
-                    className="h-7 px-2 gap-1 hover-elevate"
+                    className={`h-7 px-2 gap-1 hover-elevate ${hasUserReacted ? 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700' : ''}`}
                     onClick={() => handleReactionClick(iconName)}
                     data-testid={`reaction-${iconName}-${message.id}`}
                   >
-                    <IconComponent className={`w-3 h-3 ${hasUserReacted ? 'fill-current text-yellow-500' : ''}`} />
-                    <span className="text-xs">{reacts.length}</span>
+                    <IconComponent className={`w-3 h-3 ${hasUserReacted ? 'fill-yellow-600 dark:fill-yellow-400 text-yellow-600 dark:text-yellow-400' : ''}`} />
+                    <span className={`text-xs ${hasUserReacted ? 'text-yellow-700 dark:text-yellow-300 font-medium' : ''}`}>{reacts.length}</span>
                   </Button>
                 );
               })}
