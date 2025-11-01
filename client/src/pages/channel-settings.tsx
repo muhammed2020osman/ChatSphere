@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ArrowLeft, Trash2, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -30,14 +31,19 @@ export default function ChannelSettings() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
-  const [newMemberEmail, setNewMemberEmail] = useState("");
-  const [isAddingMember, setIsAddingMember] = useState(false);
 
   // Fetch channel data
   const { data: channel, isLoading: channelLoading } = useQuery<Channel>({
     queryKey: [`/api/channels/${id}`],
     enabled: !!id,
   });
+
+  // Check if user is company_manager - must be defined before useQuery
+  const { data: currentUserData } = useQuery<User>({
+    queryKey: ["/api/auth/user"],
+  });
+
+  const isCompanyManager = currentUserData?.role === 'company_manager';
 
   // Update form fields when channel data loads
   useEffect(() => {
@@ -58,12 +64,17 @@ export default function ChannelSettings() {
   // Fetch channel members
   const { data: members = [], isLoading: membersLoading, refetch: refetchMembers } = useQuery<ChannelMember[]>({
     queryKey: [`/api/channels/${id}/members`],
-    enabled: !!id,
+    enabled: !!id && isCompanyManager, // Only fetch if user is company manager
   });
+  
+  console.log('ChannelSettings - Members data:', members);
+  console.log('ChannelSettings - Members loading:', membersLoading);
+  console.log('ChannelSettings - Is company manager:', isCompanyManager);
 
   // Fetch all users for adding members
-  const { data: allUsers = [] } = useQuery<User[]>({
+  const { data: allUsers = [], isLoading: allUsersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
+    enabled: isCompanyManager, // Only fetch if user is company manager
   });
 
   // Update channel mutation
@@ -104,9 +115,8 @@ export default function ChannelSettings() {
         title: "Success",
         description: "Member added successfully",
       });
-      setNewMemberEmail("");
-      setIsAddingMember(false);
       refetchMembers();
+      queryClient.invalidateQueries({ queryKey: [`/api/channels/${id}/members`] });
     },
     onError: (error: Error) => {
       toast({
@@ -140,12 +150,6 @@ export default function ChannelSettings() {
     },
   });
 
-  // Check if user is company_manager
-  const { data: currentUserData } = useQuery<User>({
-    queryKey: ["/api/auth/user"],
-  });
-
-  const isCompanyManager = currentUserData?.role === 'company_manager';
 
   if (!isCompanyManager) {
     return (
@@ -202,18 +206,6 @@ export default function ChannelSettings() {
     });
   };
 
-  const handleAddMember = () => {
-    const userToAdd = allUsers.find(u => u.email === newMemberEmail.trim());
-    if (!userToAdd) {
-      toast({
-        title: "Error",
-        description: "User not found",
-        variant: "destructive",
-      });
-      return;
-    }
-    addMemberMutation.mutate(userToAdd.id as number);
-  };
 
   const handleRemoveMember = (userId: number) => {
     if (confirm("Are you sure you want to remove this member from the channel?")) {
@@ -226,10 +218,11 @@ export default function ChannelSettings() {
   );
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <ScrollArea className="flex-1">
-        <div className="p-6">
-          <div className="max-w-4xl mx-auto space-y-6">
+    <div className="flex h-full">
+      <div className="flex flex-col flex-1 overflow-hidden">
+        <ScrollArea className="flex-1">
+          <div className="p-6">
+            <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => setLocation(`/channel/${id}`)}>
@@ -303,91 +296,93 @@ export default function ChannelSettings() {
               Manage members who have access to this channel
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Add Member */}
-            {!isAddingMember ? (
-              <Button
-                variant="outline"
-                onClick={() => setIsAddingMember(true)}
-                className="w-full"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Member
-              </Button>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="member-email">User Email</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="member-email"
-                    value={newMemberEmail}
-                    onChange={(e) => setNewMemberEmail(e.target.value)}
-                    placeholder="Enter user email"
-                    list="users-list"
-                  />
-                  <datalist id="users-list">
-                    {availableUsers.map(user => (
-                      <option key={user.id} value={user.email || ""} />
-                    ))}
-                  </datalist>
-                  <Button
-                    onClick={handleAddMember}
-                    disabled={addMemberMutation.isPending || !newMemberEmail.trim()}
-                  >
-                    Add
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setIsAddingMember(false);
-                      setNewMemberEmail("");
-                    }}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
+          <CardContent>
+            <Tabs defaultValue="current" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="current">Current Members</TabsTrigger>
+                <TabsTrigger value="add">Add Members</TabsTrigger>
+              </TabsList>
+              
+              {/* Current Members Tab */}
+              <TabsContent value="current" className="mt-4">
+                {membersLoading ? (
+                  <p className="text-muted-foreground">Loading members...</p>
+                ) : members.length === 0 ? (
+                  <p className="text-muted-foreground">No members in this channel</p>
+                ) : (
+                  <div className="space-y-2">
+                    {members.map((member) => {
+                      // Use member.user if available, otherwise find in allUsers
+                      const memberUser = member.user || allUsers.find(u => u.id === member.userId);
+                      return (
+                        <div
+                          key={member.id}
+                          className="flex items-center justify-between p-3 border rounded-lg"
+                        >
+                          <div>
+                            <p className="font-medium">{memberUser?.name || "Unknown User"}</p>
+                            <p className="text-sm text-muted-foreground">{memberUser?.email || ""}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveMember(member.userId)}
+                            disabled={removeMemberMutation.isPending}
+                            title="Remove member"
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </TabsContent>
 
-            <Separator />
-
-            {/* Members List */}
-            {membersLoading ? (
-              <p className="text-muted-foreground">Loading members...</p>
-            ) : members.length === 0 ? (
-              <p className="text-muted-foreground">No members in this channel</p>
-            ) : (
-              <div className="space-y-2">
-                {members.map((member) => {
-                  // Use member.user if available, otherwise find in allUsers
-                  const memberUser = member.user || allUsers.find(u => u.id === member.userId);
-                  return (
-                    <div
-                      key={member.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
-                    >
-                      <div>
-                        <p className="font-medium">{memberUser?.name || "Unknown User"}</p>
-                        <p className="text-sm text-muted-foreground">{memberUser?.email || ""}</p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveMember(member.userId)}
-                        disabled={removeMemberMutation.isPending}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+              {/* Add Members Tab */}
+              <TabsContent value="add" className="mt-4">
+                {allUsersLoading ? (
+                  <p className="text-muted-foreground">Loading users...</p>
+                ) : availableUsers.length === 0 ? (
+                  <p className="text-muted-foreground">All users are already members of this channel</p>
+                ) : (
+                  <div className="space-y-2">
+                    {availableUsers.map((user) => {
+                      const isMember = members.some(m => m.userId === user.id);
+                      if (isMember) return null; // Skip if already a member
+                      
+                      return (
+                        <div
+                          key={user.id}
+                          className="flex items-center justify-between p-3 border rounded-lg"
+                        >
+                          <div>
+                            <p className="font-medium">{user.name || "Unknown User"}</p>
+                            <p className="text-sm text-muted-foreground">{user.email || ""}</p>
+                          </div>
+                          <Button
+                            variant="default"
+                            size="icon"
+                            onClick={() => addMemberMutation.mutate(user.id as number)}
+                            disabled={addMemberMutation.isPending}
+                            title="Add member"
+                            className="bg-primary text-primary-foreground hover:bg-primary/90"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
+            </div>
           </div>
-        </div>
-      </ScrollArea>
+        </ScrollArea>
+      </div>
     </div>
   );
 }
