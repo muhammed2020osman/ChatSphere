@@ -188,12 +188,10 @@ export const notifications = mysqlTable("notifications", {
 // Starred messages table
 export const starredMessages = mysqlTable("starred_messages", {
   id: int("id").primaryKey().autoincrement(),
-  companyId: int("company_id").notNull().references(() => companies.id),
   messageId: int("message_id").notNull().references(() => messages.id),
   userId: int("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
-  index("idx_starred_messages_company").on(table.companyId),
   uniqueIndex("unique_message_user").on(table.messageId, table.userId),
 ]);
 
