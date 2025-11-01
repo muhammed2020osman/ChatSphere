@@ -22,6 +22,7 @@ const registerSchema = z.object({
   password: z.string().min(8),
   name: z.string().min(1),
   companyId: z.number().optional(), // Optional - can be from tenantResolver
+  role: z.string().optional(), // Optional - 'member' or 'company_manager'
 });
 
 router.post('/register', async (req, res) => {
@@ -57,7 +58,11 @@ router.post('/register', async (req, res) => {
     const exists = await emailExists(email, companyId);
     if (exists) return res.status(409).json({ error: 'Email already in use for this company' });
     const passwordHash = await bcrypt.hash(password, 12);
-    const user = await createAuthUser({ email, passwordHash, name, companyId });
+    
+    // Determine role: use provided role or default to 'member'
+    const role = parsed.data.role || 'member';
+    
+    const user = await createAuthUser({ email, passwordHash, name, companyId, role });
     
     // Generate JWT token instead of using session
     const token = generateToken({

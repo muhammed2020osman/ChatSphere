@@ -207,8 +207,13 @@ export default function RegisterPage() {
         return;
       }
       
-      // Register user with the company
-      await registerUser(name, email, password, companyId);
+      // Determine role based on registration type:
+      // - If user entered invitation code (company ID): role = 'member'
+      // - If user created new company (entered company name): role = 'company_manager'
+      const role = useInvitationCode ? 'member' : 'company_manager';
+      
+      // Register user with the company and role
+      await registerUser(name, email, password, companyId, role);
       // Don't navigate manually - GuestOnly component will handle redirect
       // navigate("/");
     } catch (err: any) {

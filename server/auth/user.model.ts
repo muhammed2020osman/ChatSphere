@@ -69,12 +69,13 @@ export async function emailExists(email: string, companyId: number): Promise<boo
   }
 }
 
-export async function createAuthUser(params: { email: string; passwordHash: string; name: string; companyId: number; }): Promise<AuthUser> {
+export async function createAuthUser(params: { email: string; passwordHash: string; name: string; companyId: number; role?: string; }): Promise<AuthUser> {
   try {
-    // Insert user with company_id
+    // Insert user with company_id and role (default to 'member' if not provided)
+    const role = params.role || 'member';
     await pool.execute<mysql.ResultSetHeader>(
-      'INSERT INTO users (email, password_hash, name, company_id) VALUES (?, ?, ?, ?)',
-      [params.email, params.passwordHash, params.name, params.companyId]
+      'INSERT INTO users (email, password_hash, name, company_id, role) VALUES (?, ?, ?, ?, ?)',
+      [params.email, params.passwordHash, params.name, params.companyId, role]
     );
     // Fetch the inserted user to get id reliably
     const inserted = await findAuthUserByEmail(params.email, params.companyId);
