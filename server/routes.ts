@@ -95,6 +95,12 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Debug middleware for API routes
+  app.use('/api', (req, res, next) => {
+    console.log(`[API Route] ${req.method} ${req.path} - Original URL: ${req.originalUrl}`);
+    next();
+  });
+  
   // Tenant resolver middleware - Must be before auth
   const { tenantResolver } = await import('./middleware/tenantResolver');
   app.use(tenantResolver);
@@ -166,8 +172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         companyId: companyId as number,
       });
 
-      // Set admin role
-      const { pool } = await import('./db');
+      // Set admin role (using existing pool from above)
       await pool.execute(
         'UPDATE users SET role = ? WHERE id = ?',
         ['admin', adminUser.id]
@@ -261,6 +266,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error finding company:', error);
       res.status(500).json({ error: 'Failed to find company', message: error?.message });
+    }
+  });
+
+  // Create simple company (only name, returns company ID) - for registration flow
+  app.post('/api/companies/create-simple', async (req, res) => {
+    // Ensure we send JSON response
+    res.type('application/json');
+    
+    try {
+      console.log('=== /api/companies/create-simple called ===');
+      console.log('Request URL:', req.url);
+      console.log('Request method:', req.method);
+      console.log('Request body:', req.body);
+      console.log('Request headers:', req.headers);
+      
+      const { name } = req.body;
+      
+      if (!name || !name.trim()) {
+        console.log('Validation failed: Company name is required');
+        return res.status(400).json({ error: 'Company name is required' });
+      }
+      
+      console.log('Creating company with name:', name.trim());
+
+      const { pool } = await import('./db');
+      const mysql = await import('mysql2/promise');
+      
+      // Check if company with same name already exists
+      const [existing] = await pool.execute<mysql.RowDataPacket[]>(
+        'SELECT id FROM companies WHERE name = ? LIMIT 1',
+        [name.trim()]
+      );
+      
+      if (existing.length > 0) {
+        return res.status(409).json({ error: 'Company with this name already exists' });
+      }
+      
+      // Create company with default values
+      const [result] = await pool.execute<mysql.ResultSetHeader>(
+        'INSERT INTO companies (name, domain, plan_type) VALUES (?, ?, ?)',
+        [name.trim(), null, 'basic']
+      );
+      
+      console.log('Company insert result:', { 
+        insertId: result.insertId, 
+        affectedRows: result.affectedRows,
+        warningCount: result.warningCount 
+      });
+      
+      let companyId = result.insertId;
+      
+      // If insertId is 0 or undefined, query for the last inserted ID
+      if (!companyId || companyId === 0) {
+        console.log('insertId is 0, querying LAST_INSERT_ID()...');
+        const [lastInsert] = await pool.execute<mysql.RowDataPacket[]>(
+          'SELECT LAST_INSERT_ID() as id'
+        );
+        const lastId = (lastInsert[0] as any)?.id;
+        console.log('LAST_INSERT_ID() result:', lastId);
+        if (lastId && lastId > 0) {
+          companyId = lastId;
+        }
+      }
+      
+      // If still no ID, try to find the company by name (as fallback)
+      if (!companyId || companyId === 0) {
+        console.log('Still no ID, trying to find company by name...');
+        const [found] = await pool.execute<mysql.RowDataPacket[]>(
+          'SELECT id FROM companies WHERE name = ? ORDER BY id DESC LIMIT 1',
+          [name.trim()]
+        );
+        console.log('Found company by name:', found);
+        if (found.length > 0 && found[0].id) {
+          companyId = found[0].id;
+        }
+      }
+      
+      if (!companyId || companyId === 0) {
+        console.error('Failed to get company ID after creation:', { 
+          result, 
+          insertId: result.insertId,
+          name: name.trim()
+        });
+        return res.status(500).json({ 
+          error: 'Failed to create company', 
+          message: 'Could not retrieve company ID after creation' 
+        });
+      }
+
+      // Ensure companyId is a number
+      const finalCompanyId = typeof companyId === 'string' ? parseInt(companyId, 10) : Number(companyId);
+      
+      if (isNaN(finalCompanyId) || finalCompanyId <= 0) {
+        console.error('Invalid company ID after conversion:', { companyId, finalCompanyId });
+        return res.status(500).json({ 
+          error: 'Failed to create company', 
+          message: 'Invalid company ID after creation' 
+        });
+      }
+
+      console.log('Simple company created for registration:', {
+        companyId: finalCompanyId,
+        companyName: name.trim(),
+        insertId: result.insertId,
+        finalCompanyIdType: typeof finalCompanyId,
+      });
+
+      const responseData = {
+        id: finalCompanyId,
+        name: name.trim(),
+      };
+      
+      console.log('Sending response:', responseData);
+      console.log('Response data type check:', {
+        id: responseData.id,
+        idType: typeof responseData.id,
+        name: responseData.name,
+      });
+
+      res.status(201).json(responseData);
+      console.log('Response sent successfully');
+    } catch (error: any) {
+      console.error('Error creating simple company:', error);
+      
+      // Handle duplicate company name
+      if (error?.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({ error: 'Company name already exists' });
+      }
+      
+      res.status(500).json({ error: 'Failed to create company', message: error?.message });
     }
   });
 

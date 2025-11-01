@@ -40,8 +40,35 @@ export async function setupVite(app: Express, server: Server) {
     appType: "custom",
   });
 
-  app.use(vite.middlewares);
+  // CRITICAL: vite.middlewares contains its own catch-all route that returns HTML
+  // We MUST wrap it to prevent API routes from being processed
+  const originalMiddleware = vite.middlewares;
+  
+  // Create a wrapped version that checks the path BEFORE passing to Vite
+  const wrappedViteMiddleware: express.RequestHandler = (req, res, next) => {
+    // CRITICAL: Check path BEFORE passing to vite.middlewares
+    // vite.middlewares has its own catch-all that will return HTML for any unmatched route
+    if (req.path && req.path.startsWith('/api/')) {
+      console.log(`[Vite Wrapper] BLOCKING Vite for API route: ${req.method} ${req.path}`);
+      // Don't call vite.middlewares at all for API routes
+      return next();
+    }
+    
+    console.log(`[Vite Wrapper] Allowing Vite for: ${req.method} ${req.path}`);
+    // For non-API routes, call the original vite.middlewares
+    return originalMiddleware(req, res, next);
+  };
+  
+  app.use(wrappedViteMiddleware);
+  
   app.use("*", async (req, res, next) => {
+    // Double check - API routes should never reach here
+    if (req.path.startsWith('/api/')) {
+      console.error(`[ERROR] API route reached Vite catch-all: ${req.method} ${req.path}`);
+      // Return 404 JSON for API routes that somehow reached here
+      return res.status(404).json({ error: 'API endpoint not found' });
+    }
+    
     const url = req.originalUrl;
 
     try {

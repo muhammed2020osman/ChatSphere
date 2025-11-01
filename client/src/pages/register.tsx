@@ -55,7 +55,7 @@ export default function RegisterPage() {
     
     // Validate: either invitation code or company name must be provided
     if (useInvitationCode && !invitationCode.trim()) {
-      setError('Please enter an invitation code');
+      setError('Please enter an invitation code (company ID)');
       return;
     }
     if (!useInvitationCode && !companyName.trim()) {
@@ -65,31 +65,149 @@ export default function RegisterPage() {
     
     setLoading(true);
     try {
-      // First, find the company by invitation code or name
       let companyId: number | undefined;
       
-      try {
-        const company = await apiRequest<{ id: number; name: string }>('/api/companies/find', {
-          method: 'POST',
-          body: useInvitationCode 
-            ? { invitationCode: invitationCode.trim() }
-            : { companyName: companyName.trim() }
-        });
-        companyId = company.id;
-      } catch (findErr: any) {
-        const findError = normalizeError(findErr);
-        setError(`Company not found: ${findError}`);
+      if (useInvitationCode) {
+        // Invitation code is the company ID directly
+        const parsedId = parseInt(invitationCode.trim(), 10);
+        if (isNaN(parsedId) || parsedId <= 0) {
+          setError('Invalid invitation code. Please enter a valid company ID number.');
+          setLoading(false);
+          return;
+        }
+        companyId = parsedId;
+      } else {
+        // Create new company if company name is provided
+        try {
+          console.log('Creating company with name:', companyName.trim());
+          
+          const response = await fetch('/api/companies/create-simple', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ name: companyName.trim() }),
+            credentials: 'include',
+          });
+          
+          console.log('Company creation response status:', response.status, response.statusText);
+          console.log('Company creation response headers:', Object.fromEntries(response.headers.entries()));
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Company creation failed:', response.status, errorText);
+            try {
+              const errorJson = JSON.parse(errorText);
+              setError(`Failed to create company: ${errorJson.error || errorJson.message || 'Unknown error'}`);
+            } catch {
+              setError(`Failed to create company: ${response.status} ${response.statusText}`);
+            }
+            setLoading(false);
+            return;
+          }
+          
+          const contentType = response.headers.get('content-type');
+          console.log('Response content-type:', contentType);
+          
+          let newCompany: { id: number; name?: string } | null = null;
+          
+          // Read response text only once
+          const responseText = await response.text();
+          console.log('Raw response text:', responseText);
+          console.log('Response text length:', responseText.length);
+          
+          if (!responseText || responseText.trim().length === 0) {
+            console.error('Empty response body');
+            setError('Failed to create company: Empty response from server');
+            setLoading(false);
+            return;
+          }
+          
+          if (contentType && contentType.includes('application/json')) {
+            try {
+              newCompany = JSON.parse(responseText);
+              console.log('Parsed company response:', newCompany);
+              console.log('Parsed company type check:', {
+                hasId: 'id' in (newCompany || {}),
+                id: (newCompany as any)?.id,
+                idType: typeof (newCompany as any)?.id,
+                fullObject: JSON.stringify(newCompany, null, 2),
+              });
+            } catch (parseError) {
+              console.error('Failed to parse JSON response:', parseError);
+              console.error('Response text that failed to parse:', responseText);
+              setError(`Failed to create company: Invalid JSON response from server (${parseError instanceof Error ? parseError.message : 'unknown error'})`);
+              setLoading(false);
+              return;
+            }
+          } else {
+            console.error('Unexpected content-type:', contentType);
+            console.error('Response text:', responseText);
+            setError(`Failed to create company: Unexpected response format (content-type: ${contentType || 'none'})`);
+            setLoading(false);
+            return;
+          }
+          
+          console.log('Company created response (after parsing):', newCompany);
+          
+          if (!newCompany) {
+            console.error('Company response is null or undefined');
+            setError('Failed to create company: No data in response');
+            setLoading(false);
+            return;
+          }
+          
+          if (!('id' in newCompany)) {
+            console.error('Company response missing id property:', Object.keys(newCompany));
+            setError('Failed to create company: Response missing company ID');
+            setLoading(false);
+            return;
+          }
+          
+          if (newCompany.id === undefined || newCompany.id === null) {
+            console.error('Company ID is undefined or null:', { 
+              newCompany, 
+              id: newCompany.id,
+              idType: typeof newCompany.id 
+            });
+            setError('Failed to create company: Company ID is missing in response');
+            setLoading(false);
+            return;
+          }
+          
+          // Ensure companyId is a number
+          const id = typeof newCompany.id === 'string' ? parseInt(newCompany.id, 10) : Number(newCompany.id);
+          if (isNaN(id) || id <= 0) {
+            console.error('Invalid company ID from response:', { 
+              newCompany, 
+              id, 
+              originalId: newCompany.id,
+              idType: typeof newCompany.id 
+            });
+            setError(`Failed to create company: Invalid company ID in response (got: ${newCompany.id}, type: ${typeof newCompany.id})`);
+            setLoading(false);
+            return;
+          }
+          
+          companyId = id;
+          console.log('Company ID from creation (final):', companyId, 'type:', typeof companyId);
+        } catch (createErr: any) {
+          console.error('Error creating company (exception):', createErr);
+          console.error('Error stack:', createErr?.stack);
+          const createError = normalizeError(createErr);
+          setError(`Failed to create company: ${createError}`);
+          setLoading(false);
+          return;
+        }
+      }
+      
+      if (!companyId || companyId <= 0) {
+        setError('Company ID not found or created. Please try again.');
         setLoading(false);
         return;
       }
       
-      if (!companyId) {
-        setError('Company ID not found');
-        setLoading(false);
-        return;
-      }
-      
-      // Register user with the found company
+      // Register user with the company
       await registerUser(name, email, password, companyId);
       // Don't navigate manually - GuestOnly component will handle redirect
       // navigate("/");
@@ -136,17 +254,21 @@ export default function RegisterPage() {
           </span>
         </div>
         
-        {/* Invitation Code or Company Name Field */}
+        {/* Invitation Code (Company ID) or Company Name Field */}
         {useInvitationCode ? (
           <div>
-            <label className="block text-sm mb-1">Invitation Code *</label>
+            <label className="block text-sm mb-1">Invitation Code (Company ID) *</label>
             <Input 
-              type="text" 
+              type="number" 
               value={invitationCode} 
               onChange={(e) => setInvitationCode(e.target.value)} 
-              placeholder="Enter invitation code"
+              placeholder="Enter company ID number"
+              min="1"
               required
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              Enter the company ID number (invitation code)
+            </p>
           </div>
         ) : (
           <div>
@@ -158,6 +280,9 @@ export default function RegisterPage() {
               placeholder="Enter company name"
               required
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              A new company will be created with this name
+            </p>
           </div>
         )}
         {error && <p className="text-sm text-red-500">{error}</p>}

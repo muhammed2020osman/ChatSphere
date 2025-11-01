@@ -37,6 +37,23 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Company ID is required. Provide x-company-id header or companyId in body.' });
     }
     
+    // Verify company exists (if companyId is provided)
+    if (companyId) {
+      const { db } = await import('../db');
+      const { companies } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      
+      const companyResults = await db
+        .select()
+        .from(companies)
+        .where(eq(companies.id, companyId))
+        .limit(1);
+      
+      if (companyResults.length === 0) {
+        return res.status(404).json({ error: 'Company not found. Invalid company ID.' });
+      }
+    }
+    
     const exists = await emailExists(email, companyId);
     if (exists) return res.status(409).json({ error: 'Email already in use for this company' });
     const passwordHash = await bcrypt.hash(password, 12);
