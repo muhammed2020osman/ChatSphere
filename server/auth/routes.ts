@@ -117,7 +117,6 @@ router.post('/register', async (req, res) => {
 const loginSchema = z.object({ 
   email: z.string().email(), 
   password: z.string().min(8),
-  companyId: z.number().optional(), // Optional - can be from tenantResolver
 });
 router.post('/login', async (req, res) => {
   try {
@@ -126,21 +125,28 @@ router.post('/login', async (req, res) => {
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input' });
     const { email, password } = parsed.data;
     
-    // Get companyId from request body or tenantResolver
-    const companyId = parsed.data.companyId || req.companyId;
-    if (!companyId) {
-      return res.status(400).json({ error: 'Company ID is required. Provide x-company-id header or companyId in body.' });
+    // Find user by email only (company will be detected from user data)
+    const user = await findAuthUserByEmail(email);
+    if (!user || !user.password_hash) return res.status(401).json({ error: 'Invalid email or password' });
+    
+    // Debug: Log user data to see what we're getting
+    console.log('Login - User found:', {
+      id: user.id,
+      email: user.email,
+      companyId: user.companyId,
+      hasCompanyId: !!user.companyId,
+    });
+    
+    if (!user.companyId) {
+      console.error('Login - User has no companyId:', user);
+      return res.status(400).json({ error: 'User is not associated with any company' });
     }
     
-    const user = await findAuthUserByEmail(email, companyId);
-    if (!user || !user.password_hash) return res.status(401).json({ error: 'Invalid email or password' });
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
     
-    // Verify user belongs to the requested company
-    if (user.companyId !== companyId) {
-      return res.status(403).json({ error: 'User does not belong to this company' });
-    }
+    // Company is automatically detected from user.companyId
+    const companyId = user.companyId;
     
     // Generate JWT token instead of using session
     const token = generateToken({

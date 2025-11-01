@@ -12,7 +12,6 @@ export default function LoginPage() {
   const { isAuthenticated, isLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [companyId, setCompanyId] = useState<string>("");
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -46,8 +45,7 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const companyIdNum = companyId ? parseInt(companyId, 10) : undefined;
-      await login(email, password, companyIdNum);
+      await login(email, password);
       // Don't navigate manually - GuestOnly component will handle redirect
       // navigate("/");
     } catch (err: any) {
@@ -70,15 +68,6 @@ export default function LoginPage() {
         <div>
           <label className="block text-sm mb-1">Password</label>
           <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Company ID (Optional)</label>
-          <Input 
-            type="number" 
-            value={companyId} 
-            onChange={(e) => setCompanyId(e.target.value)} 
-            placeholder="Leave empty to use subdomain or header"
-          />
         </div>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <label className="inline-flex items-center gap-2">

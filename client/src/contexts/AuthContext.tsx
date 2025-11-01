@@ -39,10 +39,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refresh();
   }, [refresh]);
 
-  const login = useCallback(async (email: string, password: string, companyId?: number) => {
+  const login = useCallback(async (email: string, password: string) => {
     const response = await apiRequest<{ id: number; email: string; name: string; companyId: number; token: string }>("/api/auth/login", { 
       method: "POST", 
-      body: { email, password, ...(companyId ? { companyId } : {}) } 
+      body: { email, password } 
     });
     // Save token and companyId to localStorage
     if (response.token) {

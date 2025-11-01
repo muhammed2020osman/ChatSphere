@@ -43,13 +43,33 @@ export type AuthUser = {
   password_hash?: string | null;
 };
 
-export async function findAuthUserByEmail(email: string, companyId: number): Promise<AuthUser | null> {
+export async function findAuthUserByEmail(email: string, companyId?: number): Promise<AuthUser | null> {
   try {
-    const [rows] = await pool.query<mysql.RowDataPacket[]>(
-      'SELECT id, company_id, email, name, password_hash FROM users WHERE email = ? AND company_id = ? LIMIT 1',
-      [email, companyId]
-    );
-    return rows[0] ? (rows[0] as unknown as AuthUser) : null;
+    let query: string;
+    let params: any[];
+    
+    if (companyId) {
+      // Search with companyId (for registration and specific company lookup)
+      query = 'SELECT id, company_id, email, name, password_hash FROM users WHERE email = ? AND company_id = ? LIMIT 1';
+      params = [email, companyId];
+    } else {
+      // Search without companyId (for login - company will be detected from user data)
+      query = 'SELECT id, company_id, email, name, password_hash FROM users WHERE email = ? LIMIT 1';
+      params = [email];
+    }
+    
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(query, params);
+    if (!rows[0]) return null;
+    
+    // Map database column names (snake_case) to AuthUser type (camelCase)
+    const row = rows[0];
+    return {
+      id: row.id,
+      companyId: row.company_id, // Map company_id to companyId
+      email: row.email,
+      name: row.name || undefined,
+      password_hash: row.password_hash || null,
+    } as AuthUser;
   } catch (e: any) {
     (e as any).code = (e as any)?.code || 'DB_UNAVAILABLE';
     throw e;
@@ -92,7 +112,17 @@ export async function findAuthUserById(id: string | number): Promise<AuthUser | 
       'SELECT id, company_id, email, name, password_hash FROM users WHERE id = ? LIMIT 1',
       [id]
     );
-    return rows[0] ? (rows[0] as unknown as AuthUser) : null;
+    if (!rows[0]) return null;
+    
+    // Map database column names (snake_case) to AuthUser type (camelCase)
+    const row = rows[0];
+    return {
+      id: row.id,
+      companyId: row.company_id, // Map company_id to companyId
+      email: row.email,
+      name: row.name || undefined,
+      password_hash: row.password_hash || null,
+    } as AuthUser;
   } catch (e: any) {
     (e as any).code = (e as any)?.code || 'DB_UNAVAILABLE';
     throw e;
