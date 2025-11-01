@@ -679,9 +679,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Company ID is required' });
       }
       
-      // Show all channels (public and private) for all users
-      // Private channels are visible in sidebar, but access is controlled when viewing channel content
-      const channels = await storage.getChannels(companyId);
+      // Get user to check role
+      const user = await storage.getUser(userId, companyId);
+      
+      let channels: any[];
+      if (user?.role === 'company_manager') {
+        // Company manager can access all company channels
+        channels = await storage.getChannels(companyId);
+      } else {
+        // Member can only access channels they are a member of
+        channels = await storage.getMemberChannels(userId, companyId);
+      }
       
       res.json(channels);
     } catch (error) {

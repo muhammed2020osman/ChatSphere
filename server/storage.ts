@@ -40,6 +40,7 @@ export interface IStorage {
   // Channel operations
   getChannels(companyId?: number): Promise<Channel[]>;
   getUserChannels(userId: string, companyId?: number): Promise<Channel[]>;
+  getMemberChannels(userId: string, companyId?: number): Promise<Channel[]>;
   getChannel(id: string | number, companyId?: number): Promise<Channel | undefined>;
   createChannel(channel: any, companyId?: number): Promise<Channel>;
   joinChannel(channelId: string | number, userId: string | number): Promise<void>;
@@ -258,6 +259,24 @@ export class DatabaseStorage implements IStorage {
     // Combine and return unique channels
     const allChannels = [...publicChannels, ...userPrivateChannels.map((c: any) => c.channels)];
     return allChannels;
+  }
+
+  async getMemberChannels(userId: string, companyId?: number): Promise<Channel[]> {
+    const userIdNum = this.getUserIdAsNumber(userId);
+    // Get only channels where user is a member (from channel_members table)
+    let query = db
+      .select()
+      .from(channels)
+      .innerJoin(channelMembers, eq(channels.id, channelMembers.channelId))
+      .where(eq(channelMembers.userId, userIdNum));
+    
+    if (companyId) {
+      query = query.where(and(eq(channelMembers.userId, userIdNum), eq(channels.companyId, companyId))) as any;
+    }
+    
+    const result = await query.orderBy(channels.createdAt);
+    // Extract channels from the join result
+    return result.map((row: any) => row.channels).filter(Boolean);
   }
 
   async getChannel(id: string | number, companyId?: number): Promise<Channel | undefined> {
