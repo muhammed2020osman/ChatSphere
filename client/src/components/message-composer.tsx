@@ -1,7 +1,7 @@
-import { useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Bold, Italic, Send, Paperclip, X } from "lucide-react";
+import { Bold, Italic, Send, Paperclip, X, AtSign } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -29,8 +29,8 @@ export function MessageComposer({
   const [attachmentType, setAttachmentType] = useState<string | null>(null);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionSearch, setMentionSearch] = useState("");
-  const [mentionStartPos, setMentionStartPos] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const mentionsPopoverRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -47,9 +47,27 @@ export function MessageComposer({
   });
 
   // Extract users from channel members or use all users for DM
-  const users: User[] = channelId 
-    ? (channelMembersData?.filter(member => member && member.user).map(member => member.user).filter((user): user is User => user !== undefined && user !== null && user.id !== undefined) || [])
-    : allUsers;
+  const users: User[] = React.useMemo(() => {
+    if (channelId) {
+      if (!channelMembersData || channelMembersData.length === 0) {
+        return [];
+      }
+      return channelMembersData
+        .filter((member): member is { user: User } => 
+          member !== null && 
+          member !== undefined && 
+          typeof member === 'object' && 
+          'user' in member && 
+          member.user !== null && 
+          member.user !== undefined &&
+          typeof member.user === 'object' &&
+          'id' in member.user
+        )
+        .map(member => member.user)
+        .filter((user): user is User => user !== undefined && user !== null);
+    }
+    return allUsers || [];
+  }, [channelId, channelMembersData, allUsers]);
 
   const sendMessageMutation = useMutation({
     mutationFn: async () => {
@@ -207,56 +225,62 @@ export function MessageComposer({
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = e.target.value;
     setContent(newContent);
+  };
 
-    // Check for @ mentions
-    const cursorPos = e.target.selectionStart;
-    const textBeforeCursor = newContent.slice(0, cursorPos);
-    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
-    
-    if (lastAtIndex !== -1) {
-      const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
-      
-      // Only show mentions if @ is at start or preceded by space, and followed by text or nothing
-      const charBeforeAt = lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : ' ';
-      if ((charBeforeAt === ' ' || charBeforeAt === '\n') && !textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
-        setMentionSearch(textAfterAt);
-        setMentionStartPos(lastAtIndex);
-        setShowMentions(true);
-      } else {
-        setShowMentions(false);
-      }
-    } else {
-      setShowMentions(false);
-    }
+  const handleMentionClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowMentions((prev) => !prev);
+    setMentionSearch("");
+    // Focus textarea after a short delay
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 0);
   };
 
   const insertMention = (user: User) => {
     const userName = getUserName(user);
     
-    const before = content.slice(0, mentionStartPos);
-    const after = content.slice(mentionStartPos + mentionSearch.length + 1);
-    const newContent = `${before}@${userName} ${after}`;
+    if (!textareaRef.current) return;
+    
+    const textarea = textareaRef.current;
+    const cursorPos = textarea.selectionStart;
+    const before = content.slice(0, cursorPos);
+    const after = content.slice(cursorPos);
+    
+    // Insert @username with a space after
+    const mentionText = `@${userName} `;
+    const newContent = `${before}${mentionText}${after}`;
     
     setContent(newContent);
     setShowMentions(false);
+    setMentionSearch("");
     
-    // Focus back on textarea
+    // Focus back on textarea and set cursor position after mention
     setTimeout(() => {
       if (textareaRef.current) {
         textareaRef.current.focus();
-        const newCursorPos = mentionStartPos + userName.length + 2;
+        const newCursorPos = cursorPos + mentionText.length;
         textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
       }
     }, 0);
   };
 
-  const filteredUsers = users.filter(user => {
-    if (!user || !user.id) return false;
-    if (!mentionSearch) return true;
-    const search = mentionSearch.toLowerCase();
-    const name = (user.name || user.email || "").toLowerCase();
-    return name.includes(search);
-  }).slice(0, 5);
+  const filteredUsers = React.useMemo(() => {
+    if (!users || users.length === 0) {
+      return [];
+    }
+    return users
+      .filter(user => {
+        if (!user || !user.id) return false;
+        if (!mentionSearch.trim()) return true;
+        const search = mentionSearch.toLowerCase();
+        const name = (user.name || user.email || "").toLowerCase();
+        const email = (user.email || "").toLowerCase();
+        return name.includes(search) || email.includes(search);
+      })
+      .slice(0, 8);
+  }, [users, mentionSearch]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey && !showMentions) {
@@ -266,8 +290,47 @@ export function MessageComposer({
     
     if (e.key === "Escape" && showMentions) {
       setShowMentions(false);
+      setMentionSearch("");
+    }
+    
+    // Handle arrow keys for mention selection
+    if (showMentions && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      e.preventDefault();
+      // TODO: Implement keyboard navigation for mentions
     }
   };
+
+  // Close mentions popover when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      
+      // Check if click is outside both popover and button
+      if (
+        showMentions &&
+        mentionsPopoverRef.current &&
+        !mentionsPopoverRef.current.contains(target) &&
+        textareaRef.current &&
+        !textareaRef.current.contains(target) &&
+        !(event.target as HTMLElement)?.closest('[data-testid="button-mention"]')
+      ) {
+        setShowMentions(false);
+        setMentionSearch("");
+      }
+    };
+
+    if (showMentions) {
+      // Use a small delay to allow the click event to complete
+      const timeoutId = setTimeout(() => {
+        document.addEventListener("mousedown", handleClickOutside);
+      }, 100);
+      
+      return () => {
+        clearTimeout(timeoutId);
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }
+  }, [showMentions]);
 
   return (
     <div className="p-4 border-t">
@@ -282,35 +345,57 @@ export function MessageComposer({
           data-testid="textarea-message-composer"
         />
 
-        {showMentions && filteredUsers.length > 0 && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 bg-popover border rounded-lg shadow-lg max-h-60 overflow-y-auto z-50" data-testid="mentions-popover">
-            <div className="p-2">
-              <div className="text-xs text-muted-foreground mb-1 px-2">Mention someone</div>
-              {filteredUsers.map((user) => (
-                <button
-                  key={user.id}
-                  className="w-full flex items-center gap-2 p-2 hover-elevate rounded-md text-left"
-                  onClick={() => insertMention(user)}
-                  data-testid={`mention-user-${user.id}`}
-                >
-                  <Avatar className="w-6 h-6">
-                    <AvatarImage src={user.profileImageUrl || undefined} />
-                    <AvatarFallback className="text-xs">
-                      {getUserInitials(user)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">
-                      {getUserName(user)}
-                    </div>
-                    {user.email && user.name && (
-                      <div className="text-xs text-muted-foreground truncate">
-                        {user.email}
+        {showMentions && (
+          <div 
+            ref={mentionsPopoverRef}
+            className="absolute bottom-full left-0 right-0 mb-1 bg-popover border rounded-lg shadow-lg max-h-60 overflow-hidden z-50" 
+            data-testid="mentions-popover"
+          >
+            <div className="p-2 border-b">
+              <input
+                type="text"
+                placeholder="Search users..."
+                value={mentionSearch}
+                onChange={(e) => setMentionSearch(e.target.value)}
+                className="w-full px-2 py-1 text-sm bg-background border rounded focus:outline-none focus:ring-2 focus:ring-primary"
+                autoFocus
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+            <div className="overflow-y-auto max-h-48">
+              {filteredUsers.length > 0 ? (
+                <div className="p-1">
+                  {filteredUsers.map((user) => (
+                    <button
+                      key={user.id}
+                      className="w-full flex items-center gap-2 p-2 hover:bg-accent rounded-md text-left"
+                      onClick={() => insertMention(user)}
+                      data-testid={`mention-user-${user.id}`}
+                    >
+                      <Avatar className="w-6 h-6">
+                        <AvatarImage src={user.profileImageUrl || undefined} />
+                        <AvatarFallback className="text-xs">
+                          {getUserInitials(user)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">
+                          {getUserName(user)}
+                        </div>
+                        {user.email && user.name && (
+                          <div className="text-xs text-muted-foreground truncate">
+                            {user.email}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </button>
-              ))}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  No users found
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -351,6 +436,17 @@ export function MessageComposer({
               data-testid="button-attach-file"
             >
               <Paperclip className="w-4 h-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={handleMentionClick}
+              onMouseDown={(e) => e.stopPropagation()}
+              data-testid="button-mention"
+              className={showMentions ? "bg-accent" : ""}
+            >
+              <AtSign className="w-4 h-4" />
             </Button>
             <Button
               type="button"
