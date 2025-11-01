@@ -166,6 +166,9 @@ export class DatabaseStorage implements IStorage {
     }
     const result = await query.limit(1);
     console.log('storage.getUser - found:', result[0] ? 'yes' : 'no');
+    console.log('storage.getUser - result[0]:', result[0]);
+    console.log('storage.getUser - result[0] role:', (result[0] as any)?.role);
+    console.log('storage.getUser - result[0] keys:', result[0] ? Object.keys(result[0]) : []);
     return result[0] || undefined;
   }
 

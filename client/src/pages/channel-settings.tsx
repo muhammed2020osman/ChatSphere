@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { ArrowLeft, Trash2, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -34,16 +35,25 @@ export default function ChannelSettings() {
 
   // Fetch channel data
   const { data: channel, isLoading: channelLoading } = useQuery<Channel>({
-    queryKey: ["/api/channels", id],
+    queryKey: [`/api/channels/${id}`],
     enabled: !!id,
-    onSuccess: (data) => {
-      if (data) {
-        setName(data.name || "");
-        setDescription(data.description || "");
-        setIsPrivate(data.isPrivate || false);
-      }
-    },
   });
+
+  // Update form fields when channel data loads
+  useEffect(() => {
+    if (channel) {
+      console.log('ChannelSettings - Channel loaded:', channel);
+      console.log('ChannelSettings - Setting name:', channel.name);
+      console.log('ChannelSettings - Setting description:', channel.description);
+      console.log('ChannelSettings - Setting isPrivate:', channel.isPrivate);
+      setName(channel.name || "");
+      setDescription(channel.description || "");
+      setIsPrivate(channel.isPrivate || false);
+      console.log('ChannelSettings - Fields updated');
+    } else {
+      console.log('ChannelSettings - Channel not loaded yet, isLoading:', channelLoading);
+    }
+  }, [channel, channelLoading]);
 
   // Fetch channel members
   const { data: members = [], isLoading: membersLoading, refetch: refetchMembers } = useQuery<ChannelMember[]>({
@@ -69,7 +79,7 @@ export default function ChannelSettings() {
         title: "Success",
         description: "Channel updated successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/channels", id] });
+      queryClient.invalidateQueries({ queryKey: [`/api/channels/${id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/channels"] });
     },
     onError: (error: Error) => {
@@ -139,7 +149,7 @@ export default function ChannelSettings() {
 
   if (!isCompanyManager) {
     return (
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div className="flex-1 overflow-auto flex items-center justify-center p-8">
         <Card className="max-w-md">
           <CardHeader>
             <CardTitle>Access Denied</CardTitle>
@@ -160,7 +170,7 @@ export default function ChannelSettings() {
 
   if (channelLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 overflow-auto flex items-center justify-center">
         <p className="text-muted-foreground">Loading...</p>
       </div>
     );
@@ -168,7 +178,7 @@ export default function ChannelSettings() {
 
   if (!channel) {
     return (
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 overflow-auto flex items-center justify-center">
         <Card className="max-w-md">
           <CardHeader>
             <CardTitle>Channel Not Found</CardTitle>
@@ -216,8 +226,10 @@ export default function ChannelSettings() {
   );
 
   return (
-    <div className="flex-1 overflow-auto p-6">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <ScrollArea className="flex-1">
+        <div className="p-6">
+          <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => setLocation(`/channel/${id}`)}>
@@ -373,7 +385,9 @@ export default function ChannelSettings() {
             )}
           </CardContent>
         </Card>
-      </div>
+          </div>
+        </div>
+      </ScrollArea>
     </div>
   );
 }

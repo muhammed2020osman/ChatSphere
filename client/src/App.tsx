@@ -62,6 +62,7 @@ function Router() {
       <Route path="/threads" component={() => <Protected component={Home} />} />
       <Route path="/starred" component={() => <Protected component={Home} />} />
       <Route path="/drawings" component={() => <Protected component={Home} />} />
+      <Route path="/channel/:id/settings" component={() => <Protected component={Home} />} />
       <Route path="/channel/:id" component={() => <Protected component={Home} />} />
       <Route path="/dm/:userId" component={() => <Protected component={Home} />} />
       <Route path="/settings" component={() => <Protected component={Home} />} />

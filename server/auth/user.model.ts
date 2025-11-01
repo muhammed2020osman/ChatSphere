@@ -41,6 +41,7 @@ export type AuthUser = {
   email: string;
   name?: string;
   password_hash?: string | null;
+  role?: string;
 };
 
 export async function findAuthUserByEmail(email: string, companyId?: number): Promise<AuthUser | null> {
@@ -50,11 +51,11 @@ export async function findAuthUserByEmail(email: string, companyId?: number): Pr
     
     if (companyId) {
       // Search with companyId (for registration and specific company lookup)
-      query = 'SELECT id, company_id, email, name, password_hash FROM users WHERE email = ? AND company_id = ? LIMIT 1';
+      query = 'SELECT id, company_id, email, name, password_hash, role FROM users WHERE email = ? AND company_id = ? LIMIT 1';
       params = [email, companyId];
     } else {
       // Search without companyId (for login - company will be detected from user data)
-      query = 'SELECT id, company_id, email, name, password_hash FROM users WHERE email = ? LIMIT 1';
+      query = 'SELECT id, company_id, email, name, password_hash, role FROM users WHERE email = ? LIMIT 1';
       params = [email];
     }
     
@@ -69,6 +70,7 @@ export async function findAuthUserByEmail(email: string, companyId?: number): Pr
       email: row.email,
       name: row.name || undefined,
       password_hash: row.password_hash || null,
+      role: row.role || 'member', // Map role
     } as AuthUser;
   } catch (e: any) {
     (e as any).code = (e as any)?.code || 'DB_UNAVAILABLE';
@@ -99,7 +101,13 @@ export async function createAuthUser(params: { email: string; passwordHash: stri
     );
     // Fetch the inserted user to get id reliably
     const inserted = await findAuthUserByEmail(params.email, params.companyId);
-    return { id: inserted?.id!, companyId: params.companyId, email: params.email, name: params.name } as AuthUser;
+    return { 
+      id: inserted?.id!, 
+      companyId: params.companyId, 
+      email: params.email, 
+      name: params.name,
+      role: inserted?.role || role, // Include role from inserted user or fallback to the role we set
+    } as AuthUser;
   } catch (e: any) {
     (e as any).code = (e as any)?.code || 'DB_UNAVAILABLE';
     throw e;
@@ -109,7 +117,7 @@ export async function createAuthUser(params: { email: string; passwordHash: stri
 export async function findAuthUserById(id: string | number): Promise<AuthUser | null> {
   try {
     const [rows] = await pool.query<mysql.RowDataPacket[]>(
-      'SELECT id, company_id, email, name, password_hash FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, company_id, email, name, password_hash, role FROM users WHERE id = ? LIMIT 1',
       [id]
     );
     if (!rows[0]) return null;
@@ -122,6 +130,7 @@ export async function findAuthUserById(id: string | number): Promise<AuthUser | 
       email: row.email,
       name: row.name || undefined,
       password_hash: row.password_hash || null,
+      role: row.role || 'member', // Map role
     } as AuthUser;
   } catch (e: any) {
     (e as any).code = (e as any)?.code || 'DB_UNAVAILABLE';

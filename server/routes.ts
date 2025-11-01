@@ -471,13 +471,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         actualUserId = userId.substring(5);
       }
       
+      // Verify user belongs to the company (if companyId is set)
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      
       // Try to get user from auth system first (for email/password auth)
       const { findAuthUserById } = await import('./auth/user.model');
-      let user = await findAuthUserById(actualUserId);
+      let user: any = await findAuthUserById(actualUserId);
+      
+      console.log('User from findAuthUserById:', user);
+      console.log('User role from findAuthUserById:', (user as any)?.role);
       
       // If not found in auth system, try storage.getUser (for OIDC users)
       if (!user) {
-        user = await storage.getUser(userId);
+        const storageUser = await storage.getUser(userId, companyId);
+        if (storageUser) {
+          user = storageUser as any;
+        }
       }
       
       if (!user) {
@@ -485,8 +494,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      // Verify user belongs to the company (if companyId is set)
-      const companyId = (req.user as any)?.companyId || req.companyId;
       if (companyId && (user as any).companyId && (user as any).companyId !== companyId) {
         console.error('User company mismatch:', {
           userId: user.id,
@@ -498,12 +505,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log('User found:', user.id, user.email);
       
-      // Get user role from storage if available
-      const fullUser = await storage.getUser(user.id, companyId);
-      console.log('Full user from storage:', fullUser);
-      console.log('Full user role:', (fullUser as any)?.role);
+      // Get user role - try multiple sources
+      let userRole = (user as any)?.role || null;
       
-      const userRole = (fullUser as any)?.role || (user as any)?.role || null;
+      // If role is not found, try to get from storage
+      if (!userRole) {
+        const fullUser = await storage.getUser(user.id, companyId);
+        console.log('Full user from storage:', fullUser);
+        console.log('Full user role:', (fullUser as any)?.role);
+        userRole = (fullUser as any)?.role || null;
+      }
+      
+      // If still not found, query directly from database
+      if (!userRole) {
+        console.log('Role not found, querying directly from database...');
+        const { pool } = await import('./db');
+        const mysql = await import('mysql2/promise');
+        const [rows] = await pool.execute<mysql.RowDataPacket[]>(
+          'SELECT role FROM users WHERE id = ? LIMIT 1',
+          [user.id]
+        );
+        if (rows[0] && rows[0].role) {
+          userRole = rows[0].role;
+          console.log('Role found from direct query:', userRole);
+        }
+      }
+      
       console.log('Final user role:', userRole);
       
       // Return user data in expected format
@@ -512,7 +539,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email: user.email,
         name: user.name || null,
         companyId: (user as any).companyId || companyId,
-        role: userRole,
+        role: userRole || 'member', // Default to 'member' if not found
       };
       console.log('API response data:', responseData);
       
@@ -610,7 +637,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!companyId) {
         return res.status(400).json({ message: 'Company ID is required' });
       }
-      const channels = await storage.getUserChannels(userId, companyId);
+      
+      // Show all channels (public and private) for all users
+      // Private channels are visible in sidebar, but access is controlled when viewing channel content
+      const channels = await storage.getChannels(companyId);
+      
       res.json(channels);
     } catch (error) {
       console.error("Error fetching channels:", error);
@@ -625,17 +656,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!companyId) {
         return res.status(400).json({ message: 'Company ID is required' });
       }
+      
+      // Get current user to check role
+      const user = await storage.getUser(userId, companyId);
+      
       const channel = await storage.getChannel(req.params.id, companyId);
       
       if (!channel) {
         return res.status(404).json({ message: "Channel not found" });
       }
       
-      // Check if user has access (member or public channel)
+      // Check if user has access (member, public channel, or company_manager/admin)
       if (channel.isPrivate) {
-        const isMember = await storage.isChannelMember(req.params.id, userId);
-        if (!isMember) {
-          return res.status(403).json({ message: "Access denied" });
+        // Allow company_manager and admin to access all private channels
+        const isManager = user && ((user as any).role === 'company_manager' || (user as any).role === 'admin');
+        if (!isManager) {
+          // For regular users, check if they are a member
+          const isMember = await storage.isChannelMember(req.params.id, userId);
+          if (!isMember) {
+            return res.status(403).json({ message: "Access denied" });
+          }
         }
       }
       
