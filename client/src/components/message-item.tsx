@@ -387,12 +387,12 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
                     key={iconName}
                     variant={hasUserReacted ? "default" : "outline"}
                     size="sm"
-                    className={`h-7 px-2 gap-1 hover-elevate ${hasUserReacted ? 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700' : ''}`}
+                    className={`h-7 px-2 gap-1 hover-elevate ${hasUserReacted ? 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700' : 'border-border dark:border-gray-600'}`}
                     onClick={() => handleReactionClick(iconName)}
                     data-testid={`reaction-${iconName}-${message.id}`}
                   >
-                    <IconComponent className={`w-3 h-3 ${hasUserReacted ? 'fill-yellow-600 dark:fill-yellow-400 text-yellow-600 dark:text-yellow-400' : ''}`} />
-                    <span className={`text-xs ${hasUserReacted ? 'text-yellow-700 dark:text-yellow-300 font-medium' : ''}`}>{reacts.length}</span>
+                    <IconComponent className={`w-3 h-3 ${hasUserReacted ? '1fill-yellow-600 dark:1fill-yellow-400 1text-yellow-600 dark:1text-yellow-400' : 'text-foreground dark:text-gray-300'}`} />
+                    <span className={`text-xs ${hasUserReacted ? 'text-yellow-700 dark:text-yellow-300 font-medium' : 'text-foreground dark:text-gray-300'}`}>{reacts.length}</span>
                   </Button>
                 );
               })}
@@ -436,7 +436,7 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
               disabled={(isStarredFromMessage === undefined && isStarredLoading) || toggleStarMutation.isPending}
               data-testid={`button-star-${message.id}`}
             >
-              <Star className={`w-4 h-4 ${isStarred ? 'fill-current text-yellow-500' : 'text-white'}`} />
+              <Star className={`w-4 h-4 ${isStarred ? 'fill-yellow-500 dark:fill-yellow-400 text-yellow-500 dark:text-yellow-400' : 'text-foreground dark:text-gray-300 hover:text-yellow-500 dark:hover:text-yellow-400'}`} />
             </Button>
             
             {channelId && (
@@ -448,7 +448,7 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
                     className="hover-elevate"
                     data-testid={`button-add-reaction-${message.id}`}
                   >
-                    <Smile className="w-4 h-4" />
+                    <Smile className="w-4 h-4 text-foreground dark:text-gray-300 hover:text-yellow-500 dark:hover:text-yellow-400" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-2" align="start">
@@ -462,7 +462,7 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
                         onClick={() => handleReactionClick(name)}
                         data-testid={`reaction-option-${name}`}
                       >
-                        <Icon className="w-5 h-5" />
+                        <Icon className="w-5 h-5 text-foreground dark:text-gray-300 hover:text-yellow-500 dark:hover:text-yellow-400" />
                       </Button>
                     ))}
                   </div>
