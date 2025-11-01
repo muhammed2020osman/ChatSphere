@@ -1195,18 +1195,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Reaction routes
   app.post('/api/reactions', isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    let data: any = null;
+    
     try {
-      const userId = req.user.claims.sub;
-      const userIdAsNumber = getUserIdAsNumber(userId);
-      const parsed = insertReactionSchema.parse({
-        ...req.body,
-        userId: userIdAsNumber,
-      });
-      // Explicitly remove id to ensure it's not passed
-      const { id, ...data } = parsed;
-
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+      
+      // Get companyId first (needed for getMessage and reaction schema)
+      const companyIdForMessage = (req.user as any)?.companyId || req.companyId;
+      if (!companyIdForMessage) {
+        return res.status(400).json({ message: "Company ID is required" });
+      }
+      
       // Get the message directly to verify it exists and get its channel
-      const message = await storage.getMessage(data.messageId);
+      const message = await storage.getMessage(req.body.messageId, companyIdForMessage);
       
       if (!message) {
         return res.status(404).json({ message: "Message not found or access denied" });
@@ -1225,8 +1229,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const reaction = await storage.addReaction(data);
-      const user = await storage.getUser(userId);
+      // Get companyId from message or user (use message.companyId as it's more reliable)
+      const companyId = message.companyId || companyIdForMessage;
+      
+      const userIdAsNumber = getUserIdAsNumber(userId);
+      
+      // Parse with companyId included (required by schema)
+      const parsed = insertReactionSchema.parse({
+        ...req.body,
+        userId: userIdAsNumber,
+        companyId: typeof companyId === 'string' ? parseInt(companyId, 10) : companyId,
+      });
+      
+      // Explicitly remove id to ensure it's not passed
+      const { id, ...parsedData } = parsed;
+      data = parsedData;
+      
+      // reactionData is already correct with companyId
+      const reactionData = data;
+
+      const reaction = await storage.addReaction(reactionData);
+      if (!reaction) {
+        console.error("Failed to create reaction - addReaction returned undefined");
+        return res.status(500).json({ message: "Failed to create reaction" });
+      }
+      
+      const user = await storage.getUser(userId, companyId);
+      if (!user) {
+        console.error("User not found for reaction - userId:", userId, "companyId:", companyId);
+        return res.status(404).json({ message: "User not found" });
+      }
       const reactionWithUser = { ...reaction, user };
 
       // Broadcast using server-derived channelId
@@ -1254,6 +1286,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         code: error?.code,
         message: error?.message,
         sqlMessage: error?.sqlMessage,
+        stack: error?.stack,
+        userId: userId || 'not defined',
+        messageId: data?.messageId || req.body?.messageId || 'not defined',
+        icon: data?.icon || req.body?.icon || 'not defined',
       });
       res.status(500).json({ message: "Failed to add reaction" });
     }

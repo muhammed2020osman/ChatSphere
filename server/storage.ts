@@ -432,10 +432,28 @@ export class DatabaseStorage implements IStorage {
       
       const result = await query.orderBy(asc(messages.createdAt));
       
+      // Get reactions for all messages in batch
+      const messageIds = result.map(r => r.message.id);
+      const allReactions = messageIds.length > 0 ? await this.getMessageReactionsBatch(messageIds) : [];
+      
+      // Group reactions by messageId
+      const reactionsByMessageId = allReactions.reduce((acc: any, reaction: any) => {
+        const msgId = reaction.reaction.messageId;
+        if (!acc[msgId]) {
+          acc[msgId] = [];
+        }
+        acc[msgId].push({
+          ...reaction.reaction,
+          user: reaction.user,
+        });
+        return acc;
+      }, {});
+      
       return result.map(r => ({
         ...r.message,
         user: r.user,
         isStarred: !!r.starred, // If starred exists, message is starred
+        reactions: reactionsByMessageId[r.message.id] || [],
       }));
     } else {
       // No userId, just return messages without starred status
@@ -454,12 +472,46 @@ export class DatabaseStorage implements IStorage {
       
       const result = await query.orderBy(asc(messages.createdAt));
       
+      // Get reactions for all messages in batch
+      const messageIds = result.map(r => r.message.id);
+      const allReactions = messageIds.length > 0 ? await this.getMessageReactionsBatch(messageIds) : [];
+      
+      // Group reactions by messageId
+      const reactionsByMessageId = allReactions.reduce((acc: any, reaction: any) => {
+        const msgId = reaction.reaction.messageId;
+        if (!acc[msgId]) {
+          acc[msgId] = [];
+        }
+        acc[msgId].push({
+          ...reaction.reaction,
+          user: reaction.user,
+        });
+        return acc;
+      }, {});
+      
       return result.map(r => ({
         ...r.message,
         user: r.user,
         isStarred: false,
+        reactions: reactionsByMessageId[r.message.id] || [],
       }));
     }
+  }
+
+  async getMessageReactionsBatch(messageIds: number[]): Promise<any[]> {
+    if (messageIds.length === 0) return [];
+    
+    const result = await db
+      .select({
+        reaction: reactions,
+        user: users,
+      })
+      .from(reactions)
+      .innerJoin(users, eq(reactions.userId, users.id))
+      .where(inArray(reactions.messageId, messageIds))
+      .orderBy(asc(reactions.createdAt));
+    
+    return result;
   }
 
   async getMessage(messageId: string, companyId?: number): Promise<Message | undefined> {
@@ -618,20 +670,31 @@ export class DatabaseStorage implements IStorage {
 
   // Reaction operations
   async addReaction(reactionData: any): Promise<any> {
-    // Check if user already reacted with this icon
-    const existing = await db
+    const messageIdNum = typeof reactionData.messageId === 'string' ? parseInt(reactionData.messageId, 10) : reactionData.messageId;
+    const userIdNum = typeof reactionData.userId === 'string' ? parseInt(reactionData.userId, 10) : reactionData.userId;
+
+    // Check if user already has ANY reaction on this message (single reaction per user per message)
+    const existingReaction = await db
       .select()
       .from(reactions)
       .where(
         and(
-          eq(reactions.messageId, reactionData.messageId),
-          eq(reactions.userId, reactionData.userId),
-          eq(reactions.icon, reactionData.icon)
+          eq(reactions.messageId, messageIdNum),
+          eq(reactions.userId, userIdNum)
         )
-      );
+      )
+      .limit(1);
     
-    if (existing.length > 0) {
-      return existing[0];
+    // If user already has a reaction on this message, delete it first
+    if (existingReaction.length > 0) {
+      await db
+        .delete(reactions)
+        .where(
+          and(
+            eq(reactions.messageId, messageIdNum),
+            eq(reactions.userId, userIdNum)
+          )
+        );
     }
 
     // Remove id if provided since it's AUTO_INCREMENT
@@ -647,8 +710,8 @@ export class DatabaseStorage implements IStorage {
           .from(reactions)
           .where(
             and(
-              eq(reactions.messageId, reactionData.messageId),
-              eq(reactions.userId, reactionData.userId),
+              eq(reactions.messageId, messageIdNum),
+              eq(reactions.userId, userIdNum),
               eq(reactions.icon, reactionData.icon)
             )
           )
@@ -665,12 +728,18 @@ export class DatabaseStorage implements IStorage {
       .from(reactions)
       .where(
         and(
-          eq(reactions.messageId, reactionData.messageId),
-          eq(reactions.userId, reactionData.userId),
+          eq(reactions.messageId, messageIdNum),
+          eq(reactions.userId, userIdNum),
           eq(reactions.icon, reactionData.icon)
         )
       )
       .limit(1);
+    
+    if (!result[0]) {
+      console.error("Failed to fetch reaction after insert - messageId:", messageIdNum, "userId:", userIdNum, "icon:", reactionData.icon);
+      throw new Error("Failed to retrieve created reaction");
+    }
+    
     return result[0];
   }
 

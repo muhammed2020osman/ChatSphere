@@ -186,6 +186,7 @@ const expectedTables = {
   reactions: {
     columns: [
       { name: 'id', type: 'int', nullable: false, key: 'PRI' },
+      { name: 'company_id', type: 'int', nullable: false, key: 'MUL' },
       { name: 'message_id', type: 'int', nullable: false, key: 'MUL' },
       { name: 'user_id', type: 'int', nullable: false, key: 'MUL' },
       { name: 'icon', type: 'varchar(10)', nullable: false, key: '' },

@@ -45,10 +45,14 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
     queryKey: ["/api/auth/user"],
   });
 
+  // Use reactions from message if available, otherwise fetch them
+  const reactionsFromMessage = (message as any)?.reactions;
   const { data: reactions = [] } = useQuery<ReactionWithUser[]>({
     queryKey: ["/api/messages", message.id, "reactions"],
-    enabled: !!message.id,
+    enabled: !!message.id && !reactionsFromMessage,
   });
+  
+  const allReactions = reactionsFromMessage || reactions;
 
   // Use isStarred from message if available, otherwise fetch it
   const isStarredFromMessage = (message as any)?.isStarred;
@@ -93,6 +97,7 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/messages", message.id, "reactions"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/channels/${message.channelId}/messages`] });
     },
     onError: (error: Error) => {
       toast({
@@ -111,6 +116,7 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/messages", message.id, "reactions"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/channels/${message.channelId}/messages`] });
     },
     onError: (error: Error) => {
       toast({
@@ -124,7 +130,13 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
   const handleReactionClick = (iconName: string) => {
     if (!currentUser?.id) return;
     
-    const userReaction = reactions.find(r => r.icon === iconName && r.userId === currentUser.id);
+    // Check if current user already reacted with this icon
+    const userReaction = allReactions.find(r => {
+      const reactionUserId = typeof r.userId === 'number' ? r.userId.toString() : r.userId;
+      const currentUserId = typeof currentUser.id === 'number' ? currentUser.id.toString() : currentUser.id;
+      return r.icon === iconName && reactionUserId === currentUserId;
+    });
+    
     if (userReaction) {
       removeReactionMutation.mutate(iconName);
     } else {
@@ -354,17 +366,22 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
           )}
           
           {/* Reactions */}
-          {reactions.length > 0 && (
+          {allReactions.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1" data-testid={`reactions-${message.id}`}>
               {Object.entries(
-                reactions.reduce((acc, r) => {
+                allReactions.reduce((acc, r) => {
                   if (!acc[r.icon]) acc[r.icon] = [];
                   acc[r.icon].push(r);
                   return acc;
                 }, {} as Record<string, ReactionWithUser[]>)
               ).map(([iconName, reacts]) => {
                 const IconComponent = REACTION_ICONS.find(ri => ri.name === iconName)?.icon || Smile;
-                const hasUserReacted = reacts.some(r => r.userId === currentUser?.id);
+                // Check if current user reacted - compare userId (may be number or string)
+                const hasUserReacted = reacts.some(r => {
+                  const reactionUserId = typeof r.userId === 'number' ? r.userId.toString() : r.userId;
+                  const currentUserId = typeof currentUser?.id === 'number' ? currentUser.id.toString() : currentUser?.id;
+                  return reactionUserId === currentUserId;
+                });
                 return (
                   <Button
                     key={iconName}
@@ -374,7 +391,7 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
                     onClick={() => handleReactionClick(iconName)}
                     data-testid={`reaction-${iconName}-${message.id}`}
                   >
-                    <IconComponent className="w-3 h-3" />
+                    <IconComponent className={`w-3 h-3 ${hasUserReacted ? 'fill-current text-yellow-500' : ''}`} />
                     <span className="text-xs">{reacts.length}</span>
                   </Button>
                 );

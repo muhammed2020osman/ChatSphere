@@ -176,12 +176,15 @@ const tableDefinitions = {
   reactions: `
     CREATE TABLE IF NOT EXISTS reactions (
       id INT AUTO_INCREMENT PRIMARY KEY,
+      company_id INT NOT NULL,
       message_id INT NOT NULL,
       user_id INT NOT NULL,
       icon VARCHAR(10) NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (company_id) REFERENCES companies(id),
       FOREIGN KEY (message_id) REFERENCES messages(id),
-      FOREIGN KEY (user_id) REFERENCES users(id)
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      INDEX idx_reactions_company (company_id)
     )
   `,
 
