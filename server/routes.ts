@@ -12,7 +12,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated, getSession } from "./replitAuth";
 // Removed Object Storage imports for local development
 import { localStorage } from "./localStorage";
-import { extractMentions, findUserIdsByUsernames, requireAdmin } from "./utils";
+import { extractMentions, findUserIdsByUsernames, requireAdmin, requireCompanyManager } from "./utils";
 import { analyzeEngineeringDrawing } from "./services/gemini";
 import { convertPDFToImage, convertPDFPagesToImages, isPDF } from "./services/pdfConverter";
 import { extractPDFText } from "./services/pdfTextExtractor";
@@ -498,13 +498,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log('User found:', user.id, user.email);
       
+      // Get user role from storage if available
+      const fullUser = await storage.getUser(user.id, companyId);
+      console.log('Full user from storage:', fullUser);
+      console.log('Full user role:', (fullUser as any)?.role);
+      
+      const userRole = (fullUser as any)?.role || (user as any)?.role || null;
+      console.log('Final user role:', userRole);
+      
       // Return user data in expected format
-      res.json({
+      const responseData = {
         id: user.id,
         email: user.email,
         name: user.name || null,
         companyId: (user as any).companyId || companyId,
-      });
+        role: userRole,
+      };
+      console.log('API response data:', responseData);
+      
+      res.json(responseData);
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
@@ -709,6 +721,182 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Message routes
+  // Update channel endpoint (company_manager only)
+  app.put('/api/channels/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+
+      // Get user to check role
+      const user = await storage.getUser(userId, companyId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Check if user is company_manager
+      try {
+        requireCompanyManager(user);
+      } catch (error: any) {
+        return res.status(403).json({ message: error.message || 'Company manager access required' });
+      }
+
+      const channelId = req.params.id;
+      const channel = await storage.getChannel(channelId, companyId);
+      
+      if (!channel) {
+        return res.status(404).json({ message: 'Channel not found' });
+      }
+
+      const { name, description, isPrivate } = req.body;
+      
+      // Update channel
+      const { db } = await import('./db');
+      const { channels } = await import('@shared/schema');
+      const { eq, and } = await import('drizzle-orm');
+      
+      await db.update(channels)
+        .set({
+          name: name || channel.name,
+          description: description !== undefined ? description : channel.description,
+          isPrivate: isPrivate !== undefined ? isPrivate : channel.isPrivate,
+        })
+        .where(and(eq(channels.id, parseInt(channelId, 10)), eq(channels.companyId, companyId)));
+
+      // Get updated channel
+      const updated = await storage.getChannel(channelId, companyId);
+      
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error updating channel:", error);
+      if (error.message === 'Company manager access required') {
+        return res.status(403).json({ message: error.message });
+      }
+      res.status(500).json({ message: "Failed to update channel" });
+    }
+  });
+
+  // Get channel members endpoint (company_manager only)
+  app.get('/api/channels/:id/members', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+
+      // Get user to check role
+      const user = await storage.getUser(userId, companyId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Check if user is company_manager
+      try {
+        requireCompanyManager(user);
+      } catch (error: any) {
+        return res.status(403).json({ message: error.message || 'Company manager access required' });
+      }
+
+      const channelId = req.params.id;
+      const members = await storage.getChannelMembers(channelId, companyId);
+      
+      res.json(members);
+    } catch (error: any) {
+      console.error("Error fetching channel members:", error);
+      if (error.message === 'Company manager access required') {
+        return res.status(403).json({ message: error.message });
+      }
+      res.status(500).json({ message: "Failed to fetch channel members" });
+    }
+  });
+
+  // Add channel member endpoint (company_manager only)
+  app.post('/api/channels/:id/members', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+
+      // Get user to check role
+      const user = await storage.getUser(userId, companyId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Check if user is company_manager
+      try {
+        requireCompanyManager(user);
+      } catch (error: any) {
+        return res.status(403).json({ message: error.message || 'Company manager access required' });
+      }
+
+      const channelId = req.params.id;
+      const { userId: memberUserId } = req.body;
+      
+      if (!memberUserId) {
+        return res.status(400).json({ message: 'User ID is required' });
+      }
+
+      await storage.addChannelMember(channelId, memberUserId, companyId);
+      
+      res.status(201).json({ message: 'Member added successfully' });
+    } catch (error: any) {
+      console.error("Error adding channel member:", error);
+      if (error.message === 'Company manager access required') {
+        return res.status(403).json({ message: error.message });
+      }
+      if (error.message.includes('already a member') || error.message.includes('not found')) {
+        return res.status(400).json({ message: error.message });
+      }
+      res.status(500).json({ message: "Failed to add channel member" });
+    }
+  });
+
+  // Remove channel member endpoint (company_manager only)
+  app.delete('/api/channels/:id/members/:userId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+
+      // Get user to check role
+      const user = await storage.getUser(userId, companyId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Check if user is company_manager
+      try {
+        requireCompanyManager(user);
+      } catch (error: any) {
+        return res.status(403).json({ message: error.message || 'Company manager access required' });
+      }
+
+      const channelId = req.params.id;
+      const memberUserId = req.params.userId;
+      
+      await storage.removeChannelMember(channelId, memberUserId, companyId);
+      
+      res.json({ message: 'Member removed successfully' });
+    } catch (error: any) {
+      console.error("Error removing channel member:", error);
+      if (error.message === 'Company manager access required') {
+        return res.status(403).json({ message: error.message });
+      }
+      if (error.message.includes('not found')) {
+        return res.status(400).json({ message: error.message });
+      }
+      res.status(500).json({ message: "Failed to remove channel member" });
+    }
+  });
+
   app.get('/api/channels/:id/messages', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;

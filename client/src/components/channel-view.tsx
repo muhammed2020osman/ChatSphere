@@ -1,23 +1,36 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "wouter";
-import type { Channel, MessageWithUser } from "@shared/schema";
+import { useParams, Link } from "wouter";
+import type { Channel, MessageWithUser, User } from "@shared/schema";
 import { MessageItem } from "./message-item";
 import { MessageComposer } from "./message-composer";
-import { Hash, Lock, Users, X } from "lucide-react";
+import { Hash, Lock, Users, X, Settings } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 
 export function ChannelView() {
   const { id } = useParams();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const { user } = useAuth();
 
   const { data: channel, isLoading: channelLoading } = useQuery<Channel>({
     queryKey: ["/api/channels", id],
     enabled: !!id,
   });
+
+  const { data: currentUser, isLoading: currentUserLoading } = useQuery<User>({
+    queryKey: ["/api/auth/user"],
+  });
+
+  const isCompanyManager = currentUser?.role === 'company_manager';
+  
+  // Debug: Log user role
+  console.log('ChannelView - Current user:', currentUser);
+  console.log('ChannelView - User role:', currentUser?.role);
+  console.log('ChannelView - Is company manager:', isCompanyManager);
 
   const isChannelRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/channel/');
   const { data: messages, isLoading: messagesLoading } = useQuery<MessageWithUser[]>({
@@ -72,7 +85,21 @@ export function ChannelView() {
             <h2 className="text-lg font-semibold" data-testid="text-channel-name">
               {channel.name}
             </h2>
-            <Users className="w-4 h-4 text-muted-foreground ml-auto" />
+            <div className="flex items-center gap-2 ml-auto">
+              {!currentUserLoading && currentUser && currentUser.role === 'company_manager' && (
+                <Link href={`/channel/${id}/settings`}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="w-8 h-8"
+                    title="Channel Settings"
+                  >
+                    <Settings className="w-4 h-4" />
+                  </Button>
+                </Link>
+              )}
+              <Users className="w-4 h-4 text-muted-foreground" />
+            </div>
           </div>
           {channel.description && (
             <p className="text-sm text-muted-foreground mt-1" data-testid="text-channel-description">

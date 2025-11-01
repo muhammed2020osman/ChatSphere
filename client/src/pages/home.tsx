@@ -14,6 +14,7 @@ import Mentions from "./mentions";
 import Threads from "./threads";
 import Starred from "./starred";
 import Drawings from "./drawings";
+import ChannelSettings from "./channel-settings";
 import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -97,6 +98,9 @@ export default function Home() {
               </Route>
               <Route path="/members">
                 <Members />
+              </Route>
+              <Route path="/channel/:id/settings">
+                <ChannelSettings />
               </Route>
               <Route path="/channel/:id">
                 <ChannelView />

@@ -52,3 +52,15 @@ export function requireAdmin(user: any) {
     throw new Error('Admin access required');
   }
 }
+
+// Check if user is company_manager
+export function isCompanyManager(user: { role?: string | null }): boolean {
+  return user?.role === 'company_manager';
+}
+
+// Middleware to require company_manager role
+export function requireCompanyManager(user: any) {
+  if (!user || !isCompanyManager(user)) {
+    throw new Error('Company manager access required');
+  }
+}

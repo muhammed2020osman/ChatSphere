@@ -44,6 +44,9 @@ export interface IStorage {
   createChannel(channel: any, companyId?: number): Promise<Channel>;
   joinChannel(channelId: string | number, userId: string | number): Promise<void>;
   isChannelMember(channelId: string | number, userId: string | number): Promise<boolean>;
+  getChannelMembers(channelId: string | number, companyId?: number): Promise<any[]>;
+  addChannelMember(channelId: string | number, userId: string | number, companyId?: number): Promise<void>;
+  removeChannelMember(channelId: string | number, userId: string | number, companyId?: number): Promise<void>;
   
   // Message operations
   getChannelMessages(channelId: string, companyId?: number): Promise<any[]>;
@@ -305,6 +308,76 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(channelMembers.channelId, channelIdNum), eq(channelMembers.userId, userIdNum)))
       .limit(1);
     return result.length > 0;
+  }
+
+  async getChannelMembers(channelId: string | number, companyId?: number): Promise<any[]> {
+    const channelIdNum = typeof channelId === 'string' ? parseInt(channelId, 10) : channelId;
+    
+    let query = db
+      .select({
+        id: channelMembers.id,
+        userId: channelMembers.userId,
+        channelId: channelMembers.channelId,
+        joinedAt: channelMembers.joinedAt,
+        user: users,
+      })
+      .from(channelMembers)
+      .innerJoin(users, eq(channelMembers.userId, users.id))
+      .where(eq(channelMembers.channelId, channelIdNum));
+    
+    // If companyId is provided, filter by company
+    if (companyId) {
+      query = query.where(and(eq(channelMembers.channelId, channelIdNum), eq(users.companyId, companyId))) as any;
+    }
+    
+    const result = await query;
+    return result.map(row => ({
+      id: row.id,
+      userId: row.userId,
+      channelId: row.channelId,
+      joinedAt: row.joinedAt,
+      user: row.user,
+    }));
+  }
+
+  async addChannelMember(channelId: string | number, userId: string | number, companyId?: number): Promise<void> {
+    const channelIdNum = typeof channelId === 'string' ? parseInt(channelId, 10) : channelId;
+    const userIdNum = typeof userId === 'string' ? this.getUserIdAsNumber(userId) : userId;
+    
+    // Verify user belongs to the company if companyId is provided
+    if (companyId) {
+      const user = await this.getUser(userId, companyId);
+      if (!user) {
+        throw new Error('User not found in this company');
+      }
+    }
+    
+    // Check if member already exists
+    const isMember = await this.isChannelMember(channelIdNum, userIdNum);
+    if (isMember) {
+      throw new Error('User is already a member of this channel');
+    }
+    
+    await db.insert(channelMembers).values({
+      channelId: channelIdNum,
+      userId: userIdNum,
+    });
+  }
+
+  async removeChannelMember(channelId: string | number, userId: string | number, companyId?: number): Promise<void> {
+    const channelIdNum = typeof channelId === 'string' ? parseInt(channelId, 10) : channelId;
+    const userIdNum = typeof userId === 'string' ? this.getUserIdAsNumber(userId) : userId;
+    
+    // Verify user belongs to the company if companyId is provided
+    if (companyId) {
+      const user = await this.getUser(userId, companyId);
+      if (!user) {
+        throw new Error('User not found in this company');
+      }
+    }
+    
+    await db.delete(channelMembers)
+      .where(and(eq(channelMembers.channelId, channelIdNum), eq(channelMembers.userId, userIdNum)));
   }
 
   // Message operations
