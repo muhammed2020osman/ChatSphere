@@ -426,9 +426,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getMessage(messageId: string, companyId?: number): Promise<Message | undefined> {
-    let query = db.select().from(messages).where(eq(messages.id, messageId));
+    const messageIdNum = typeof messageId === 'string' ? parseInt(messageId, 10) : messageId;
+    let query = db.select().from(messages).where(eq(messages.id, messageIdNum));
     if (companyId) {
-      query = query.where(and(eq(messages.id, messageId), eq(messages.companyId, companyId))) as any;
+      query = query.where(and(eq(messages.id, messageIdNum), eq(messages.companyId, companyId))) as any;
     }
     const result = await query.limit(1);
     return result[0] || undefined;
@@ -756,8 +757,21 @@ export class DatabaseStorage implements IStorage {
       }
 
       const messageIdNum = typeof messageId === 'string' ? parseInt(messageId, 10) : messageId;
+      if (isNaN(messageIdNum)) {
+        throw new Error(`Invalid messageId: ${messageId}`);
+      }
+
       const userIdNum = this.getUserIdAsNumber(userId);
-      const companyIdNum = typeof finalCompanyId === 'number' ? finalCompanyId : parseInt(finalCompanyId, 10);
+      if (isNaN(userIdNum)) {
+        throw new Error(`Invalid userId: ${userId}`);
+      }
+
+      const companyIdNum = typeof finalCompanyId === 'number' ? finalCompanyId : parseInt(finalCompanyId as string, 10);
+      if (isNaN(companyIdNum)) {
+        throw new Error(`Invalid companyId: ${finalCompanyId}`);
+      }
+
+      console.log('starMessage - Inserting:', { messageId: messageIdNum, userId: userIdNum, companyId: companyIdNum });
 
       // Try to insert new star
       await db
@@ -771,7 +785,7 @@ export class DatabaseStorage implements IStorage {
       return result[0];
     } catch (error: any) {
       // If duplicate key error, return existing record
-      if (error.code === 'ER_DUP_ENTRY' || error.code === 'ER_DUP_KEYNAME') {
+      if (error.code === 'ER_DUP_ENTRY' || error.code === 'ER_DUP_KEYNAME' || error.message?.includes('Duplicate entry')) {
         const messageIdNum = typeof messageId === 'string' ? parseInt(messageId, 10) : messageId;
         const userIdNum = this.getUserIdAsNumber(userId);
         const existing = await db.select().from(starredMessages)
@@ -779,6 +793,16 @@ export class DatabaseStorage implements IStorage {
           .limit(1);
         return existing[0];
       }
+      console.error("Error in starMessage:", error);
+      console.error("Error details:", {
+        message: error.message,
+        code: error.code,
+        sqlState: error.sqlState,
+        sqlMessage: error.sqlMessage,
+        messageId,
+        userId,
+        companyId
+      });
       throw error;
     }
   }

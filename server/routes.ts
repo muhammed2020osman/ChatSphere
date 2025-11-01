@@ -1571,9 +1571,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const starred = await storage.starMessage(id, userId, companyId);
         res.json({ isStarred: true, ...starred });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error toggling star:", error);
-      res.status(500).json({ message: "Failed to toggle star" });
+      console.error("Error details:", {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      });
+      res.status(500).json({ 
+        message: "Failed to toggle star",
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   });
 
