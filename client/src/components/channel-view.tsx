@@ -13,8 +13,13 @@ import { useAuth } from "@/hooks/useAuth";
 export function ChannelView() {
   const { id } = useParams();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const { user } = useAuth();
+
+  // Get messageId from URL query parameter
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetMessageId = urlParams.get("messageId");
 
   const { data: channel, isLoading: channelLoading } = useQuery<Channel>({
     queryKey: ["/api/channels", id],
@@ -39,11 +44,34 @@ export function ChannelView() {
     refetchInterval: isChannelRoute ? 3000 : false,
   });
 
+  // Scroll to bottom on new messages (only if no target message)
   useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current && messages && !targetMessageId) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, targetMessageId]);
+
+  // Scroll to target message when it's loaded
+  useEffect(() => {
+    if (targetMessageId && messages && messages.length > 0) {
+      // Check if message exists in the messages array
+      const messageExists = messages.some(m => String(m.id) === targetMessageId);
+      if (messageExists) {
+        // Wait for refs to be set
+        const timeoutId = setTimeout(() => {
+          const messageElement = messageRefs.current.get(targetMessageId);
+          if (messageElement && scrollRef.current) {
+            messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Remove messageId from URL after scrolling
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.delete('messageId');
+            window.history.replaceState({}, '', newUrl.toString());
+          }
+        }, 300);
+        return () => clearTimeout(timeoutId);
+      }
+    }
+  }, [targetMessageId, messages]);
 
   const activeThread = activeThreadId ? messages?.find(m => m.id === activeThreadId) : null;
   const threadReplies = messages?.filter(m => m.threadParentId === activeThreadId) || [];
@@ -121,13 +149,25 @@ export function ChannelView() {
                 .filter((msg) => !msg.threadParentId)
                 .map((message) => {
                   const replies = messages.filter(m => m.threadParentId === message.id);
+                  const isTargetMessage = targetMessageId === String(message.id);
                   return (
-                    <MessageItem 
-                      key={message.id} 
-                      message={{ ...message, threadReplies: replies }} 
-                      onReply={(id) => setActiveThreadId(id)}
-                      channelId={id}
-                    />
+                    <div
+                      key={message.id}
+                      ref={(el) => {
+                        if (el) {
+                          messageRefs.current.set(String(message.id), el);
+                        } else {
+                          messageRefs.current.delete(String(message.id));
+                        }
+                      }}
+                      className={isTargetMessage ? "ring-2 ring-yellow-400 rounded-lg p-1 -m-1" : ""}
+                    >
+                      <MessageItem 
+                        message={{ ...message, threadReplies: replies }} 
+                        onReply={(id) => setActiveThreadId(id)}
+                        channelId={id}
+                      />
+                    </div>
                   );
                 })
             ) : (

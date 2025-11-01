@@ -3,12 +3,18 @@ import { Card } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import { MessageItem } from "@/components/message-item";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useLocation } from "wouter";
 import type { MessageWithUser } from "@shared/schema";
 
 export default function StarredPage() {
+  const [, setLocation] = useLocation();
   const { data: starredMessages, isLoading } = useQuery<MessageWithUser[]>({
     queryKey: ["/api/starred"],
   });
+
+  const handleMessageClick = (message: MessageWithUser) => {
+    setLocation(`/channel/${message.channelId}?messageId=${message.id}`);
+  };
 
   return (
     <div className="h-full overflow-y-auto">
@@ -32,11 +38,16 @@ export default function StarredPage() {
         ) : starredMessages && starredMessages.length > 0 ? (
           <div className="space-y-1">
             {starredMessages.map((message) => (
-              <MessageItem
+              <div
                 key={message.id}
-                message={message}
-                channelId={message.channelId}
-              />
+                onClick={() => handleMessageClick(message)}
+                className="cursor-pointer hover:bg-muted/50 rounded-lg transition-colors"
+              >
+                <MessageItem
+                  message={message}
+                  channelId={message.channelId}
+                />
+              </div>
             ))}
           </div>
         ) : (
