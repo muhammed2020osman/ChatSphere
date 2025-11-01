@@ -43,6 +43,12 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
     queryKey: ["/api/users"],
   });
 
+  // Fetch company data
+  const { data: companyData } = useQuery<{ id: number; name: string; domain: string | null; planType: string }>({
+    queryKey: [`/api/companies/${user?.companyId}`],
+    enabled: !!user?.companyId,
+  });
+
   const getUserInitials = (u: User | undefined) => {
     if (!u) return "?";
     if (u.name ) {
@@ -88,6 +94,12 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-64">
+            {companyData && (
+              <div className="px-2 py-1.5 text-sm border-b border-border">
+                <p className="font-semibold">{companyData.name}</p>
+                <p className="text-xs text-muted-foreground">code: {companyData.id}</p>
+              </div>
+            )}
             {user?.role === 'admin' && (
               <DropdownMenuItem asChild>
                 <Link href="/settings" data-testid="link-settings">

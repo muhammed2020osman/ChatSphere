@@ -220,6 +220,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get company by ID (authenticated)
+  app.get('/api/companies/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = parseInt(req.params.id, 10);
+      const userCompanyId = (req.user as any)?.companyId || req.companyId;
+      
+      if (!companyId || isNaN(companyId)) {
+        return res.status(400).json({ error: 'Invalid company ID' });
+      }
+      
+      // Verify user belongs to this company
+      if (userCompanyId && companyId !== userCompanyId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      
+      const { db } = await import('./db');
+      const { companies } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      
+      const results = await db
+        .select()
+        .from(companies)
+        .where(eq(companies.id, companyId))
+        .limit(1);
+      
+      if (results.length === 0) {
+        return res.status(404).json({ error: 'Company not found' });
+      }
+      
+      res.json({
+        id: results[0].id,
+        name: results[0].name,
+        domain: results[0].domain,
+        planType: results[0].planType,
+      });
+    } catch (error: any) {
+      console.error('Error fetching company:', error);
+      res.status(500).json({ error: 'Failed to fetch company', message: error?.message });
+    }
+  });
+
   // Find company by invitation code or name (no auth required)
   app.post('/api/companies/find', async (req, res) => {
     try {
