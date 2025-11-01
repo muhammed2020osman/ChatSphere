@@ -194,6 +194,7 @@ export const starredMessages = mysqlTable("starred_messages", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_starred_messages_company").on(table.companyId),
+  uniqueIndex("unique_message_user").on(table.messageId, table.userId),
 ]);
 
 // Attachments table

@@ -209,6 +209,7 @@ const tableDefinitions = {
       message_id INT NOT NULL,
       user_id INT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY unique_message_user (message_id, user_id),
       FOREIGN KEY (message_id) REFERENCES messages(id),
       FOREIGN KEY (user_id) REFERENCES users(id)
     )
