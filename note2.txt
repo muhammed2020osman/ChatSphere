@@ -1,0 +1,69 @@
+ sudo nano /etc/nginx/sites-available/souglink.com
+  432  /etc/nginx/sites-enabled/souglink.com
+  433  sudo /etc/nginx/sites-enabled/souglink.com
+  434  sudo ln -s /etc/nginx/sites-available/souglink.com /etc/nginx/sites-enabled/souglink.com
+  435  ls -l /etc/nginx/sites-enabled/
+  436  sudo nginx -t
+  437  sudo systemctl restart nginx
+  438  sudo systemctl status nginx.service
+  439  sudo pkill -9 nginx
+  440  sudo ss -tulnp | grep -E ':80|:8080'
+  441  sudo ln -sf /etc/nginx/sites-available/souglink.com /etc/nginx/sites-enabled/souglink.com
+  442  sudo nginx -t
+  443  sudo systemctl start nginx
+  444  sudo systemctl status nginx
+  445  sudo ss -tulnp | grep 5000
+  446  sudo pkill -9 nginx && sudo rm -f /run/nginx.pid && sudo systemctl start nginx && sudo systemctl status nginx
+  447  #!/bin/bash
+  448  echo "Checking for running Nginx processes..."
+  449  if pgrep nginx > /dev/null; then     echo "Found running Nginx processes. Killing them...";     sudo pkill -9 nginx; else     echo "No running Nginx processes found."; fi
+  450  if [ -f /run/nginx.pid ]; then     echo "Removing old PID file...";     sudo rm -f /run/nginx.pid; fi
+  451  echo "Starting Nginx service..."
+  452  sudo systemctl start nginx
+  453  echo "Checking Nginx status..."
+  454  sudo systemctl status nginx --no-pager
+  455  chmod +x nginx-clean.sh
+  456  ./nginx-clean.sh
+  457  sudo nano /root/nginx-clean.sh
+  458  sudo chmod +x /root/nginx-clean.sh
+  459  sudo /root/nginx-clean.sh
+  460  sudo ss -tulnp | grep -E ':80|:443'
+  461  ls -l /etc/nginx/sites-enabled/
+  462  sudo nano /etc/nginx/sites-available/souglink.com
+  463  sudo nginx -t
+  464  sudo pkill -f nginx
+  465  sudo systemctl restart nginx
+  466  sudo systemctl status nginx
+  467  sudo ss -tulnp | grep 80
+  468  pm2 list
+  469  sudo ss -tulnp | grep 5000
+  470  sudo nano /etc/nginx/sites-available/souglink.com
+  471  sudo pkill -f nginx
+  472  sudo systemctl start nginx
+  473  sudo systemctl status nginx
+  474  sudo ss -tulnp | grep 80
+  475  sudo grep -R "8080" /etc/nginx
+  476  sudo nano /etc/nginx/sites-available/chat.conf
+  477  sudo nano /etc/nginx/sites-available/default
+  478  sudo nginx -t
+  479  sudo systemctl restart nginx
+  480  sudo ss -tulnp | grep :80
+  481  sudo find /etc/nginx/sites-available/ /etc/nginx/sites-enabled/ -type f -exec sed -i 's/listen 8080/listen 80/g' {} \; && sudo nginx -t && sudo systemctl restart nginx
+  482  sudo ss -tulnp | grep :80
+  483  sudo nano /etc/nginx/sites-available/default
+  484  /etc/nginx/sites-available/souglink.com
+  485  sudo /etc/nginx/sites-available/souglink.com
+  486  sudo nano /etc/nginx/sites-available/souglink.com
+  487  sudo nginx -t
+  488  sudo systemctl restart nginx
+  489  sudo ss -tulnp | grep :80
+  490  pm2 list
+  491  sudo ss -tulnp | grep 5000
+  492  sudo ufw status
+  493  sudo iptables -L -n | grep 80
+  494  pm2 logs chat --lines 10
+  495  bt
+  496  cd /www/wwwroot/ChatSphere
+  497  git status
+  498  lst
+  4

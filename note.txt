@@ -9,6 +9,7 @@ username: kmzwyz1l
 password: d88ac464
  
 cd /www/wwwroot/ChatSphere
+cd /www/wwwroot/souglink.com
 git stash
 git pull origin main --rebase
 pnpm remove canvas
@@ -54,6 +55,8 @@ pnpm install
 npm run build
 pm2 restart chat
 pm2 save
+pm2 show chat
+
 git pull origin main --rebase && npm run build && pm2 restart chat &&  pm2 save
 أو استخدام السكريبت:
 ssh root@72.61.96.90 'bash -s' < deploy.sh

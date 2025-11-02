@@ -147,13 +147,13 @@ export function IngestPlansModal() {
     totalPages: number;
   }>({
     queryKey: ["/api/drawings", 1, 100],
-    queryFn: async () => {
-      const res = await fetch(`/api/drawings?page=1&limit=100`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to fetch drawings");
-      return await res.json();
-    },
+    queryFn: () => apiRequest<{
+      drawings: DrawingWithDetails[];
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>("/api/drawings?page=1&limit=100"),
     enabled: watchedVersionType === "update",
   });
 
@@ -187,30 +187,20 @@ export function IngestPlansModal() {
       const formData = new FormData();
       formData.append("file", file);
       
-      const response = await fetch(`/api/drawings/${drawingId}/upload`, {
+      return await apiRequest<UploadResponse>(`/api/drawings/${drawingId}/upload`, {
         method: "POST",
         body: formData,
-        credentials: "include",
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Upload failed");
-      }
-
-      return await response.json() as UploadResponse;
     },
     onSuccess: async (data) => {
       setUploadResult(data);
       
       // Fetch all pages for this revision
-      const pagesResponse = await fetch(`/api/revisions/${data.revisionId}/pages`, {
-        credentials: "include",
-      });
-      
-      if (pagesResponse.ok) {
-        const pages = await pagesResponse.json();
+      try {
+        const pages = await apiRequest<DrawingPage[]>(`/api/revisions/${data.revisionId}/pages`);
         setDrawingPages(pages);
+      } catch (error) {
+        console.error("Failed to fetch pages:", error);
       }
       
       // Invalidate queries to refresh data
@@ -248,31 +238,21 @@ export function IngestPlansModal() {
       if (values.parentDrawingId) formData.append("parentDrawingId", values.parentDrawingId);
       if (values.revisionNotes) formData.append("revisionNotes", values.revisionNotes);
 
-      const response = await fetch("/api/drawings/upload-manual", {
+      return await apiRequest<UploadResponse>("/api/drawings/upload-manual", {
         method: "POST",
         body: formData,
-        credentials: "include",
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Upload failed");
-      }
-
-      return await response.json() as UploadResponse;
     },
     onSuccess: async (data) => {
       setUploadResult(data);
       
       // Fetch all pages for this revision if multi-page
       if (data.pageCount > 1) {
-        const pagesResponse = await fetch(`/api/revisions/${data.revisionId}/pages`, {
-          credentials: "include",
-        });
-        
-        if (pagesResponse.ok) {
-          const pages = await pagesResponse.json();
+        try {
+          const pages = await apiRequest<DrawingPage[]>(`/api/revisions/${data.revisionId}/pages`);
           setDrawingPages(pages);
+        } catch (error) {
+          console.error("Failed to fetch pages:", error);
         }
       }
       

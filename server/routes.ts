@@ -2323,20 +2323,38 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
 
       let drawingId: string;
 
+      // Get companyId from request
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: "Company ID is required" });
+      }
+
       // Drawing Creation/Selection based on versionType
       console.log('Version type:', versionType);
       if (versionType === 'new') {
         // Create new drawing
         const userIdAsNumber = getUserIdAsNumber(userId);
+        // Parse disciplineId and floorId to integers (they come as strings from FormData)
+        const disciplineIdInt = parseInt(disciplineId, 10);
+        const floorIdInt = floorId ? parseInt(floorId, 10) : null;
+        
+        if (isNaN(disciplineIdInt)) {
+          return res.status(400).json({ message: "Invalid disciplineId" });
+        }
+        if (floorId && isNaN(floorIdInt!)) {
+          return res.status(400).json({ message: "Invalid floorId" });
+        }
+
         const drawingData = {
+          companyId: typeof companyId === 'string' ? parseInt(companyId, 10) : companyId,
           name: title, // Add required name field
           description: '', // Add required description field
           data: {
             sheetNo,
             title,
-            disciplineId,
-            floorId: floorId || null,
           },
+          disciplineId: disciplineIdInt, // Top level, as integer
+          floorId: floorIdInt, // Top level, as integer or null
           createdBy: userIdAsNumber,
         };
         console.log('Creating drawing with data:', drawingData);

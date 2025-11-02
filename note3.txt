@@ -1,0 +1,7 @@
+to login ssh use:
+ssh root@72.61.96.90
+express:/www/wwwroot/souglink.com
+php: /www/wwwroot/souglink.comphp
+
+مطلوب ان يشتغل مشروع  اكسبريس في الدومين
+https://souglink.com/
