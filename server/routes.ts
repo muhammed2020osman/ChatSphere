@@ -2636,19 +2636,44 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const userIdAsNumber = getUserIdAsNumber(userId);
+      
+      // Get companyId from request
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: "Company ID is required" });
+      }
+      
       const { id, ...bodyWithoutId } = req.body;
+      
+      // Prepare ticket data with proper field mapping and type conversion
       const ticketData = {
         ...bodyWithoutId,
-        // Convert empty strings to null for optional fields
-        layerId: req.body.layerId && req.body.layerId.trim() !== '' ? parseInt(req.body.layerId, 10) : null,
-        assignedTo: req.body.assignedTo && req.body.assignedTo.trim() !== '' ? parseInt(req.body.assignedTo, 10) : null,
+        companyId: typeof companyId === 'string' ? parseInt(companyId, 10) : companyId,
+        title: req.body.title,
+        description: req.body.description || null,
+        type: req.body.type || 'issue',
+        status: req.body.status || 'open',
+        priority: req.body.priority || 'medium',
+        // Parse numeric fields
+        drawingId: req.body.drawingId ? (typeof req.body.drawingId === 'string' ? parseInt(req.body.drawingId, 10) : req.body.drawingId) : null,
+        disciplineId: req.body.disciplineId ? (typeof req.body.disciplineId === 'string' ? parseInt(req.body.disciplineId, 10) : req.body.disciplineId) : null,
+        pinId: req.body.pinId ? (typeof req.body.pinId === 'string' ? parseInt(req.body.pinId, 10) : req.body.pinId) : null,
+        layerId: req.body.layerId ? (typeof req.body.layerId === 'string' ? parseInt(req.body.layerId, 10) : req.body.layerId) : null,
+        assignedTo: req.body.assignedTo ? (typeof req.body.assignedTo === 'string' ? parseInt(req.body.assignedTo, 10) : req.body.assignedTo) : null,
         createdBy: userIdAsNumber,
       };
+      
+      // Validate required fields
+      if (!ticketData.title || ticketData.title.trim() === '') {
+        return res.status(400).json({ message: "Title is required" });
+      }
+      
       const ticket = await storage.createTicket(ticketData);
       res.json(ticket);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating ticket:", error);
-      res.status(500).json({ message: "Failed to create ticket" });
+      const errorMessage = error?.message || "Failed to create ticket";
+      res.status(500).json({ message: errorMessage });
     }
   });
 

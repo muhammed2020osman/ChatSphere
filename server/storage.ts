@@ -1373,17 +1373,27 @@ export class DatabaseStorage implements IStorage {
     const { id, ...dataWithoutId } = ticketData;
     
     await db.insert(tickets).values(dataWithoutId);
+    console.log('MySQL insert ticket result:', JSON.stringify(dataWithoutId));
     
-    // Get the last inserted ticket
-    const result = await db.select().from(tickets)
-      .where(eq(tickets.createdBy, ticketData.createdBy))
+    // Get the last inserted ticket by querying with multiple fields to be more specific
+    // Use title + createdBy + createdAt to find the exact ticket we just created
+    const lastInserted = await db.select().from(tickets)
+      .where(
+        and(
+          eq(tickets.createdBy, ticketData.createdBy),
+          eq(tickets.title, ticketData.title),
+          eq(tickets.type, ticketData.type || 'issue')
+        )
+      )
       .orderBy(desc(tickets.createdAt))
       .limit(1);
     
-    if (!result[0]) {
-      throw new Error('Failed to create ticket');
+    console.log('Last inserted ticket:', lastInserted[0]);
+    
+    if (!lastInserted[0]) {
+      throw new Error('Failed to create ticket - could not retrieve created ticket');
     }
-    return result[0];
+    return lastInserted[0];
   }
 
   async updateTicketStatus(ticketId: string, status: string): Promise<Ticket> {
