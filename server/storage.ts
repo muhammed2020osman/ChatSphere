@@ -1246,9 +1246,33 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPin(pinData: any): Promise<any> {
-    await db.insert(pins).values(pinData);
-    const result = await db.select().from(pins).where(eq(pins.id, pinData.id)).limit(1);
-    return result[0];
+    // Remove id if provided since it's AUTO_INCREMENT
+    const { id, ...dataWithoutId } = pinData;
+    
+    await db.insert(pins).values(dataWithoutId);
+    console.log('MySQL insert pin result:', JSON.stringify(dataWithoutId));
+    
+    // Get the last inserted record by querying with multiple fields to be more specific
+    // Use drawingId + createdBy + createdAt to find the exact pin we just created
+    const lastInserted = await db.select().from(pins)
+      .where(
+        and(
+          eq(pins.drawingId, pinData.drawingId),
+          eq(pins.createdBy, pinData.createdBy),
+          eq(pins.name, pinData.name),
+          eq(pins.x, pinData.x),
+          eq(pins.y, pinData.y)
+        )
+      )
+      .orderBy(desc(pins.createdAt))
+      .limit(1);
+    
+    console.log('Last inserted pin:', lastInserted[0]);
+    
+    if (!lastInserted[0]) {
+      throw new Error('Failed to create pin - could not retrieve created pin');
+    }
+    return lastInserted[0];
   }
 
   async deletePin(pinId: string): Promise<void> {

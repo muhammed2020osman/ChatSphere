@@ -2536,17 +2536,30 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const userIdAsNumber = getUserIdAsNumber(userId);
+      
+      // Prepare pin data with proper field mapping
       const pinData = {
-        ...req.body,
-        // Convert empty string to null for layerId (optional field)
-        layerId: req.body.layerId && req.body.layerId.trim() !== '' ? parseInt(req.body.layerId, 10) : null,
+        name: req.body.label || req.body.name || 'Pin', // Use label as name, fallback to name or default
+        x: req.body.x.toString(),
+        y: req.body.y.toString(),
+        type: req.body.type || 'pin', // Default type is 'pin'
+        data: req.body.data || null,
+        drawingId: parseInt(req.body.drawingId, 10),
+        layerId: req.body.layerId && req.body.layerId.toString().trim() !== '' ? parseInt(req.body.layerId, 10) : null,
         createdBy: userIdAsNumber,
       };
+      
+      // Validate required fields
+      if (!pinData.drawingId || isNaN(pinData.drawingId)) {
+        return res.status(400).json({ message: "drawingId is required and must be a number" });
+      }
+      
       const pin = await storage.createPin(pinData);
       res.json(pin);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating pin:", error);
-      res.status(500).json({ message: "Failed to create pin" });
+      const errorMessage = error?.message || "Failed to create pin";
+      res.status(500).json({ message: errorMessage });
     }
   });
 

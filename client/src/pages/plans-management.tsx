@@ -20,6 +20,7 @@ import { Card } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
 import type { DrawingWithDetails } from "@shared/schema";
 
 type ViewMode = "grid" | "list";
@@ -71,13 +72,13 @@ export default function PlansManagement() {
     totalPages: number;
   }>({
     queryKey: ['/api/drawings', currentPage],
-    queryFn: async () => {
-      const res = await fetch(`/api/drawings?page=${currentPage}&limit=30`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to fetch drawings");
-      return await res.json();
-    },
+    queryFn: () => apiRequest<{
+      drawings: DrawingWithDetails[];
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>(`/api/drawings?page=${currentPage}&limit=30`),
   });
 
   const plans = paginatedData?.drawings || [];

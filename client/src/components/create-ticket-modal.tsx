@@ -31,17 +31,17 @@ import { Button } from "@/components/ui/button";
 import { insertTicketSchema, type Discipline, type User, type Layer } from "@shared/schema";
 
 // Extend ticket schema for form validation
-// Remove pinId and drawingId - these are set by the parent component
+// Remove pinId, drawingId, companyId, and createdBy - these are set by the parent component or server
 const ticketFormSchema = insertTicketSchema
-  .omit({ pinId: true, drawingId: true })
+  .omit({ pinId: true, drawingId: true, companyId: true, createdBy: true })
   .extend({
     title: z.string().min(3, "العنوان يجب أن يكون 3 أحرف على الأقل"),
     description: z.string().optional(),
     type: z.enum(["rfi", "issue", "clash", "change_request", "observation", "safety", "quality"]),
-    disciplineId: z.string().min(1, "يجب اختيار الـ Discipline"),
+    disciplineId: z.number().min(1, "يجب اختيار الـ Discipline"),
     priority: z.enum(["low", "medium", "high"]),
-    assignedTo: z.string().optional(),
-    layerId: z.string().optional(), // Layer is optional - some drawings don't have layers
+    assignedTo: z.number().optional(),
+    layerId: z.number().optional(), // Layer is optional - some drawings don't have layers
   });
 
 type TicketFormValues = z.infer<typeof ticketFormSchema>;
@@ -82,17 +82,18 @@ export function CreateTicketModal({
       title: "",
       description: "",
       type: "issue",
-      disciplineId: drawingDisciplineId || "", // Auto-populate from drawing
+      disciplineId: drawingDisciplineId ? (typeof drawingDisciplineId === 'string' ? parseInt(drawingDisciplineId, 10) : drawingDisciplineId) : undefined,
       priority: "medium",
-      assignedTo: "",
-      layerId: "",
+      assignedTo: undefined,
+      layerId: undefined,
     },
   });
 
   // Auto-populate discipline when drawingDisciplineId changes
   useEffect(() => {
     if (drawingDisciplineId) {
-      form.setValue("disciplineId", drawingDisciplineId);
+      const disciplineIdNum = typeof drawingDisciplineId === 'string' ? parseInt(drawingDisciplineId, 10) : drawingDisciplineId;
+      form.setValue("disciplineId", disciplineIdNum);
     }
   }, [drawingDisciplineId, form]);
 
@@ -214,8 +215,8 @@ export function CreateTicketModal({
                 <FormItem>
                   <FormLabel>الطبقة (Layer)</FormLabel>
                   <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    onValueChange={(value) => field.onChange(value ? parseInt(value, 10) : undefined)}
+                    value={field.value ? field.value.toString() : ""}
                     data-testid="select-layer"
                   >
                     <FormControl>
@@ -234,7 +235,7 @@ export function CreateTicketModal({
                           return (
                             <SelectItem
                               key={layer.id}
-                              value={layer.id}
+                              value={layer.id.toString()}
                               data-testid={`option-layer-${layer.id}`}
                             >
                               {layer.name} ({discipline?.name || 'Unknown'})
@@ -257,8 +258,8 @@ export function CreateTicketModal({
                 <FormItem>
                   <FormLabel>التخصص (Discipline) *</FormLabel>
                   <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
+                    onValueChange={(value) => field.onChange(parseInt(value, 10))}
+                    value={field.value ? field.value.toString() : ""}
                     data-testid="select-discipline"
                   >
                     <FormControl>
@@ -270,7 +271,7 @@ export function CreateTicketModal({
                       {disciplines.map((discipline) => (
                         <SelectItem
                           key={discipline.id}
-                          value={discipline.id}
+                          value={discipline.id.toString()}
                           data-testid={`option-discipline-${discipline.name || 'N/A'}`}
                         >
                           {discipline.name}
@@ -325,8 +326,8 @@ export function CreateTicketModal({
                 <FormItem>
                   <FormLabel>تعيين إلى</FormLabel>
                   <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    onValueChange={(value) => field.onChange(value ? parseInt(value, 10) : undefined)}
+                    value={field.value ? field.value.toString() : ""}
                     data-testid="select-assigned-to"
                   >
                     <FormControl>
@@ -341,7 +342,7 @@ export function CreateTicketModal({
                         return (
                           <SelectItem
                             key={user.id}
-                            value={user.id}
+                            value={user.id.toString()}
                             data-testid={`option-user-${user.id}`}
                           >
                             <div className="flex flex-col">

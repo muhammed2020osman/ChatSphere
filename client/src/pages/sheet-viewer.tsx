@@ -608,11 +608,16 @@ export default function SheetViewer() {
         description: ticketData.description,
       });
       
+      // Validate pin response
+      if (!pinResponse || !pinResponse.id) {
+        throw new Error('Failed to create pin - invalid response');
+      }
+      
       // Create ticket with pinId and drawingId (both added here, not from form)
       await createTicketMutation.mutateAsync({
         ...ticketData,
         drawingId: id!, // Add drawingId from route param
-        pinId: (pinResponse as any).id, // Add pinId from created pin
+        pinId: pinResponse.id, // Add pinId from created pin
       });
       
       // Close modal and reset tempPin
@@ -620,8 +625,13 @@ export default function SheetViewer() {
       setShowTicketModal(false);
     } catch (error) {
       console.error("Error in handleTicketSubmit:", error);
+      toast({
+        title: "خطأ",
+        description: error instanceof Error ? error.message : "فشل في إنشاء الدبوس أو التذكرة",
+        variant: "destructive",
+      });
     }
-  }, [tempPin, id, createPinMutation, createTicketMutation]);
+  }, [tempPin, id, createPinMutation, createTicketMutation, toast]);
 
   // Mutation to toggle layer visibility
   const toggleLayerMutation = useMutation({

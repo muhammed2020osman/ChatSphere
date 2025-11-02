@@ -48,22 +48,28 @@ export async function apiRequest<T = any>(
     return undefined as T;
   }
   
+  // Read response text once to avoid "body stream already read" error
+  const text = await res.text();
+  
   // Check if response has content
+  if (!text || text.trim() === '') {
+    return undefined as T;
+  }
+  
+  // Check if response is JSON
   const contentType = res.headers.get("content-type");
   if (contentType && contentType.includes("application/json")) {
     try {
-      return await res.json();
+      return JSON.parse(text) as T;
     } catch (error) {
       console.error("JSON parsing error:", error);
-      const text = await res.text();
       console.error("Response text:", text);
       throw new Error(`Invalid JSON response: ${text}`);
     }
   }
   
-  // For other content types or empty body, return undefined
-  const text = await res.text();
-  return (text ? text : undefined) as T;
+  // For other content types, return text
+  return text as T;
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
