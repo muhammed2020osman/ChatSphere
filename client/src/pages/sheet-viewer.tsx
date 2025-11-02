@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useParams, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -150,6 +150,24 @@ export default function SheetViewer() {
     enabled: !!id,
   });
 
+  // Fetch tickets for this drawing to match with pins
+  const { data: ticketsData } = useQuery<{ tickets: Ticket[] }>({
+    queryKey: ['/api/tickets', { drawingId: id }],
+    enabled: !!id,
+  });
+
+  // Match tickets to pins
+  const pinsWithTickets: PinWithTickets[] = useMemo(() => {
+    const tickets = ticketsData?.tickets || [];
+    return pins.map(pin => {
+      const pinTickets = tickets.filter(ticket => ticket.pinId === pin.id);
+      return {
+        ...pin,
+        tickets: pinTickets.length > 0 ? pinTickets : undefined,
+      };
+    });
+  }, [pins, ticketsData]);
+
   // Fetch disciplines for display names
   const { data: disciplines = [] } = useQuery<Discipline[]>({
     queryKey: ['/api/disciplines'],
@@ -220,7 +238,7 @@ export default function SheetViewer() {
 
   // Filter pins based on visible layers
   // Pins without a layer (layerId=null) are always visible
-  const visiblePins = pins.filter((pin) => {
+  const visiblePins = pinsWithTickets.filter((pin) => {
     // If pin has no layer, it's always visible
     if (!pin.layerId) return true;
     
@@ -1699,12 +1717,12 @@ export default function SheetViewer() {
                               </>
                             ) : (
                               <>
-                                <p className="text-sm font-medium text-foreground">{pin.label || "دبوس بدون تذكرة"}</p>
+                                <p className="text-sm font-medium text-foreground">{pin.name || "دبوس بدون تذكرة"}</p>
                                 <p className="text-xs text-muted-foreground mt-1">
                                   الموقع: ({Math.round(parseFloat(pin.x))}, {Math.round(parseFloat(pin.y))})
                                 </p>
-                                {pin.description && (
-                                  <p className="text-xs text-muted-foreground mt-1">{pin.description}</p>
+                                {pin.data && typeof pin.data === 'object' && (pin.data as any).description && (
+                                  <p className="text-xs text-muted-foreground mt-1">{(pin.data as any).description}</p>
                                 )}
                               </>
                             )}
