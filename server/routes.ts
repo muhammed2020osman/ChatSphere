@@ -2088,125 +2088,53 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
       let isPdfFile = false;
       let pdfUrl = '';
       let pageResults: any[] = [];
-      let extractedTextData: any = null;
+      // No text extraction - file kept as-is
       
       if (fileType === 'application/pdf' || isPDF(fileBuffer)) {
-        console.log('Multi-page PDF detected - processing...');
+        console.log('PDF detected - saving as-is without any processing...');
         isPdfFile = true;
         
         try {
-          // Step 1: Extract text from entire PDF
-          console.log('Step 1: Extracting text from PDF...');
-          extractedTextData = await extractPDFText(fileBuffer);
-          console.log(`Text extracted from ${extractedTextData.numPages} pages. Metadata:`, extractedTextData.metadata);
-          
-          // Step 2: Convert all PDF pages to PNG images
-          console.log('Step 2: Converting all PDF pages to images...');
-          const pdfConversionResults = await convertPDFPagesToImages(fileBuffer);
-          console.log(`Converted ${pdfConversionResults.length} pages`);
-          
-          // Step 3: Save original PDF locally
-          console.log('Step 3: Saving original PDF locally...');
+          // Simply save PDF file without any processing or analysis
           const pdfFileName = `${drawingId}_${revisionNo}_${timestamp}.pdf`;
           const pdfPath = `drawings/${pdfFileName}`;
           
           pdfUrl = await localStorage.uploadFile(pdfPath, fileBuffer, 'application/pdf');
-          console.log('Original PDF saved locally');
+          console.log('PDF saved successfully without processing');
           
-          // Step 4: Process each page - upload images and analyze with AI
-          console.log('Step 4: Processing individual pages...');
-          for (let pageIndex = 0; pageIndex < pdfConversionResults.length; pageIndex++) {
-            const pageResult = pdfConversionResults[pageIndex];
-            const pageNumber = pageIndex + 1;
-            
-            console.log(`Processing page ${pageNumber}/${pdfConversionResults.length}...`);
-            
-            // Upload page image locally
-            const pageImageFileName = `${drawingId}_${revisionNo}_p${pageNumber}_${timestamp}.png`;
-            const pageImagePath = `drawings/${pageImageFileName}`;
-            
-            const pageImageUrl = await localStorage.uploadFile(pageImagePath, pageResult.imageBuffer, 'image/png');
-            
-            // Analyze page with Gemini AI
-            let pageAiData = null;
-            try {
-              console.log(`Analyzing page ${pageNumber} with Gemini AI...`);
-              pageAiData = await analyzeEngineeringDrawing(pageResult.imageBuffer, 'image/png');
-              console.log(`Page ${pageNumber} AI analysis completed`);
-            } catch (aiError) {
-              console.error(`AI analysis failed for page ${pageNumber} (continuing):`, aiError);
-            }
-            
-            pageResults.push({
-              pageNumber,
-              imageUrl: pageImageUrl,
-              width: pageResult.width.toString(),
-              height: pageResult.height.toString(),
-              aiExtractedData: pageAiData,
-            });
-          }
-          
-          // Use first page for revision thumbnail
-          fileBuffer = pdfConversionResults[0].imageBuffer;
-          fileType = 'image/png';
+          // No text extraction, no AI analysis, no conversion - PDF kept as-is
           
         } catch (pdfError) {
-          console.error('Failed to process PDF:', pdfError);
+          console.error('Failed to save PDF:', pdfError);
           return res.status(400).json({ 
-            message: "Failed to process PDF file. Please ensure it's a valid PDF or try uploading as PNG/JPG." 
+            message: "Failed to save PDF file. Please ensure it's a valid PDF." 
           });
         }
       } else {
         // Single image file (PNG/JPG)
-        console.log('Single image file detected');
+        console.log('Single image file detected - saving as-is without processing');
         
-        // Analyze with Gemini AI (skip in development if needed)
-        let aiData = null;
-        if (process.env.SKIP_AI_ANALYSIS === 'true' || process.env.NODE_ENV === 'development') {
-          console.log('Skipping AI analysis (SKIP_AI_ANALYSIS=true)');
-          aiData = {
-            title: "Engineering Drawing",
-            summary: "Drawing uploaded without AI analysis",
-            layers: [],
-            dimensions: [],
-            elements: [],
-            titleBlock: {},
-            annotations: []
-          };
-        } else {
-          try {
-            console.log('Analyzing image with Gemini AI...');
-            aiData = await analyzeEngineeringDrawing(fileBuffer, fileType);
-            console.log('AI analysis completed');
-          } catch (aiError) {
-            console.error('AI analysis failed (continuing):', aiError);
-            // Provide fallback data
-            aiData = {
-              title: "Engineering Drawing",
-              summary: "Drawing uploaded - AI analysis failed",
-              layers: [],
-              dimensions: [],
-              elements: [],
-              titleBlock: {},
-              annotations: []
-            };
-          }
-        }
-        
-        // Create single page result
+        // No AI analysis - file kept as-is
+        // Create single page result without AI data
         pageResults.push({
           pageNumber: 1,
           imageUrl: '', // Will be set after upload
-          aiExtractedData: aiData,
+          aiExtractedData: null,
         });
       }
 
       // Upload main thumbnail image locally
-      const fileExtension = isPdfFile ? 'png' : fileName.split('.').pop();
-      const uniqueFileName = `${drawingId}_${revisionNo}_${timestamp}.${fileExtension}`;
-      const imagePath = `drawings/${uniqueFileName}`;
-      
-      const thumbnailUrl = await localStorage.uploadFile(imagePath, fileBuffer, fileType);
+      // For PDFs: use PDF itself as thumbnail, for images: upload the image
+      let thumbnailUrl = '';
+      if (isPdfFile) {
+        // For PDFs, use the PDF URL as thumbnail (or we could extract first page later)
+        thumbnailUrl = pdfUrl;
+      } else {
+        const fileExtension = fileName.split('.').pop();
+        const uniqueFileName = `${drawingId}_${revisionNo}_${timestamp}.${fileExtension}`;
+        const imagePath = `drawings/${uniqueFileName}`;
+        thumbnailUrl = await localStorage.uploadFile(imagePath, fileBuffer, fileType);
+      }
 
       // Create drawing revision
       const userIdAsNumber = getUserIdAsNumber(userId);
@@ -2222,54 +2150,58 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
         fileName,
         fileType: isPdfFile ? 'application/pdf' : fileType,
         fileSize,
-        aiExtractedData: extractedTextData as any, // Store PDF text extraction in revision
+        aiExtractedData: null, // No analysis - file kept as-is
         uploadedBy: userIdAsNumber,
+        uploadMethod: 'ai' as const, // Mark as AI upload method
       };
 
       const revision = await storage.createDrawingRevision(revisionData);
       
-      // Create drawing pages in database
-      if (pageResults.length > 0) {
+      // Create drawing pages in database (only for image files, not PDFs)
+      // PDFs are kept as single PDF file, no separate pages stored
+      if (pageResults.length > 0 && !isPdfFile) {
         console.log(`Creating ${pageResults.length} drawing pages in database...`);
         for (const pageData of pageResults) {
           // Update image URL for single image uploads
-          if (!isPdfFile) {
-            pageData.imageUrl = thumbnailUrl;
-          }
+          pageData.imageUrl = thumbnailUrl;
           
           await storage.createDrawingPage({
             revisionId: revision.id,
             pageNumber: pageData.pageNumber.toString(),
             imageUrl: pageData.imageUrl,
             thumbnailUrl: pageData.imageUrl, // Same as image for now
-            extractedText: extractedTextData?.text || null,
-            extractedMetadata: extractedTextData?.metadata || null,
-            aiExtractedData: pageData.aiExtractedData,
+            extractedText: null, // No text extraction - file kept as-is
+            extractedMetadata: null, // No metadata extraction - file kept as-is
+            aiExtractedData: pageData.aiExtractedData, // No AI analysis
             width: pageData.width || null,
             height: pageData.height || null,
           });
         }
         console.log('All pages created successfully');
+      } else if (isPdfFile) {
+        console.log('PDF file - no drawing pages created (PDF kept as single file)');
       }
       
-      // Compile AI data from all pages
-      const aiAnalysis = pageResults.length > 0 && pageResults[0].aiExtractedData 
-        ? pageResults[0].aiExtractedData 
-        : null;
+      // No AI analysis - file kept as-is
+      const aiAnalysis = null;
+
+      // For PDFs, we don't know page count without reading the file
+      // Set to 1 as default (can be updated later if needed)
+      const pageCount = isPdfFile ? 1 : pageResults.length;
 
       res.json({
         drawingId: drawing.id,
         revisionId: revision.id,
-        pageCount: pageResults.length,
+        pageCount: pageCount,
         extractedText: {
-          fullText: extractedTextData?.text || "",
-          metadata: extractedTextData?.metadata || {
+          fullText: "",
+          metadata: {
             sheetNumbers: [],
             roomNames: [],
             dimensions: [],
           },
         },
-        aiAnalysis: aiAnalysis,
+        aiAnalysis: null,
       });
     } catch (error: any) {
       console.error("Error uploading drawing:", error);

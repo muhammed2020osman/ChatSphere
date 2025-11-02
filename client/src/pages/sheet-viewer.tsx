@@ -228,8 +228,8 @@ export default function SheetViewer() {
   const displayImageUrl = currentPageData?.imageUrl || selectedRevision?.fileUrl || plan.imageUrl;
   
   // Determine display mode: PDF or Image
-  const displayMode = selectedRevision?.uploadMethod === 'manual' && 
-                      selectedRevision?.fileType === 'application/pdf' 
+  // Show PDF directly if fileType is PDF, regardless of uploadMethod
+  const displayMode = selectedRevision?.fileType === 'application/pdf' 
                         ? 'pdf' : 'image';
 
   // Group layers by discipline

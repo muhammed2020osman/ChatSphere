@@ -135,8 +135,9 @@ export function TicketsMapView({
   // Get latest revision for selected drawing
   const latestRevision = selectedDrawing?.revisions?.[0];
   const displayImageUrl = latestRevision?.fileUrl;
-  const displayMode = latestRevision?.uploadMethod === 'manual' && 
-                      latestRevision?.fileType === 'application/pdf' 
+  // Determine display mode: PDF or Image
+  // Show PDF directly if fileType is PDF, regardless of uploadMethod
+  const displayMode = latestRevision?.fileType === 'application/pdf'
                         ? 'pdf' : 'image';
 
   // Reset zoom when drawing changes
