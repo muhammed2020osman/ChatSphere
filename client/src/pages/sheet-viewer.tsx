@@ -48,7 +48,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PDFViewerCanvas } from "@/components/pdf-viewer-canvas";
-import type { Layer, Pin, Discipline, DrawingRevision, DrawingWithDetails, Floor, Ticket } from "@shared/schema";
+import type { Layer, Pin, Discipline, DrawingRevision, DrawingWithDetails, Floor, Ticket, User } from "@shared/schema";
 import mapLocationIcon from "@assets/map-location_1761314621260.png";
 
 // Extend Pin type to include tickets
@@ -176,6 +176,11 @@ export default function SheetViewer() {
   // Fetch floors for display names
   const { data: floors = [] } = useQuery<Floor[]>({
     queryKey: ['/api/floors'],
+  });
+
+  // Fetch users to show assigned user information
+  const { data: users = [] } = useQuery<User[]>({
+    queryKey: ['/api/users'],
   });
 
   // Fetch drawing pages for the selected revision
@@ -1713,6 +1718,17 @@ export default function SheetViewer() {
                                 </div>
                                 {firstTicket.description && (
                                   <p className="text-xs text-muted-foreground line-clamp-2">{firstTicket.description}</p>
+                                )}
+                                {firstTicket.assignedTo && (
+                                  <div className="flex items-center gap-2 mt-2 pt-2 border-t">
+                                    <span className="text-xs text-muted-foreground">معيّن إلى:</span>
+                                    <span className="text-xs font-medium text-foreground">
+                                      {(() => {
+                                        const assignedUser = users.find(u => u.id === firstTicket.assignedTo);
+                                        return assignedUser ? (assignedUser.name || assignedUser.email || 'غير معروف') : 'غير معروف';
+                                      })()}
+                                    </span>
+                                  </div>
                                 )}
                               </>
                             ) : (
