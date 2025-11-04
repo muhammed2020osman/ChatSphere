@@ -4,6 +4,7 @@ import {
   users,
   channels,
   messages,
+  messageMentions,
   directMessages,
   channelMembers,
   reactions,
@@ -527,11 +528,16 @@ export class DatabaseStorage implements IStorage {
 
   async createMessage(messageData: any, companyId?: number): Promise<Message> {
     // Remove id if provided since it's AUTO_INCREMENT
-    const { id, ...dataWithoutId } = messageData;
+    const { id, mentionedUserIds, ...dataWithoutId } = messageData;
     
     // Add companyId if provided
     if (companyId) {
       dataWithoutId.companyId = companyId;
+    }
+    
+    // Remove mentions from JSON field (we'll use message_mentions table instead)
+    if (dataWithoutId.mentions) {
+      delete dataWithoutId.mentions;
     }
     
     await db.insert(messages).values(dataWithoutId);
@@ -545,7 +551,114 @@ export class DatabaseStorage implements IStorage {
     if (!result[0]) {
       throw new Error('Failed to create message');
     }
-    return result[0];
+    
+    const createdMessage = result[0];
+    
+    // Create message mentions if mentionedUserIds provided
+    if (mentionedUserIds && Array.isArray(mentionedUserIds) && mentionedUserIds.length > 0) {
+      const finalCompanyId = companyId || dataWithoutId.companyId;
+      console.log('[createMessage] Creating mentions:', {
+        messageId: createdMessage.id,
+        mentionedUserIds,
+        companyId: finalCompanyId
+      });
+      await this.createMessageMentions(createdMessage.id, mentionedUserIds, finalCompanyId);
+    } else {
+      console.log('[createMessage] No mentions to create:', {
+        mentionedUserIds,
+        isArray: Array.isArray(mentionedUserIds),
+        length: mentionedUserIds?.length
+      });
+    }
+    
+    return createdMessage;
+  }
+  
+  async createMessageMentions(messageId: number, userIds: number[], companyId: number): Promise<void> {
+    if (!userIds || userIds.length === 0) {
+      console.log('[createMessageMentions] No userIds provided');
+      return;
+    }
+    
+    // Ensure all userIds are numbers
+    const numericUserIds = userIds.map(id => {
+      const num = typeof id === 'string' ? parseInt(id, 10) : id;
+      if (isNaN(num)) {
+        console.error('[createMessageMentions] Invalid userId:', id);
+        return null;
+      }
+      return num;
+    }).filter((id): id is number => id !== null);
+    
+    if (numericUserIds.length === 0) {
+      console.error('[createMessageMentions] No valid userIds after conversion');
+      return;
+    }
+    
+    const mentionData = numericUserIds.map(userId => ({
+      messageId,
+      userId,
+      companyId,
+    }));
+    
+    console.log('[createMessageMentions] Inserting mentions:', mentionData);
+    
+    try {
+      await db.insert(messageMentions).values(mentionData);
+      console.log('[createMessageMentions] Mentions created successfully');
+    } catch (error) {
+      console.error('[createMessageMentions] Error creating mentions:', error);
+      throw error;
+    }
+  }
+  
+  async getMessageMentions(messageId: number | string): Promise<any[]> {
+    const messageIdNum = typeof messageId === 'string' ? parseInt(messageId, 10) : messageId;
+    
+    const result = await db
+      .select({
+        mention: messageMentions,
+        user: users,
+      })
+      .from(messageMentions)
+      .innerJoin(users, eq(messageMentions.userId, users.id))
+      .where(eq(messageMentions.messageId, messageIdNum));
+    
+    return result.map(r => ({
+      ...r.mention,
+      user: r.user,
+    }));
+  }
+  
+  async getUserMentions(userId: string | number, companyId?: number): Promise<any[]> {
+    const userIdNum = typeof userId === 'string' ? parseInt(userId, 10) : userId;
+    
+    let query = db
+      .select({
+        message: messages,
+        user: users,
+        channel: channels,
+        mention: messageMentions,
+      })
+      .from(messageMentions)
+      .innerJoin(messages, eq(messageMentions.messageId, messages.id))
+      .innerJoin(users, eq(messages.userId, users.id))
+      .leftJoin(channels, eq(messages.channelId, channels.id))
+      .where(eq(messageMentions.userId, userIdNum))
+      .orderBy(desc(messageMentions.createdAt));
+    
+    if (companyId) {
+      query = query.where(and(eq(messageMentions.userId, userIdNum), eq(messageMentions.companyId, companyId))) as any;
+    }
+    
+    const result = await query;
+    
+    return result.map(r => ({
+      ...r.message,
+      user: r.user,
+      channel: r.channel,
+      mention: r.mention,
+    }));
   }
 
   async searchMessages(query: string, userId: string): Promise<any[]> {
@@ -912,17 +1025,35 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Message editing/deletion
-  async updateMessage(messageId: string, content: string, mentions?: string[]): Promise<Message> {
+  async updateMessage(messageId: string, content: string, mentionedUserIds?: number[]): Promise<Message> {
+    const messageIdNum = typeof messageId === 'string' ? parseInt(messageId, 10) : messageId;
+    
+    // Get message to get companyId
+    const message = await db.select().from(messages).where(eq(messages.id, messageIdNum)).limit(1);
+    if (!message[0]) {
+      throw new Error('Message not found');
+    }
+    
     await db
       .update(messages)
       .set({ 
         content, 
         editedAt: new Date(),
-        mentions: mentions || [],
       })
-      .where(eq(messages.id, messageId));
+      .where(eq(messages.id, messageIdNum));
     
-    const result = await db.select().from(messages).where(eq(messages.id, messageId)).limit(1);
+    // Update mentions if provided
+    if (mentionedUserIds !== undefined) {
+      // Delete existing mentions
+      await db.delete(messageMentions).where(eq(messageMentions.messageId, messageIdNum));
+      
+      // Create new mentions
+      if (mentionedUserIds.length > 0) {
+        await this.createMessageMentions(messageIdNum, mentionedUserIds, message[0].companyId);
+      }
+    }
+    
+    const result = await db.select().from(messages).where(eq(messages.id, messageIdNum)).limit(1);
     return result[0];
   }
 

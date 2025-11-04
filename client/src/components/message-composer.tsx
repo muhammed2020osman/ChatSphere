@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Bold, Italic, Send, Paperclip, X, AtSign } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -34,6 +35,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
   const [showMentions, setShowMentions] = useState(false);
   const [mentionSearch, setMentionSearch] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [mentionedUsers, setMentionedUsers] = useState<User[]>([]);
   const mentionsPopoverRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,9 +89,23 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
         payload.attachmentType = attachmentType;
       }
 
+      // Extract mentionedUserIds from mentionedUsers array
+      const mentionedUserIds = mentionedUsers.map(u => {
+        // Ensure id is a number
+        const id = typeof u.id === 'string' ? parseInt(u.id, 10) : u.id;
+        return isNaN(id) ? null : id;
+      }).filter((id): id is number => id !== null);
+      
+      console.log('[MessageComposer] Sending message with mentions:', {
+        mentionedUsers,
+        mentionedUserIds,
+        payload
+      });
+      
       if (channelId) {
         payload.channelId = channelId;
         payload.threadParentId = threadParentId;
+        payload.mentionedUserIds = mentionedUserIds;
         return await apiRequest("/api/messages", {
           method: "POST",
           body: payload,
@@ -112,6 +128,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
       setAttachmentUrl(null);
       setAttachmentName(null);
       setAttachmentType(null);
+      setMentionedUsers([]);
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -243,31 +260,28 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
   };
 
   const insertMention = (user: User) => {
-    const userName = getUserName(user);
+    // Check if user is already mentioned
+    if (mentionedUsers.some(u => u.id === user.id)) {
+      setShowMentions(false);
+      setMentionSearch("");
+      return;
+    }
     
-    if (!textareaRef.current) return;
-    
-    const textarea = textareaRef.current;
-    const cursorPos = textarea.selectionStart;
-    const before = content.slice(0, cursorPos);
-    const after = content.slice(cursorPos);
-    
-    // Insert @username with a space after
-    const mentionText = `@${userName} `;
-    const newContent = `${before}${mentionText}${after}`;
-    
-    setContent(newContent);
+    // Add user to mentionedUsers array
+    setMentionedUsers(prev => [...prev, user]);
     setShowMentions(false);
     setMentionSearch("");
     
-    // Focus back on textarea and set cursor position after mention
+    // Focus back on textarea
     setTimeout(() => {
       if (textareaRef.current) {
         textareaRef.current.focus();
-        const newCursorPos = cursorPos + mentionText.length;
-        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
       }
     }, 0);
+  };
+  
+  const removeMention = (userId: number) => {
+    setMentionedUsers(prev => prev.filter(u => u.id !== userId));
   };
 
   // Expose insertMention via ref
@@ -406,6 +420,41 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {mentionedUsers.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-t bg-muted/30">
+            <span className="text-xs text-muted-foreground">Mentioned:</span>
+            {mentionedUsers.map((user) => (
+              <Badge
+                key={user.id}
+                variant="secondary"
+                className="flex items-center gap-1 pr-1"
+              >
+                <Avatar className="w-4 h-4">
+                  <AvatarImage src={user.profileImageUrl || undefined} />
+                  <AvatarFallback className="text-[10px]">
+                    {getUserInitials(user)}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-xs">{getUserName(user)}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-4 w-4 p-0 hover:bg-destructive/20"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    removeMention(user.id);
+                  }}
+                  data-testid={`button-remove-mention-${user.id}`}
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              </Badge>
+            ))}
           </div>
         )}
 

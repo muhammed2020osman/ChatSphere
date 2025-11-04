@@ -21,6 +21,7 @@
     "db:fix-names": "tsx scripts/fix-table-names.ts",
     "db:fix-final": "tsx scripts/fix-final-issues.ts",
     "db:fix-all": "tsx scripts/fix-all-issues.ts",
+    "db:create-mentions": "tsx scripts/create-message-mentions.ts",
     "test:messages": "tsx scripts/test-messages.ts",
     "add:message": "tsx scripts/add-test-message.ts",
     "test:api": "tsx scripts/test-api-message.ts",

@@ -1028,45 +1028,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Company ID is required' });
       }
       
-      // Extract mentions from content
-      const mentions = req.body.content ? extractMentions(req.body.content) : [];
+      // Get mentionedUserIds from request body (array of user IDs)
+      const mentionedUserIds = req.body.mentionedUserIds || [];
+      
+      console.log('[POST /api/messages] Request body mentionedUserIds:', mentionedUserIds);
+      console.log('[POST /api/messages] Request body:', JSON.stringify(req.body, null, 2));
       
       const userIdAsNumber = getUserIdAsNumber(userId);
-      const data = insertMessageSchema.parse({
+      // Parse message data (without mentionedUserIds, as it's not part of message schema)
+      const messageData = insertMessageSchema.parse({
         ...req.body,
         userId: userIdAsNumber,
-        mentions,
         companyId,
       });
       
+      // Add mentionedUserIds separately (not part of message schema)
+      const dataWithMentions = {
+        ...messageData,
+        mentionedUserIds,
+      };
+      
+      console.log('[POST /api/messages] Data with mentions:', dataWithMentions);
+      
       // Verify user is a member of the channel
-      if (!data.channelId) {
+      if (!messageData.channelId) {
         return res.status(400).json({ message: "Channel ID is required" });
       }
       
-      const channel = await storage.getChannel(data.channelId.toString(), companyId);
+      const channel = await storage.getChannel(messageData.channelId.toString(), companyId);
       if (!channel) {
         return res.status(404).json({ message: "Channel not found" });
       }
       
-      const isMember = await storage.isChannelMember(data.channelId.toString(), userId);
+      const isMember = await storage.isChannelMember(messageData.channelId.toString(), userId);
       if (!isMember && channel.isPrivate) {
         return res.status(403).json({ message: "Access denied - not a member of this channel" });
       }
       
-      const message = await storage.createMessage(data, companyId);
+      const message = await storage.createMessage(dataWithMentions, companyId);
       
       // Get user info for the message
       const user = await storage.getUser(userId, companyId);
       const messageWithUser = { ...message, user };
       
       // Create notifications for mentioned users
-      if (mentions.length > 0) {
-        const allUsers = await storage.getAllUsers(companyId);
-        const mentionedUserIds = await findUserIdsByUsernames(mentions, allUsers);
-        
+      if (mentionedUserIds && mentionedUserIds.length > 0) {
         // Create notifications for each mentioned user (except the sender)
-        for (const mentionedUserId of mentionedUserIds) {
+        for (const mentionedUserIdNum of mentionedUserIds) {
+          const mentionedUserId = typeof mentionedUserIdNum === 'string' ? mentionedUserIdNum : `auth:${mentionedUserIdNum}`;
           if (mentionedUserId !== userId) {
             try {
               const mentionedUserIdAsNumber = getUserIdAsNumber(mentionedUserId);
@@ -1441,9 +1450,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You can only edit your own messages" });
       }
 
-      // Extract mentions from updated content
-      const mentions = content ? extractMentions(content) : [];
-      const updatedMessage = await storage.updateMessage(id, content, mentions);
+      // Get mentionedUserIds from request body (array of user IDs)
+      const mentionedUserIds = req.body.mentionedUserIds;
+      const updatedMessage = await storage.updateMessage(id, content, mentionedUserIds);
 
       // Broadcast message update
       broadcastToChannel(message.channelId, {
@@ -1455,6 +1464,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating message:", error);
       res.status(500).json({ message: "Failed to update message" });
+    }
+  });
+
+  // Get mentions for a specific message
+  app.get('/api/messages/:id/mentions', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+
+      const mentions = await storage.getMessageMentions(id);
+      res.json(mentions);
+    } catch (error: any) {
+      console.error("Error fetching message mentions:", error);
+      res.status(500).json({ message: "Failed to fetch message mentions" });
+    }
+  });
+
+  // Get all messages where the current user was mentioned
+  app.get('/api/mentions', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+
+      const userIdAsNumber = getUserIdAsNumber(userId);
+      const mentions = await storage.getUserMentions(userIdAsNumber, companyId);
+      res.json(mentions);
+    } catch (error: any) {
+      console.error("Error fetching user mentions:", error);
+      res.status(500).json({ message: "Failed to fetch mentions" });
     }
   });
 

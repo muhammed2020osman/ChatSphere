@@ -13,26 +13,10 @@ import { useMutation } from "@tanstack/react-query";
 import { getUserInitials, getUserName } from "@/lib/utils";
 
 export default function MentionsPage() {
-  const { data: notifications, isLoading } = useQuery<(Notification & { mentionedBy: User })[]>({
-    queryKey: ["/api/notifications"],
+  const { data: mentions, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/mentions"],
   });
 
-  const markAsReadMutation = useMutation({
-    mutationFn: async (notificationId: string) => {
-      return await apiRequest(`/api/notifications/${notificationId}/read`, {
-        method: "PATCH",
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-    },
-  });
-
-  const handleNotificationClick = (notification: Notification) => {
-    if (!notification.isRead) {
-      markAsReadMutation.mutate(notification.id);
-    }
-  };
 
   return (
     <div className="h-full overflow-y-auto">
@@ -61,46 +45,44 @@ export default function MentionsPage() {
               </Card>
             ))}
           </div>
-        ) : notifications && notifications.length > 0 ? (
+        ) : mentions && mentions.length > 0 ? (
           <div className="space-y-3">
-            {notifications.map((notification) => (
+            {mentions.map((mention: any) => (
               <Link
-                key={notification.id}
-                href={`/channel/${notification.channelId}?message=${notification.messageId}`}
-                onClick={() => handleNotificationClick(notification)}
+                key={mention.id}
+                href={`/channel/${mention.channelId}?messageId=${mention.id}`}
               >
                 <Card 
-                  className={`p-4 hover-elevate cursor-pointer transition-colors ${
-                    !notification.isRead ? 'bg-accent/20' : ''
-                  }`}
-                  data-testid={`notification-${notification.id}`}
+                  className="p-4 hover-elevate cursor-pointer transition-colors"
+                  data-testid={`mention-${mention.id}`}
                 >
                   <div className="flex gap-3">
                     <Avatar className="w-10 h-10">
-                      <AvatarImage src={notification.mentionedBy.profileImageUrl || undefined} />
+                      <AvatarImage src={mention.user?.profileImageUrl || undefined} />
                       <AvatarFallback>
-                        {getUserInitials(notification.mentionedBy)}
+                        {mention.user && getUserInitials(mention.user)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-semibold">
-                          {getUserName(notification.mentionedBy)}
+                          {mention.user && getUserName(mention.user)}
                         </span>
                         <span className="text-xs text-muted-foreground">
                           mentioned you
                         </span>
-                        {!notification.isRead && (
-                          <Badge variant="default" className="ml-auto">New</Badge>
-                        )}
                       </div>
                       <p className="text-sm line-clamp-2">
-                        {notification.content}
+                        {mention.content}
                       </p>
                       <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                         <MessageSquare className="w-3 h-3" />
                         <span>
-                          {notification.createdAt && formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                          {mention.channel?.name && `#${mention.channel.name}`}
+                        </span>
+                        <span>•</span>
+                        <span>
+                          {mention.createdAt && formatDistanceToNow(new Date(mention.createdAt), { addSuffix: true })}
                         </span>
                       </div>
                     </div>

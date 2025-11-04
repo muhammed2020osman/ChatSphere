@@ -66,6 +66,12 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
   
   const isStarred = isStarredFromMessage !== undefined ? isStarredFromMessage : starredStatus?.isStarred || false;
 
+  // Fetch message mentions
+  const { data: messageMentions = [] } = useQuery<Array<{ user: any }>>({
+    queryKey: ["/api/messages", message.id, "mentions"],
+    enabled: !!message.id,
+  });
+
   const toggleStarMutation = useMutation({
     mutationFn: async () => {
       return await apiRequest(`/api/messages/${message.id}/star`, {
@@ -347,6 +353,32 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
               {message.content && (
                 <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words" data-testid={`text-message-content-${message.id}`}>
                   {message.content}
+                </div>
+              )}
+              {messageMentions.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Mentioned:</span>
+                  {messageMentions.map((mention: any) => (
+                    mention?.user && (
+                      <a
+                        key={mention.id}
+                        href={`/channel/${message.channelId}`}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted hover:bg-accent text-sm transition-colors"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          // Navigate to channel (handled by parent)
+                        }}
+                      >
+                        <Avatar className="w-4 h-4">
+                          <AvatarImage src={mention.user.profileImageUrl || undefined} />
+                          <AvatarFallback className="text-[10px]">
+                            {getUserInitials(mention.user)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{getUserName(mention.user)}</span>
+                      </a>
+                    )
+                  ))}
                 </div>
               )}
               {renderAttachment()}

@@ -90,6 +90,19 @@ export const messages = mysqlTable("messages", {
   index("idx_messages_company").on(table.companyId),
 ]);
 
+// Message mentions table
+export const messageMentions = mysqlTable("message_mentions", {
+  id: int("id").primaryKey().autoincrement(),
+  messageId: int("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  companyId: int("company_id").notNull().references(() => companies.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_message_mentions_message").on(table.messageId),
+  index("idx_message_mentions_user").on(table.userId),
+  index("idx_message_mentions_company").on(table.companyId),
+]);
+
 // Drawings table
 export const drawings = mysqlTable("drawings", {
   id: int("id").primaryKey().autoincrement(),
@@ -445,6 +458,22 @@ export const messagesRelations = relations(messages, ({ one, many }) => ({
     references: [messages.id],
   }),
   attachments: many(attachments),
+  mentions: many(messageMentions),
+}));
+
+export const messageMentionsRelations = relations(messageMentions, ({ one }) => ({
+  message: one(messages, {
+    fields: [messageMentions.messageId],
+    references: [messages.id],
+  }),
+  user: one(users, {
+    fields: [messageMentions.userId],
+    references: [users.id],
+  }),
+  company: one(companies, {
+    fields: [messageMentions.companyId],
+    references: [companies.id],
+  }),
 }));
 
 export const drawingsRelations = relations(drawings, ({ one }) => ({
@@ -773,12 +802,23 @@ export type User = typeof users.$inferSelect;
 export type UpsertUser = typeof users.$inferInsert;
 export type Channel = typeof channels.$inferSelect;
 export type InsertChannel = typeof channels.$inferInsert;
+export const insertMessageMentionSchema = createInsertSchema(messageMentions)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    messageId: preprocessNumberField(true),
+    userId: preprocessNumberField(true),
+    companyId: preprocessNumberField(true),
+  });
+
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = typeof messages.$inferInsert;
+export type MessageMention = typeof messageMentions.$inferSelect;
+export type InsertMessageMention = typeof messageMentions.$inferInsert;
 export type DirectMessage = typeof directMessages.$inferSelect;
 export type InsertDirectMessage = typeof directMessages.$inferInsert;
 export type InsertChannelMember = typeof channelMembers.$inferInsert;
 export type MessageWithUser = Message & { user: User };
+export type MessageMentionWithUser = MessageMention & { user: User };
 export type DirectMessageWithUser = DirectMessage & { sender: User };
 export type Reaction = typeof reactions.$inferSelect;
 export type InsertReaction = typeof reactions.$inferInsert;
