@@ -210,7 +210,7 @@ export function ChannelView() {
             <h2 className="text-lg font-semibold" data-testid="text-channel-name">
               {channel.name}
             </h2>
-            <div className="flex items-center gap-2 ml-auto relative">
+            <div className="flex items-center gap-2 ml-auto">
               {!currentUserLoading && currentUser && currentUser.role === 'company_manager' && (
                 <Link href={`/channel/${id}/settings`}>
                   <Button
@@ -222,74 +222,6 @@ export function ChannelView() {
                     <Settings className="w-4 h-4" />
                   </Button>
                 </Link>
-              )}
-              <Button
-                ref={membersButtonRef}
-                variant="ghost"
-                size="icon"
-                className="w-8 h-8"
-                title="Mention members"
-                onClick={handleMembersClick}
-                data-testid="button-mention-members"
-              >
-                <AtSign className="w-4 h-4 text-muted-foreground" />
-              </Button>
-              
-              {/* Members Popover */}
-              {showMembersPopover && (
-                <div 
-                  ref={membersPopoverRef}
-                  className="absolute top-full right-0 mt-1 bg-popover border rounded-lg shadow-lg max-h-60 overflow-hidden z-[100] w-64" 
-                  data-testid="members-popover"
-                  style={{ position: 'absolute' }}
-                >
-                  <div className="p-2 border-b">
-                    <input
-                      type="text"
-                      placeholder="Search members..."
-                      value={membersSearch}
-                      onChange={(e) => setMembersSearch(e.target.value)}
-                      className="w-full px-2 py-1 text-sm bg-background border rounded focus:outline-none focus:ring-2 focus:ring-primary"
-                      autoFocus
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </div>
-                  <div className="overflow-y-auto max-h-48">
-                    {filteredMembers.length > 0 ? (
-                      <div className="p-1">
-                        {filteredMembers.map((user) => (
-                          <button
-                            key={user.id}
-                            className="w-full flex items-center gap-2 p-2 hover:bg-accent rounded-md text-left"
-                            onClick={() => handleMemberSelect(user)}
-                            data-testid={`mention-member-${user.id}`}
-                          >
-                            <Avatar className="w-6 h-6">
-                              <AvatarImage src={user.profileImageUrl || undefined} />
-                              <AvatarFallback className="text-xs">
-                                {getUserInitials(user)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium truncate">
-                                {getUserName(user)}
-                              </div>
-                              {user.email && user.name && (
-                                <div className="text-xs text-muted-foreground truncate">
-                                  {user.email}
-                                </div>
-                              )}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-4 text-center text-sm text-muted-foreground">
-                        {channelMembersData === undefined ? "Loading..." : members.length === 0 ? "No members in channel" : "No members found"}
-                      </div>
-                    )}
-                  </div>
-                </div>
               )}
             </div>
           </div>
@@ -348,7 +280,85 @@ export function ChannelView() {
           </div>
         </ScrollArea>
 
-        <MessageComposer ref={messageComposerRef} channelId={id} placeholder={`Message #${channel.name}`} />
+        <div className="relative">
+          <MessageComposer ref={messageComposerRef} channelId={id} placeholder={`Message #${channel.name}`} />
+          
+          {/* Mention Members Button and Popover */}
+          <div className="absolute bottom-2 right-2">
+            <Button
+              ref={membersButtonRef}
+              variant="ghost"
+              size="icon"
+              className="w-8 h-8"
+              title="Mention members"
+              onClick={handleMembersClick}
+              data-testid="button-mention-members"
+            >
+              <AtSign className="w-4 h-4 text-muted-foreground" />
+            </Button>
+            
+            {/* Members Popover */}
+            {showMembersPopover && (
+              <div 
+                ref={membersPopoverRef}
+                className="absolute bottom-full right-0 mb-1 bg-popover border rounded-lg shadow-lg max-h-60 overflow-hidden z-[100] w-64" 
+                data-testid="members-popover"
+                style={{ position: 'absolute' }}
+              >
+                <div className="p-2 border-b">
+                  <input
+                    type="text"
+                    placeholder="Search members..."
+                    value={membersSearch}
+                    onChange={(e) => setMembersSearch(e.target.value)}
+                    className="w-full px-2 py-1 text-sm bg-background border rounded focus:outline-none focus:ring-2 focus:ring-primary"
+                    autoFocus
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div className="overflow-y-auto max-h-48">
+                  {filteredMembers.length > 0 ? (
+                    <div className="p-1">
+                      {filteredMembers.map((user) => (
+                        <button
+                          key={user.id}
+                          className="w-full flex items-center gap-2 p-2 hover:bg-accent rounded-md text-left"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleMemberSelect(user);
+                          }}
+                          data-testid={`mention-member-${user.id}`}
+                        >
+                          <Avatar className="w-6 h-6">
+                            <AvatarImage src={user.profileImageUrl || undefined} />
+                            <AvatarFallback className="text-xs">
+                              {getUserInitials(user)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">
+                              {getUserName(user)}
+                            </div>
+                            {user.email && user.name && (
+                              <div className="text-xs text-muted-foreground truncate">
+                                {user.email}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      {channelMembersData === undefined ? "Loading..." : members.length === 0 ? "No members in channel" : "No members found"}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Thread panel */}
