@@ -36,7 +36,9 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
   const [mentionSearch, setMentionSearch] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [mentionedUsers, setMentionedUsers] = useState<User[]>([]);
+  const [popoverPosition, setPopoverPosition] = useState<{ top: number; left: number } | null>(null);
   const mentionsPopoverRef = useRef<HTMLDivElement>(null);
+  const mentionButtonRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -251,7 +253,11 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
   const handleMentionClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setShowMentions((prev) => !prev);
+    console.log('[MessageComposer] Mention button clicked, current showMentions:', showMentions);
+    console.log('[MessageComposer] Users available:', users.length);
+    const newValue = !showMentions;
+    setShowMentions(newValue);
+    console.log('[MessageComposer] Setting showMentions to:', newValue);
     setMentionSearch("");
     // Focus textarea after a short delay
     setTimeout(() => {
@@ -260,15 +266,23 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
   };
 
   const insertMention = (user: User) => {
+    console.log('[MessageComposer] insertMention called with user:', user);
+    
     // Check if user is already mentioned
     if (mentionedUsers.some(u => u.id === user.id)) {
+      console.log('[MessageComposer] User already mentioned, closing popover');
       setShowMentions(false);
       setMentionSearch("");
       return;
     }
     
     // Add user to mentionedUsers array
-    setMentionedUsers(prev => [...prev, user]);
+    console.log('[MessageComposer] Adding user to mentionedUsers');
+    setMentionedUsers(prev => {
+      const newMentions = [...prev, user];
+      console.log('[MessageComposer] New mentionedUsers:', newMentions);
+      return newMentions;
+    });
     setShowMentions(false);
     setMentionSearch("");
     
@@ -323,41 +337,78 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
     }
   };
 
+  // Calculate popover position when it opens
+  React.useEffect(() => {
+    if (!showMentions) {
+      setPopoverPosition(null);
+      return;
+    }
+
+    if (!textareaRef.current) return;
+
+    const calculatePosition = () => {
+      if (!textareaRef.current) return;
+      
+      const rect = textareaRef.current.getBoundingClientRect();
+      setPopoverPosition({
+        top: rect.top - 10, // Position above textarea with some margin
+        left: rect.left
+      });
+    };
+
+    // Calculate position immediately and after a short delay to ensure DOM is updated
+    calculatePosition();
+    const timeoutId = setTimeout(calculatePosition, 0);
+
+    return () => clearTimeout(timeoutId);
+  }, [showMentions]);
+
   // Close mentions popover when clicking outside
   React.useEffect(() => {
+    if (!showMentions) return;
+
     const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
+      const target = event.target as HTMLElement;
+      
+      // Check if click is inside popover or mention button
+      const isInsidePopover = mentionsPopoverRef.current?.contains(target as Node);
+      const isInsideMentionButton = mentionButtonRef.current?.contains(target as Node) || target?.closest('[data-testid="button-mention"]');
+      const isInsideMentionUser = target?.closest('[data-testid^="mention-user-"]');
+      
+      // Don't close if clicking inside popover or mention button
+      if (isInsidePopover || isInsideMentionButton || isInsideMentionUser) {
+        return;
+      }
       
       // Check if click is outside both popover and button
       if (
         showMentions &&
         mentionsPopoverRef.current &&
-        !mentionsPopoverRef.current.contains(target) &&
+        !mentionsPopoverRef.current.contains(target as Node) &&
         textareaRef.current &&
-        !textareaRef.current.contains(target) &&
-        !(event.target as HTMLElement)?.closest('[data-testid="button-mention"]')
+        !textareaRef.current.contains(target as Node) &&
+        !target?.closest('[data-testid="button-mention"]')
       ) {
         setShowMentions(false);
         setMentionSearch("");
       }
     };
 
-    if (showMentions) {
-      // Use a small delay to allow the click event to complete
-      const timeoutId = setTimeout(() => {
-        document.addEventListener("mousedown", handleClickOutside);
-      }, 100);
-      
-      return () => {
-        clearTimeout(timeoutId);
-        document.removeEventListener("mousedown", handleClickOutside);
-      };
-    }
+    // Delay adding the listener to avoid capturing the click that opened the popover
+    const timeoutId = setTimeout(() => {
+      // Use click event with capture: false to avoid conflicts
+      document.addEventListener("click", handleClickOutside, false);
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener("click", handleClickOutside, false);
+    };
   }, [showMentions]);
 
   return (
-    <div className="p-4 border-t">
-      <div className="border rounded-lg bg-background overflow-hidden relative">
+    <div className="p-4 border-t relative">
+      <div className="border rounded-lg bg-background relative">
         <Textarea
           ref={textareaRef}
           value={content}
@@ -368,11 +419,18 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
           data-testid="textarea-message-composer"
         />
 
-        {showMentions && (
+        {showMentions && popoverPosition && (
           <div 
             ref={mentionsPopoverRef}
-            className="absolute bottom-full left-0 right-0 mb-1 bg-popover border rounded-lg shadow-lg max-h-60 overflow-hidden z-50" 
+            className="fixed bg-popover border rounded-lg shadow-lg max-h-60 overflow-hidden w-64 z-[99999]" 
             data-testid="mentions-popover"
+            onClick={(e) => e.stopPropagation()}
+            style={{ 
+              position: 'fixed',
+              top: `${popoverPosition.top}px`,
+              left: `${popoverPosition.left}px`,
+              transform: 'translateY(-100%)'
+            }}
           >
             <div className="p-2 border-b">
               <input
@@ -391,8 +449,17 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
                   {filteredUsers.map((user) => (
                     <button
                       key={user.id}
+                      type="button"
                       className="w-full flex items-center gap-2 p-2 hover:bg-accent rounded-md text-left"
-                      onClick={() => insertMention(user)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        insertMention(user);
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
                       data-testid={`mention-user-${user.id}`}
                     >
                       <Avatar className="w-6 h-6">
@@ -486,25 +553,27 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
               data-testid="input-file-upload"
             />
             <Button
+              ref={mentionButtonRef}
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={handleMentionClick}
+              data-testid="button-mention"
+              className={`w-8 h-8 flex items-center justify-center hover:bg-accent hover:text-foreground transition-colors ${showMentions ? "bg-accent text-foreground" : "text-muted-foreground"}`}
+              title="Mention members"
+            >
+              <AtSign className="w-4 h-4" />
+            </Button>
+            <Button
               type="button"
               variant="ghost"
               size="icon"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
               data-testid="button-attach-file"
+              className="w-8 h-8"
             >
               <Paperclip className="w-4 h-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={handleMentionClick}
-              onMouseDown={(e) => e.stopPropagation()}
-              data-testid="button-mention"
-              className={showMentions ? "bg-accent" : ""}
-            >
-              <AtSign className="w-4 h-4" />
             </Button>
             <Button
               type="button"
