@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { MessageSquare, FileIcon, Download, Smile, ThumbsUp, Heart, Laugh, PartyPopper, CheckCircle, MoreVertical, Edit, Trash, Star } from "lucide-react";
 import type { MessageWithUser, ReactionWithUser } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Popover,
   PopoverContent,
@@ -67,10 +67,17 @@ export function MessageItem({ message, onReply, channelId }: MessageItemProps) {
   const isStarred = isStarredFromMessage !== undefined ? isStarredFromMessage : starredStatus?.isStarred || false;
 
   // Fetch message mentions
-  const { data: messageMentions = [] } = useQuery<Array<{ user: any }>>({
-    queryKey: ["/api/messages", message.id, "mentions"],
+  const { data: messageMentions = [], isLoading: mentionsLoading } = useQuery<Array<{ user: any }>>({
+    queryKey: [`/api/messages/${message.id}/mentions`],
     enabled: !!message.id,
   });
+  
+  // Debug: Log mentions data
+  useEffect(() => {
+    if (message.id && !mentionsLoading) {
+      console.log(`[MessageItem] Message ${message.id} mentions:`, messageMentions);
+    }
+  }, [message.id, messageMentions, mentionsLoading]);
 
   const toggleStarMutation = useMutation({
     mutationFn: async () => {

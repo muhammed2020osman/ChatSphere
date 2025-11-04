@@ -1477,6 +1477,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const mentions = await storage.getMessageMentions(id);
+      console.log(`[GET /api/messages/${id}/mentions] Returning ${mentions.length} mentions:`, mentions);
       res.json(mentions);
     } catch (error: any) {
       console.error("Error fetching message mentions:", error);
