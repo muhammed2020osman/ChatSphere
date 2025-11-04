@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, forwardRef, useImperativeHandle } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Bold, Italic, Send, Paperclip, X, AtSign } from "lucide-react";
@@ -17,12 +17,16 @@ interface MessageComposerProps {
   threadParentId?: string;
 }
 
-export function MessageComposer({ 
+export interface MessageComposerRef {
+  insertMention: (user: User) => void;
+}
+
+export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerProps>(({ 
   channelId, 
   recipientId, 
   placeholder = "Type a message...",
   threadParentId 
-}: MessageComposerProps) {
+}, ref) => {
   const [content, setContent] = useState("");
   const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
   const [attachmentName, setAttachmentName] = useState<string | null>(null);
@@ -37,7 +41,7 @@ export function MessageComposer({
 
   // Fetch channel members if channelId exists, otherwise fetch all users (for DM)
   const { data: channelMembersData } = useQuery<Array<{ user: User }>>({
-    queryKey: ["/api/channels", channelId, "members"],
+    queryKey: channelId ? [`/api/channels/${channelId}/members`] : ["/api/channels", channelId, "members"],
     enabled: !!channelId,
   });
 
@@ -266,6 +270,11 @@ export function MessageComposer({
     }, 0);
   };
 
+  // Expose insertMention via ref
+  useImperativeHandle(ref, () => ({
+    insertMention,
+  }));
+
   const filteredUsers = React.useMemo(() => {
     if (!users || users.length === 0) {
       return [];
@@ -481,4 +490,4 @@ export function MessageComposer({
       </div>
     </div>
   );
-}
+});
