@@ -1,7 +1,7 @@
  login vps only use
  ssh3
  pass:Zy8pOuw,?gfd
-
+./update-from-git.sh
 ssh root@72.61.96.90
 aPanel Internet Address: https://72.61.96.90:34627/1c8f2cf7
 aaPanel Internal Address: https://72.61.96.90:34627/1c8f2cf7

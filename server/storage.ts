@@ -20,6 +20,7 @@ import {
   tickets,
   savedViews,
   attachments,
+  pushSubscriptions,
   type User,
   type Channel,
   type Message,
@@ -137,6 +138,11 @@ export interface IStorage {
   createSavedView(view: any): Promise<any>;
   updateSavedView(id: string, updates: any): Promise<any>;
   deleteSavedView(id: string): Promise<void>;
+  
+  // Push Subscriptions operations
+  savePushSubscription(userId: string, subscription: any): Promise<void>;
+  getPushSubscriptions(userId: string): Promise<any[]>;
+  deletePushSubscription(userId: string, endpoint: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1279,7 +1285,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDrawingRevisions(drawingId: string): Promise<any[]> {
-    return await db.select().from(drawingRevisions).where(eq(drawingRevisions.drawingId, drawingId));
+    return await db.select()
+      .from(drawingRevisions)
+      .where(eq(drawingRevisions.drawingId, drawingId))
+      .orderBy(desc(drawingRevisions.uploadedAt));
   }
 
   async updateRevisionStatus(revisionId: string, status: string, reviewedBy: string, reviewNotes?: string): Promise<any> {
@@ -1649,6 +1658,59 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSavedView(id: string): Promise<void> {
     await db.delete(savedViews).where(eq(savedViews.id, id));
+  }
+
+  // Push Subscriptions operations
+  async savePushSubscription(userId: string, subscription: any): Promise<void> {
+    const userIdNum = this.getUserIdAsNumber(userId);
+    const existing = await db
+      .select()
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.endpoint, subscription.endpoint))
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Update existing subscription
+      await db
+        .update(pushSubscriptions)
+        .set({
+          keys: subscription.keys,
+          updatedAt: new Date(),
+        })
+        .where(eq(pushSubscriptions.endpoint, subscription.endpoint));
+    } else {
+      // Insert new subscription
+      await db.insert(pushSubscriptions).values({
+        userId: userIdNum,
+        endpoint: subscription.endpoint,
+        keys: subscription.keys,
+      });
+    }
+  }
+
+  async getPushSubscriptions(userId: string): Promise<any[]> {
+    const userIdNum = this.getUserIdAsNumber(userId);
+    const subscriptions = await db
+      .select()
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.userId, userIdNum));
+
+    return subscriptions.map((sub) => ({
+      endpoint: sub.endpoint,
+      keys: sub.keys,
+    }));
+  }
+
+  async deletePushSubscription(userId: string, endpoint: string): Promise<void> {
+    const userIdNum = this.getUserIdAsNumber(userId);
+    await db
+      .delete(pushSubscriptions)
+      .where(
+        and(
+          eq(pushSubscriptions.userId, userIdNum),
+          eq(pushSubscriptions.endpoint, endpoint)
+        )
+      );
   }
 }
 

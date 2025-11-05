@@ -18,6 +18,7 @@ import IngestPlansPage from "@/pages/ingest-plans";
 import PlansManagement from "@/pages/plans-management";
 import SheetViewer from "@/pages/sheet-viewer";
 import TicketsHub from "@/pages/tickets-hub";
+import { PWAInstallButton } from "@/components/pwa-install-button";
 
 function Router() {
   // Keep auth state available for components, but don't gate route definitions
@@ -83,6 +84,7 @@ export default function App() {
               <AccessCodeGate>
                 <Router />
                 <Toaster />
+                <PWAInstallButton />
               </AccessCodeGate>
             </TooltipProvider>
           </ThemeProvider>

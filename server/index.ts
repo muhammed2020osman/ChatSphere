@@ -1,10 +1,15 @@
 import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
+import compression from "compression";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./db";
 
 const app = express();
+
+// Compression middleware for better performance
+app.use(compression());
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -29,6 +34,12 @@ app.use((req, res, next) => {
     res.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.header('Pragma', 'no-cache');
     res.header('Expires', '0');
+  } else if (req.path.startsWith('/icons/') || req.path === '/manifest.json') {
+    // Cache PWA assets with long expiration
+    res.header('Cache-Control', 'public, max-age=31536000, immutable');
+  } else if (req.path.match(/\.(js|css|woff|woff2|ttf|eot|svg|png|jpg|jpeg|gif|ico)$/)) {
+    // Cache static assets
+    res.header('Cache-Control', 'public, max-age=86400'); // 1 day
   } else {
     // For non-API requests, use simpler CORS
     if (origin) {

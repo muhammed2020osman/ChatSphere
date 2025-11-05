@@ -16,6 +16,7 @@ import { extractMentions, findUserIdsByUsernames, requireAdmin, requireCompanyMa
 import { analyzeEngineeringDrawing } from "./services/gemini";
 import { convertPDFToImage, convertPDFPagesToImages, isPDF } from "./services/pdfConverter";
 import { extractPDFText } from "./services/pdfTextExtractor";
+import { PDFDocument } from "pdf-lib";
 import authRoutes from "./auth/routes";
 import { 
   insertChannelSchema, 
@@ -2044,6 +2045,13 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
   app.get('/api/drawings/:id/revisions', isAuthenticated, async (req, res) => {
     try {
       const revisions = await storage.getDrawingRevisions(req.params.id);
+      // Debug: Log revisions to check fileType
+      console.log('[API] Revisions for drawing', req.params.id, ':', revisions.map(r => ({
+        id: r.id,
+        fileType: r.fileType,
+        fileName: r.fileName,
+        fileUrl: r.fileUrl
+      })));
       res.json(revisions);
     } catch (error) {
       console.error("Error fetching revisions:", error);
@@ -2090,6 +2098,138 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
     } catch (error) {
       console.error("Error updating revision status:", error);
       res.status(500).json({ message: "Failed to update revision status" });
+    }
+  });
+
+  // Save annotations and merge with PDF
+  app.post('/api/drawings/annotations/save', isAuthenticated, upload.array('annotations'), async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userIdAsNumber = getUserIdAsNumber(userId);
+      const { revisionId, drawingId } = req.body;
+
+      if (!revisionId || !drawingId) {
+        return res.status(400).json({ message: "revisionId and drawingId are required" });
+      }
+
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ message: "No annotation images provided" });
+      }
+
+      // Get the revision to find the original PDF
+      const revisions = await storage.getDrawingRevisions(drawingId);
+      const revision = revisions.find((r: any) => r.id.toString() === revisionId.toString());
+
+      if (!revision) {
+        return res.status(404).json({ message: "Revision not found" });
+      }
+
+      if (!revision.fileUrl || revision.fileType !== 'application/pdf') {
+        return res.status(400).json({ message: "Revision must be a PDF file" });
+      }
+
+      // Download the original PDF
+      const pdfPath = revision.fileUrl.replace('http://localhost:5000/uploads/', '');
+      const fullPdfPath = path.join(process.cwd(), 'uploads', pdfPath);
+      
+      if (!fs.existsSync(fullPdfPath)) {
+        return res.status(404).json({ message: "Original PDF file not found" });
+      }
+
+      const pdfBytes = fs.readFileSync(fullPdfPath);
+      const pdfDoc = await PDFDocument.load(pdfBytes);
+      const pages = pdfDoc.getPages();
+
+      // Load annotation images and embed them into PDF pages
+      // Sort files by name to ensure correct page order (annotation-page-1.png, annotation-page-2.png, etc.)
+      const sortedFiles = (req.files as Express.Multer.File[]).sort((a, b) => {
+        const pageNumA = parseInt(a.originalname.match(/annotation-page-(\d+)/)?.[1] || '0', 10);
+        const pageNumB = parseInt(b.originalname.match(/annotation-page-(\d+)/)?.[1] || '0', 10);
+        return pageNumA - pageNumB;
+      });
+
+      console.log(`[API] Processing ${sortedFiles.length} annotation images for ${pages.length} PDF pages`);
+
+      // Embed annotations for each page
+      for (let i = 0; i < Math.min(sortedFiles.length, pages.length); i++) {
+        const annotationFile = sortedFiles[i];
+        const pageIndex = i; // Page index (0-based)
+        
+        try {
+          const annotationImage = await pdfDoc.embedPng(annotationFile.buffer);
+          const page = pages[pageIndex];
+          const { width, height } = page.getSize();
+          
+          // Embed the annotation image at full page size
+          page.drawImage(annotationImage, {
+            x: 0,
+            y: 0,
+            width: width,
+            height: height,
+            opacity: 1.0, // Full opacity for annotations
+          });
+          
+          console.log(`[API] Embedded annotations for page ${pageIndex + 1}`);
+        } catch (error) {
+          console.error(`[API] Error embedding annotations for page ${pageIndex + 1}:`, error);
+          // Continue with other pages even if one fails
+        }
+      }
+
+      // If there are more pages than annotation images, leave them as-is (no annotations)
+      if (pages.length > sortedFiles.length) {
+        console.log(`[API] ${pages.length - sortedFiles.length} pages will remain without annotations`);
+      }
+
+      // Save the modified PDF
+      const modifiedPdfBytes = await pdfDoc.save();
+      const timestamp = Date.now();
+      const fileName = `drawing_${drawingId}_revision_${revisionId}_annotated_${timestamp}.pdf`;
+      const savedPath = path.join(process.cwd(), 'uploads', 'drawings', fileName);
+      
+      // Ensure directory exists
+      const dir = path.dirname(savedPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      fs.writeFileSync(savedPath, modifiedPdfBytes);
+
+      // Upload to storage and get URL
+      const relativePath = `drawings/${fileName}`;
+      const fileUrl = await localStorage.uploadFile(relativePath, modifiedPdfBytes, 'application/pdf');
+
+      // Create a new revision with the annotated PDF
+      const existingRevisions = await storage.getDrawingRevisions(drawingId);
+      const revisionCount = existingRevisions.length + 1;
+      const uniqueId = randomUUID().split('-')[0];
+      const revisionNo = `R${revisionCount}_${uniqueId}`;
+
+      const revisionData = {
+        drawingId: parseInt(drawingId, 10),
+        version: revisionNo,
+        changes: { annotations: true },
+        status: 'draft',
+        fileUrl: fileUrl,
+        thumbnailUrl: fileUrl, // Use PDF as thumbnail for now
+        fileName: fileName,
+        fileType: 'application/pdf',
+        fileSize: modifiedPdfBytes.length.toString(),
+        aiExtractedData: null,
+        uploadedBy: userIdAsNumber,
+        uploadMethod: 'annotations' as const,
+      };
+
+      const newRevision = await storage.createDrawingRevision(revisionData);
+
+      res.json({
+        success: true,
+        revision: newRevision,
+        fileUrl: fileUrl,
+      });
+    } catch (error) {
+      console.error("Error saving annotations:", error);
+      res.status(500).json({ message: "Failed to save annotations", error: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -2374,19 +2514,33 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
 
       console.log('Manual PDF upload completed - no AI processing');
 
+      // Get PDF page count using pdf-lib
+      let pageCount = 1;
+      try {
+        const pdfDoc = await PDFDocument.load(file.buffer);
+        pageCount = pdfDoc.getPageCount();
+        console.log(`PDF has ${pageCount} pages`);
+      } catch (error) {
+        console.error('Error getting PDF page count:', error);
+        // Default to 1 if we can't read the PDF
+      }
+
       // Create Revision with uploadMethod='manual'
       const userIdAsNumber = getUserIdAsNumber(userId);
       const revisionData = {
         drawingId: parseInt(drawingId, 10), // This will be mapped to drawing_id by Drizzle
         version: revisionNo, // Map revisionNo to version
         changes: {
-          fileUrl: pdfSignedUrl,
-          fileName: fileName,
-          fileType: 'application/pdf',
-          fileSize: fileSize,
           status: 'draft',
-        }, // Add changes field with file info
-        createdBy: userIdAsNumber,
+          uploadMethod: 'manual',
+        }, // Add changes field with status and upload method
+        status: 'draft',
+        fileUrl: pdfSignedUrl,
+        fileName: fileName,
+        fileType: 'application/pdf',
+        fileSize: fileSize,
+        uploadedBy: userIdAsNumber,
+        createdBy: userIdAsNumber, // Required field in schema
       };
 
       console.log('Creating revision with data:', revisionData);
@@ -2396,7 +2550,7 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
       res.json({
         drawingId,
         revisionId: revision.id,
-        pageCount: 1,
+        pageCount: pageCount,
         uploadMethod: 'manual',
         extractedText: null,
         aiAnalysis: null,
@@ -2795,6 +2949,112 @@ app.get('/api/floors', isAuthenticated, async (req, res) => {
       console.error("Error deleting saved view:", error);
       res.status(500).json({ message: "Failed to delete saved view" });
     }
+  });
+
+  // Push Notifications Routes
+  app.post('/api/push/subscribe', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { subscription } = req.body;
+
+      if (!subscription || !subscription.endpoint || !subscription.keys) {
+        return res.status(400).json({ message: "Invalid subscription data" });
+      }
+
+      // Save subscription to database
+      await storage.savePushSubscription(userId, subscription);
+      
+      res.json({ message: "Subscription saved successfully" });
+    } catch (error) {
+      console.error("Error saving push subscription:", error);
+      res.status(500).json({ message: "Failed to save subscription" });
+    }
+  });
+
+  app.post('/api/push/unsubscribe', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { endpoint } = req.body;
+
+      if (!endpoint) {
+        return res.status(400).json({ message: "Endpoint is required" });
+      }
+
+      // Delete subscription from database
+      await storage.deletePushSubscription(userId, endpoint);
+      
+      res.json({ message: "Subscription removed successfully" });
+    } catch (error) {
+      console.error("Error removing push subscription:", error);
+      res.status(500).json({ message: "Failed to remove subscription" });
+    }
+  });
+
+  app.post('/api/push/send', isAuthenticated, async (req: any, res) => {
+    try {
+      const { userId, title, body, icon, badge, data } = req.body;
+
+      if (!userId || !title || !body) {
+        return res.status(400).json({ message: "userId, title, and body are required" });
+      }
+
+      // Get user's push subscriptions
+      const subscriptions = await storage.getPushSubscriptions(userId);
+
+      if (subscriptions.length === 0) {
+        return res.status(404).json({ message: "No subscriptions found for user" });
+      }
+
+      // Import web-push dynamically
+      const webpush = await import('web-push');
+
+      // Get VAPID keys from environment
+      const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
+      const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+      const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
+
+      if (!vapidPublicKey || !vapidPrivateKey) {
+        return res.status(500).json({ message: "VAPID keys not configured" });
+      }
+
+      // Set VAPID details
+      webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+
+      // Send notification to all subscriptions
+      const promises = subscriptions.map(async (subscription) => {
+        try {
+          await webpush.sendNotification(subscription, JSON.stringify({
+            title,
+            body,
+            icon: icon || '/icons/icon-192x192.png',
+            badge: badge || '/icons/icon-192x192.png',
+            data: data || {},
+          }));
+        } catch (error: any) {
+          // If subscription is invalid, remove it
+          if (error.statusCode === 410 || error.statusCode === 404) {
+            await storage.deletePushSubscription(userId, subscription.endpoint);
+          }
+          throw error;
+        }
+      });
+
+      await Promise.allSettled(promises);
+
+      res.json({ message: "Notifications sent successfully", count: subscriptions.length });
+    } catch (error) {
+      console.error("Error sending push notification:", error);
+      res.status(500).json({ message: "Failed to send notification" });
+    }
+  });
+
+  // Get VAPID public key
+  app.get('/api/push/vapid-public-key', (req, res) => {
+    const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
+    if (!vapidPublicKey) {
+      return res.status(500).json({ message: "VAPID keys not configured" });
+    }
+    res.json({ publicKey: vapidPublicKey });
   });
 
 

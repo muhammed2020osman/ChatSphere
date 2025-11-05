@@ -13,6 +13,10 @@ interface PDFViewerCanvasProps {
   zoom: number;
   panPosition: { x: number; y: number };
   onPanChange?: (position: { x: number; y: number }) => void;
+  onCanvasReady?: (canvas: HTMLCanvasElement | null, dimensions: { width: number; height: number }) => void;
+  currentPage?: number;
+  totalPages?: number;
+  onPageChange?: (page: number, totalPages: number) => void;
   children?: React.ReactNode;
   className?: string;
 }
@@ -22,11 +26,16 @@ export function PDFViewerCanvas({
   zoom,
   panPosition,
   onPanChange,
+  onCanvasReady,
+  currentPage = 1,
+  totalPages,
+  onPageChange,
   children,
   className = '',
 }: PDFViewerCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0 });
@@ -40,6 +49,7 @@ export function PDFViewerCanvas({
   useEffect(() => {
     let isMounted = true;
     let timeoutId: NodeJS.Timeout;
+    let currentRenderTask: pdfjsLib.RenderTask | null = null;
 
     const loadPDF = async (attemptNumber = 0): Promise<void> => {
       if (!pdfUrl) {
@@ -102,13 +112,23 @@ export function PDFViewerCanvas({
         clearTimeout(timeoutId);
         console.log('[PDF Viewer] PDF loaded successfully, pages:', pdf.numPages);
 
+        // Store PDF document reference for page navigation
+        pdfDocRef.current = pdf;
+
+        // Notify parent about total pages
+        if (onPageChange) {
+          onPageChange(currentPage, pdf.numPages);
+        }
+
         if (!isMounted) {
           pdf.destroy();
           return;
         }
 
-        const page = await pdf.getPage(1);
-        console.log('[PDF Viewer] First page loaded');
+        // Validate current page number
+        const pageNumber = Math.max(1, Math.min(currentPage || 1, pdf.numPages));
+        const page = await pdf.getPage(pageNumber);
+        console.log('[PDF Viewer] Page', pageNumber, 'loaded');
 
         if (!isMounted) {
           return;
@@ -135,28 +155,65 @@ export function PDFViewerCanvas({
             const scale = zoom / 100;
             const viewport = page.getViewport({ scale });
 
+            if (!canvas) {
+              console.error('[PDF Viewer] Canvas element is null');
+              reject(new Error('Canvas element is null'));
+              return;
+            }
+
             canvas.width = viewport.width;
             canvas.height = viewport.height;
-            setCanvasDimensions({ width: viewport.width, height: viewport.height });
+            
+            // Get context again after setting width/height (this resets the context)
+            const contextAfterResize = canvas.getContext('2d');
+            if (!contextAfterResize) {
+              console.error('[PDF Viewer] Canvas 2D context not available after resize');
+              reject(new Error('Canvas 2D context not available after resize'));
+              return;
+            }
+            
+            const dimensions = { width: viewport.width, height: viewport.height };
+            setCanvasDimensions(dimensions);
+            
+            // Notify parent component that canvas is ready
+            onCanvasReady?.(canvas, dimensions);
 
-            console.log('[PDF Viewer] Rendering page with zoom:', zoom, 'dimensions:', { width: viewport.width, height: viewport.height });
+            console.log('[PDF Viewer] Rendering page with zoom:', zoom, 'dimensions:', dimensions);
 
             const renderContext = {
-              canvasContext: context,
+              canvasContext: contextAfterResize,
               viewport: viewport,
             };
 
-            page.render(renderContext as any).promise
+            // Cancel any previous render task
+            if (currentRenderTask) {
+              try {
+                currentRenderTask.cancel();
+              } catch (err) {
+                // Ignore cancellation errors
+              }
+            }
+
+            // Create render task and store it
+            const renderTask = page.render(renderContext as any);
+            currentRenderTask = renderTask; // Store for cancellation
+            const taskPromise = renderTask.promise;
+            
+            taskPromise
               .then(() => {
-                console.log('[PDF Viewer] Page rendered successfully');
                 if (isMounted) {
+                  console.log('[PDF Viewer] Page rendered successfully');
                   setRetrying(false);
                   setRetryCount(0);
                   setLoading(false);
                 }
                 resolve();
               })
-              .catch((renderErr) => {
+              .catch((renderErr: any) => {
+                if (renderErr?.name === 'RenderingCancelledException') {
+                  console.log('[PDF Viewer] Render cancelled');
+                  return;
+                }
                 console.error('[PDF Viewer] Error rendering page:', renderErr);
                 if (isMounted) {
                   setError('Failed to render PDF page');
@@ -221,8 +278,115 @@ export function PDFViewerCanvas({
     return () => {
       isMounted = false;
       clearTimeout(timeoutId);
+      // Cancel any pending render task
+      if (currentRenderTask) {
+        try {
+          currentRenderTask.cancel();
+        } catch (err) {
+          // Ignore cancellation errors
+        }
+        currentRenderTask = null;
+      }
+      if (pdfDocRef.current) {
+        pdfDocRef.current.destroy();
+        pdfDocRef.current = null;
+      }
     };
-  }, [pdfUrl, zoom]);
+  }, [pdfUrl, zoom, currentPage]);
+
+  // Handle page changes when PDF is already loaded
+  useEffect(() => {
+    if (!pdfDocRef.current || !canvasRef.current) return;
+
+    let renderTask: pdfjsLib.RenderTask | null = null;
+    let isCancelled = false;
+
+    const renderPage = async () => {
+      try {
+        // Cancel any previous render task
+        if (renderTask) {
+          try {
+            renderTask.cancel();
+          } catch (err) {
+            // Ignore cancellation errors
+          }
+          renderTask = null;
+        }
+
+        const pdf = pdfDocRef.current!;
+        const pageNumber = Math.max(1, Math.min(currentPage || 1, pdf.numPages));
+        const page = await pdf.getPage(pageNumber);
+
+        if (isCancelled) return;
+
+        const canvas = canvasRef.current;
+        if (!canvas || isCancelled) return;
+
+        const context = canvas.getContext('2d');
+        if (!context || isCancelled) return;
+
+        const scale = zoom / 100;
+        const viewport = page.getViewport({ scale });
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        // Get context again after setting width/height (this resets the context)
+        const contextAfterResize = canvas.getContext('2d');
+        if (!contextAfterResize || isCancelled) {
+          console.error('[PDF Viewer] Canvas 2D context not available after resize');
+          setError('Canvas 2D context not available after resize');
+          return;
+        }
+        
+        const dimensions = { width: viewport.width, height: viewport.height };
+        setCanvasDimensions(dimensions);
+
+        // Notify parent component that canvas is ready
+        onCanvasReady?.(canvas, dimensions);
+
+        // Notify parent about page change
+        if (onPageChange) {
+          onPageChange(pageNumber, pdf.numPages);
+        }
+
+        const renderContext = {
+          canvasContext: contextAfterResize,
+          viewport: viewport,
+        };
+
+        // Create render task and store it
+        renderTask = page.render(renderContext as any);
+        
+        await renderTask.promise;
+        
+        if (!isCancelled) {
+          console.log('[PDF Viewer] Page', pageNumber, 'rendered');
+        }
+        renderTask = null;
+      } catch (err: any) {
+        if (err?.name === 'RenderingCancelledException') {
+          console.log('[PDF Viewer] Render cancelled');
+          return;
+        }
+        console.error('[PDF Viewer] Error rendering page:', err);
+        setError('Failed to render PDF page');
+      }
+    };
+
+    renderPage();
+
+    return () => {
+      isCancelled = true;
+      if (renderTask) {
+        try {
+          renderTask.cancel();
+        } catch (err) {
+          // Ignore cancellation errors
+        }
+      }
+    };
+  }, [currentPage, zoom, onCanvasReady, onPageChange]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;

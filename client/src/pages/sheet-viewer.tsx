@@ -27,6 +27,7 @@ import {
   FileText,
   ChevronDown,
   AlertTriangle,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +49,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PDFViewerCanvas } from "@/components/pdf-viewer-canvas";
+import { PDFAnnotationCanvas } from "@/components/pdf-annotation-canvas";
 import type { Layer, Pin, Discipline, DrawingRevision, DrawingWithDetails, Floor, Ticket, User } from "@shared/schema";
 import mapLocationIcon from "@assets/map-location_1761314621260.png";
 
@@ -116,6 +118,9 @@ export default function SheetViewer() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
+  const [pdfCanvas, setPdfCanvas] = useState<HTMLCanvasElement | null>(null);
+  const [pdfDimensions, setPdfDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  const [totalPages, setTotalPages] = useState<number>(0);
 
   // Fetch drawing data
   const { data: drawing, isLoading: drawingLoading } = useQuery<DrawingWithDetails>({
@@ -231,6 +236,18 @@ export default function SheetViewer() {
   // Show PDF directly if fileType is PDF, regardless of uploadMethod
   const displayMode = selectedRevision?.fileType === 'application/pdf' 
                         ? 'pdf' : 'image';
+  
+  // Debug: Log display mode and file type
+  useEffect(() => {
+    if (selectedRevision) {
+      console.log('[SheetViewer] Selected revision:', {
+        id: selectedRevision.id,
+        fileType: selectedRevision.fileType,
+        fileUrl: selectedRevision.fileUrl,
+        displayMode,
+      });
+    }
+  }, [selectedRevision, displayMode]);
 
   // Group layers by discipline
   const layersByDiscipline = layers.reduce((acc, layer) => {
@@ -844,8 +861,11 @@ export default function SheetViewer() {
     }
 
     try {
+      const fileUrl = selectedRevision.fileUrl.startsWith('http') 
+        ? selectedRevision.fileUrl 
+        : `http://localhost:5000${selectedRevision.fileUrl}`;
       const link = document.createElement('a');
-      link.href = selectedRevision.fileUrl;
+      link.href = fileUrl;
       link.download = selectedRevision.fileName || `drawing-${plan.sheetNo}-rev-${selectedRevision.revisionNo}`;
       document.body.appendChild(link);
       link.click();
@@ -1069,6 +1089,65 @@ export default function SheetViewer() {
           
           <Separator className="my-2 w-10" />
           
+          {/* Page Navigation - Only show for PDF mode */}
+          {displayMode === 'pdf' && totalPages > 1 && (
+            <>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        if (currentPage > 1) {
+                          setCurrentPage(currentPage - 1);
+                          setPanPosition({ x: 0, y: 0 }); // Reset pan position when changing pages
+                        }
+                      }}
+                      disabled={currentPage <= 1}
+                      data-testid="button-prev-page"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>Previous Page</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              
+              <div className="text-xs text-muted-foreground text-center px-2 min-w-[60px]">
+                Page {currentPage} of {totalPages}
+              </div>
+              
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        if (currentPage < totalPages) {
+                          setCurrentPage(currentPage + 1);
+                          setPanPosition({ x: 0, y: 0 }); // Reset pan position when changing pages
+                        }
+                      }}
+                      disabled={currentPage >= totalPages}
+                      data-testid="button-next-page"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>Next Page</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              
+              <Separator className="my-2 w-10" />
+            </>
+          )}
+          
           <div className="text-xs text-muted-foreground text-center px-1">
             {zoom}%
           </div>
@@ -1200,13 +1279,28 @@ export default function SheetViewer() {
             
             {/* Conditional Rendering: PDF or Image Mode */}
             {displayMode === 'pdf' && selectedRevision?.fileUrl ? (
-              <PDFViewerCanvas
-                pdfUrl={selectedRevision.fileUrl}
-                zoom={zoom}
-                panPosition={panPosition}
-                onPanChange={setPanPosition}
-                className="w-full h-full"
-              >
+              <>
+                <PDFViewerCanvas
+                  pdfUrl={selectedRevision.fileUrl.startsWith('http') 
+                    ? selectedRevision.fileUrl 
+                    : `http://localhost:5000${selectedRevision.fileUrl}`}
+                  zoom={zoom}
+                  panPosition={panPosition}
+                  onPanChange={setPanPosition}
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={(page, total) => {
+                    setTotalPages(total);
+                    if (page !== currentPage && page >= 1 && page <= total) {
+                      setCurrentPage(page);
+                    }
+                  }}
+                  onCanvasReady={(canvas, dimensions) => {
+                    setPdfCanvas(canvas);
+                    setPdfDimensions(dimensions);
+                  }}
+                  className="w-full h-full"
+                >
                 {/* SVG Overlay for pins and drawings */}
                 {/* Render temporary pin with confirm/cancel buttons */}
                 {tempPin && (
@@ -1235,7 +1329,85 @@ export default function SheetViewer() {
                     />
                   </g>
                 ))}
-              </PDFViewerCanvas>
+                </PDFViewerCanvas>
+                {/* Annotation Canvas Overlay */}
+                {pdfCanvas && pdfDimensions.width > 0 && pdfDimensions.height > 0 && (
+                  <PDFAnnotationCanvas
+                    pdfCanvas={pdfCanvas}
+                    pdfDimensions={pdfDimensions}
+                    zoom={zoom}
+                    panPosition={panPosition}
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onSave={async (imagesMap) => {
+                      try {
+                        if (!selectedRevision?.id || !id) {
+                          toast({
+                            title: "Error",
+                            description: "No revision or drawing ID found",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+
+                        // Send images to server
+                        const formData = new FormData();
+                        formData.append('revisionId', selectedRevision.id.toString());
+                        formData.append('drawingId', id);
+                        
+                        // Convert base64 images to files, sorted by page number
+                        const sortedPages = Array.from(imagesMap.entries()).sort((a, b) => a[0] - b[0]);
+                        
+                        sortedPages.forEach(([pageNum, imageData]) => {
+                          // imageData is already base64 without prefix
+                          const base64Data = imageData.includes(',') ? imageData.split(',')[1] : imageData;
+                          const binaryString = atob(base64Data);
+                          const bytes = new Uint8Array(binaryString.length);
+                          for (let i = 0; i < binaryString.length; i++) {
+                            bytes[i] = binaryString.charCodeAt(i);
+                          }
+                          const blob = new Blob([bytes], { type: 'image/png' });
+                          const file = new File([blob], `annotation-page-${pageNum}.png`, { type: 'image/png' });
+                          formData.append('annotations', file);
+                        });
+
+                        // Use fetch directly for FormData
+                        const response = await fetch('/api/drawings/annotations/save', {
+                          method: 'POST',
+                          headers: {
+                            // Don't set Content-Type header - browser will set it with boundary for FormData
+                          },
+                          body: formData,
+                          credentials: 'include', // Include cookies for authentication
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                          throw new Error(data.message || 'Failed to save annotations');
+                        }
+
+                        if (data.success) {
+                          toast({
+                            title: "Success",
+                            description: "Annotations saved successfully",
+                          });
+                          // Refresh revisions to show new saved file
+                          queryClient.invalidateQueries({ queryKey: [`/api/drawings/${id}/revisions`] });
+                        }
+                      } catch (error) {
+                        console.error('Error saving annotations:', error);
+                        toast({
+                          title: "Error",
+                          description: "Failed to save annotations",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                    className="absolute inset-0"
+                  />
+                )}
+              </>
             ) : null}
             
             {/* Render temporary pin buttons (for both PDF and Image modes) */}

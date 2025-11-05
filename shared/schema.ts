@@ -390,6 +390,18 @@ export const drawingPins = mysqlTable("drawing_pins", {
 });
 
 // Saved views table
+export const pushSubscriptions = mysqlTable("push_subscriptions", {
+  id: int("id").primaryKey().autoincrement(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull(),
+  keys: json("keys").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
+}, (table) => [
+  index("idx_push_subscriptions_user").on(table.userId),
+  uniqueIndex("idx_push_subscriptions_endpoint").on(table.endpoint),
+]);
+
 export const savedViews = mysqlTable("saved_views", {
   id: int("id").primaryKey().autoincrement(),
   companyId: int("company_id").notNull().references(() => companies.id),
