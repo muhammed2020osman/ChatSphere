@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { setAppBadge } from "@/lib/pwa";
 
 interface NotificationBellProps {
   showCountInHeader?: boolean;
@@ -133,6 +134,26 @@ export function NotificationBell({ showCountInHeader = false }: NotificationBell
     queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
   }, []);
 
+  // Always show badge if there are unread notifications (even if count is 0 from API)
+  const hasUnreadNotifications = notifications.some(n => 
+    n.isRead === false || n.isRead === null || n.isRead === undefined
+  );
+  
+  // Use unreadCount if available, otherwise use count from notifications list
+  const displayCount = unreadCount > 0 ? unreadCount : (hasUnreadNotifications ? unreadCountFromNotifications : 0);
+
+  // Update app badge when unread count changes
+  useEffect(() => {
+    const updateBadge = async () => {
+      if (displayCount > 0) {
+        await setAppBadge(displayCount);
+      } else {
+        await setAppBadge(0);
+      }
+    };
+    updateBadge();
+  }, [displayCount]);
+
   // Helper function to get navigation URL based on notification type
   const getNotificationUrl = (notification: NotificationWithUsers): string | null => {
     // If it's a direct message notification
@@ -174,14 +195,6 @@ export function NotificationBell({ showCountInHeader = false }: NotificationBell
       setLocation(url);
     }
   };
-
-  // Always show badge if there are unread notifications (even if count is 0 from API)
-  const hasUnreadNotifications = notifications.some(n => 
-    n.isRead === false || n.isRead === null || n.isRead === undefined
-  );
-  
-  // Use unreadCount if available, otherwise use count from notifications list
-  const displayCount = unreadCount > 0 ? unreadCount : (hasUnreadNotifications ? unreadCountFromNotifications : 0);
 
   const [popoverOpen, setPopoverOpen] = useState(false);
 

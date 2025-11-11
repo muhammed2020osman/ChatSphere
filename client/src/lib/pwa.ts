@@ -120,3 +120,36 @@ export function isPWAInstalled(): boolean {
          (window.navigator as any).standalone === true ||
          document.referrer.includes('android-app://');
 }
+
+// Badge API functions
+export async function setAppBadge(count: number | null): Promise<void> {
+  if ('setAppBadge' in navigator) {
+    try {
+      if (count === null || count === 0) {
+        await (navigator as any).clearAppBadge();
+      } else {
+        await (navigator as any).setAppBadge(count);
+      }
+      console.log(`✓ Badge updated to: ${count}`);
+    } catch (error) {
+      console.error('Error updating badge:', error);
+    }
+  } else {
+    // Fallback: send message to service worker
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      registration.active?.postMessage({
+        type: 'UPDATE_BADGE',
+        count,
+      });
+    }
+  }
+}
+
+export async function clearAppBadge(): Promise<void> {
+  await setAppBadge(0);
+}
+
+export function isBadgeSupported(): boolean {
+  return 'setAppBadge' in navigator || 'serviceWorker' in navigator;
+}

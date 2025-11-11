@@ -82,9 +82,38 @@ registerRoute(
   })
 );
 
+// Helper function to update app badge
+async function updateAppBadge(count: number | null) {
+  if ('setAppBadge' in navigator) {
+    try {
+      if (count === null || count === 0) {
+        await (navigator as any).clearAppBadge();
+      } else {
+        await (navigator as any).setAppBadge(count);
+      }
+      console.log(`[Service Worker] Badge updated to: ${count}`);
+    } catch (error) {
+      console.error('[Service Worker] Error updating badge:', error);
+    }
+  }
+}
+
+// Helper function to get current unread count and update badge
+async function updateBadgeFromNotifications() {
+  try {
+    // Get all notifications
+    const notifications = await self.registration.getNotifications();
+    const unreadCount = notifications.filter(n => !n.data?.isRead).length;
+    await updateAppBadge(unreadCount);
+  } catch (error) {
+    console.error('[Service Worker] Error updating badge from notifications:', error);
+  }
+}
+
 // Push event handler
 self.addEventListener('push', (event: PushEvent) => {
   console.log('[Service Worker] Push received:', event);
+  console.log('[Service Worker] Push event data:', event.data);
 
   let notificationData: {
     title: string;
@@ -99,17 +128,34 @@ self.addEventListener('push', (event: PushEvent) => {
 
   if (event.data) {
     try {
-      notificationData = JSON.parse(event.data.text());
+      const dataText = event.data.text();
+      console.log('[Service Worker] Push data text:', dataText);
+      notificationData = JSON.parse(dataText);
+      console.log('[Service Worker] Parsed notification data:', notificationData);
     } catch (error) {
       console.error('[Service Worker] Error parsing push data:', error);
+      // Try to use default notification
     }
+  }
+
+  // Ensure we have valid notification data
+  if (!notificationData.title || !notificationData.body) {
+    console.warn('[Service Worker] Invalid notification data, using defaults');
+    notificationData = {
+      title: 'New notification',
+      body: 'You have a new notification',
+    };
   }
 
   const options: NotificationOptions = {
     body: notificationData.body,
     icon: notificationData.icon || '/icons/icon-192x192.png',
     badge: notificationData.badge || '/icons/icon-192x192.png',
-    data: notificationData.data || {},
+    data: {
+      ...notificationData.data,
+      isRead: false,
+      timestamp: Date.now(),
+    },
     tag: notificationData.data?.type || 'notification',
     requireInteraction: false,
     renotify: true,
@@ -122,8 +168,13 @@ self.addEventListener('push', (event: PushEvent) => {
     }),
   };
 
+  console.log('[Service Worker] Showing notification with options:', options);
+
   event.waitUntil(
-    self.registration.showNotification(notificationData.title, options)
+    Promise.all([
+      self.registration.showNotification(notificationData.title, options),
+      updateBadgeFromNotifications(), // Update badge after showing notification
+    ])
   );
 });
 
@@ -182,6 +233,17 @@ self.addEventListener('notificationclick', (event: NotificationEvent) => {
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+  }
+  
+  // Handle badge update requests
+  if (event.data && event.data.type === 'UPDATE_BADGE') {
+    const count = event.data.count;
+    updateAppBadge(count);
+  }
+  
+  // Handle notification read status
+  if (event.data && event.data.type === 'NOTIFICATION_READ') {
+    updateBadgeFromNotifications();
   }
 });
 
