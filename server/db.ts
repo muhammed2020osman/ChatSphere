@@ -259,18 +259,23 @@ export async function initializeDatabase() {
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS notifications (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        company_id INT NOT NULL,
         user_id INT NOT NULL,
         type VARCHAR(50) NOT NULL,
         message_id INT,
         channel_id INT,
+        direct_message_id INT,
         from_user_id INT,
         content TEXT NOT NULL,
         is_read BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (company_id) REFERENCES companies(id),
         FOREIGN KEY (user_id) REFERENCES users(id),
         FOREIGN KEY (message_id) REFERENCES messages(id),
         FOREIGN KEY (channel_id) REFERENCES channels(id),
-        FOREIGN KEY (from_user_id) REFERENCES users(id)
+        FOREIGN KEY (direct_message_id) REFERENCES direct_messages(id),
+        FOREIGN KEY (from_user_id) REFERENCES users(id),
+        INDEX idx_notifications_company (company_id)
       )
     `);
     

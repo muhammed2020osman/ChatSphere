@@ -190,6 +190,7 @@ export const notifications = mysqlTable("notifications", {
   type: varchar("type", { length: 50 }).notNull(),
   messageId: int("message_id").references(() => messages.id),
   channelId: int("channel_id").references(() => channels.id),
+  directMessageId: int("direct_message_id").references(() => directMessages.id),
   fromUserId: int("from_user_id").references(() => users.id),
   content: text("content").notNull(),
   isRead: boolean("is_read").default(false),

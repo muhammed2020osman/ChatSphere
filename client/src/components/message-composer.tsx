@@ -92,15 +92,35 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
       }
 
       // Extract mentionedUserIds from mentionedUsers array
+      console.log('========================================');
+      console.log('[MessageComposer] ===== PREPARING TO SEND MESSAGE =====');
+      console.log('[MessageComposer] mentionedUsers array:', mentionedUsers);
+      console.log('[MessageComposer] mentionedUsers length:', mentionedUsers.length);
+      console.log('[MessageComposer] mentionedUsers type:', typeof mentionedUsers);
+      console.log('[MessageComposer] mentionedUsers isArray:', Array.isArray(mentionedUsers));
+      
       const mentionedUserIds = mentionedUsers.map(u => {
+        console.log('[MessageComposer] Processing user for mention:', u);
+        console.log('[MessageComposer] User id:', u.id, 'type:', typeof u.id);
         // Ensure id is a number
         const id = typeof u.id === 'string' ? parseInt(u.id, 10) : u.id;
-        return isNaN(id) ? null : id;
+        const result = isNaN(id) ? null : id;
+        console.log('[MessageComposer] Converted id:', result);
+        return result;
       }).filter((id): id is number => id !== null);
+      
+      console.log('[MessageComposer] Extracted mentionedUserIds:', mentionedUserIds);
+      console.log('[MessageComposer] mentionedUserIds length:', mentionedUserIds.length);
+      console.log('[MessageComposer] mentionedUserIds type:', typeof mentionedUserIds);
+      console.log('[MessageComposer] mentionedUserIds isArray:', Array.isArray(mentionedUserIds));
+      console.log('[MessageComposer] ===== END PREPARATION =====');
+      console.log('========================================');
       
       console.log('[MessageComposer] Sending message with mentions:', {
         mentionedUsers,
+        mentionedUsersLength: mentionedUsers.length,
         mentionedUserIds,
+        mentionedUserIdsLength: mentionedUserIds.length,
         payload
       });
       
@@ -108,6 +128,11 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
         payload.channelId = channelId;
         payload.threadParentId = threadParentId;
         payload.mentionedUserIds = mentionedUserIds;
+        console.log('[MessageComposer] Final payload with mentionedUserIds:', JSON.stringify(payload, null, 2));
+        console.log('[MessageComposer] Payload mentionedUserIds:', payload.mentionedUserIds);
+        console.log('[MessageComposer] Payload mentionedUserIds type:', typeof payload.mentionedUserIds);
+        console.log('[MessageComposer] Payload mentionedUserIds isArray:', Array.isArray(payload.mentionedUserIds));
+        console.log('[MessageComposer] Payload mentionedUserIds length:', payload.mentionedUserIds?.length);
         return await apiRequest("/api/messages", {
           method: "POST",
           body: payload,

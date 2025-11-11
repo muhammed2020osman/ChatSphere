@@ -12,25 +12,25 @@ import type { NotificationWithUsers } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { useEffect } from "react";
-import { useWebSocket } from "@/hooks/useWebSocket";
 import { useToast } from "@/hooks/use-toast";
 
 export function NotificationBell() {
   const { toast } = useToast();
-  const { socket } = useWebSocket();
 
-  // Fetch notifications
+  // Fetch notifications - refetch every 5 seconds to get new notifications from database
   const { data: notifications = [] } = useQuery<NotificationWithUsers[]>({
     queryKey: ["/api/notifications"],
     retry: 1,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
+    refetchInterval: 5000, // Refetch every 5 seconds
   });
 
-  // Fetch unread count
+  // Fetch unread count - refetch every 5 seconds
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ["/api/notifications/unread-count"],
     retry: 1,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
+    refetchInterval: 5000, // Refetch every 5 seconds
   });
 
   const unreadCount = unreadData?.count || 0;
@@ -61,35 +61,45 @@ export function NotificationBell() {
     },
   });
 
-  // Listen for new notifications via WebSocket
+  // Helper function to get notification message based on type
+  const getNotificationMessage = (notification: NotificationWithUsers) => {
+    const fromUserName = notification.fromUser?.name || notification.fromUser?.email || 'Someone';
+    const channelName = notification.channel?.name || 'a channel';
+    
+    switch (notification.type) {
+      case 'channel_added':
+        return {
+          title: 'Added to Channel',
+          description: `${fromUserName} added you to #${channelName}`,
+          displayText: `${fromUserName} added you to #${channelName}`,
+        };
+      case 'mention':
+        return {
+          title: 'Mentioned',
+          description: `${fromUserName} mentioned you in #${channelName}`,
+          displayText: `${fromUserName} mentioned you in #${channelName}`,
+        };
+      case 'channel_message':
+        return {
+          title: 'New Message',
+          description: `${fromUserName} sent a message in #${channelName}`,
+          displayText: `${fromUserName} sent a message in #${channelName}`,
+        };
+      default:
+        return {
+          title: 'Notification',
+          description: 'You have a new notification',
+          displayText: 'You have a new notification',
+        };
+    }
+  };
+
+  // Refresh notifications when component mounts or when window gains focus
   useEffect(() => {
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
-
-    const handleNewNotification = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'new_notification') {
-          // Show toast for new notification
-          toast({
-            title: "New Mention",
-            description: `${data.notification.fromUser.name || data.notification.fromUser.email} mentioned you in #${data.notification.channel?.name || 'a channel'}`,
-          });
-
-          // Refresh notifications
-          queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-          queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
-        }
-      } catch (error) {
-        console.error('Failed to parse notification:', error);
-      }
-    };
-
-    socket.addEventListener('message', handleNewNotification);
-
-    return () => {
-      socket.removeEventListener('message', handleNewNotification);
-    };
-  }, [socket, toast]);
+    // Refresh notifications immediately when component mounts
+    queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+  }, []);
 
   const handleNotificationClick = (notification: NotificationWithUsers) => {
     if (!notification.isRead) {
@@ -146,13 +156,7 @@ export function NotificationBell() {
                   <div className="flex gap-3">
                     <div className="flex-1">
                       <p className="text-sm">
-                        <span className="font-semibold">
-                          {notification.fromUser.name || notification.fromUser.email}
-                        </span>
-                        {' '}mentioned you in{' '}
-                        <span className="font-semibold">
-                          #{notification.channel?.name || 'a channel'}
-                        </span>
+                        {getNotificationMessage(notification).displayText}
                       </p>
                       {notification.content && (
                         <p className="text-sm text-muted-foreground mt-1 line-clamp-2">

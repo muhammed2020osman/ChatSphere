@@ -48,6 +48,99 @@ function getUserIdAsNumber(userId: string): number {
   return parsed;
 }
 
+// Helper function to find WebSocket client by user ID
+function findWebSocketClient(userId: number): { ws: WebSocket; userId: string; channels: Set<string> } | null {
+  const possibleKeys = [
+    `auth:${userId}`,
+    userId.toString(),
+  ];
+  
+  for (const key of possibleKeys) {
+    const client = clients.get(key);
+    if (client) {
+      return client;
+    }
+  }
+  
+  // Fallback: iterate through all clients
+  for (const [clientKey, client] of clients.entries()) {
+    const clientUserIdAsNumber = getUserIdAsNumber(client.userId);
+    if (clientUserIdAsNumber === userId) {
+      return client;
+    }
+  }
+  
+  return null;
+}
+
+// Helper function to create mention notifications
+async function createMentionNotifications(
+  mentionedUserIds: number[],
+  message: any,
+  senderUserId: number,
+  companyId: number
+): Promise<void> {
+  console.log('[createMentionNotifications] Called with:', {
+    mentionedUserIds,
+    mentionedUserIdsLength: mentionedUserIds?.length,
+    messageId: message?.id,
+    channelId: message?.channelId,
+    senderUserId,
+    companyId,
+  });
+  
+  if (!mentionedUserIds || mentionedUserIds.length === 0) {
+    console.log('[createMentionNotifications] No mentioned user IDs, returning early');
+    return;
+  }
+
+  console.log(`[createMentionNotifications] Processing ${mentionedUserIds.length} mentioned users`);
+  
+  for (const mentionedUserId of mentionedUserIds) {
+    console.log(`[createMentionNotifications] Processing user ${mentionedUserId}`);
+    // Skip if user is mentioning themselves
+    if (mentionedUserId === senderUserId) {
+      continue;
+    }
+
+    try {
+      // Ensure we have valid data
+      if (!message.id) {
+        console.error(`Cannot create notification: message.id is missing`);
+        return;
+      }
+      
+      if (!message.channelId) {
+        console.error(`Cannot create notification: message.channelId is missing`);
+        return;
+      }
+      
+      // Create notification in database only
+      await storage.createNotification({
+        userId: mentionedUserId,
+        companyId,
+        type: 'mention',
+        messageId: message.id,
+        channelId: message.channelId,
+        fromUserId: senderUserId,
+        content: message.content || '',
+        isRead: false,
+      });
+      
+      console.log(`Notification created successfully for user ${mentionedUserId}`);
+    } catch (error: any) {
+      console.error(`Error creating notification for user ${mentionedUserId}:`, error);
+      console.error(`Error details:`, {
+        message: error?.message,
+        code: error?.code,
+        sqlState: error?.sqlState,
+        sqlMessage: error?.sqlMessage,
+      });
+      // Continue with other notifications even if one fails
+    }
+  }
+}
+
 // Helper to get authenticated userId from WebSocket request
 async function getAuthenticatedUserId(req: IncomingMessage): Promise<string | null> {
   const sessionMiddleware = await getSession();
@@ -937,7 +1030,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'User ID is required' });
       }
 
+      // Get channel info before adding member
+      const channel = await storage.getChannel(channelId, companyId);
+      if (!channel) {
+        return res.status(404).json({ message: 'Channel not found' });
+      }
+
       await storage.addChannelMember(channelId, memberUserId, companyId);
+      
+      // Create notification for the added user
+      try {
+        const memberUserIdAsNumber = getUserIdAsNumber(memberUserId);
+        const userIdAsNumber = getUserIdAsNumber(userId);
+        
+        await storage.createNotification({
+          userId: memberUserIdAsNumber,
+          companyId,
+          type: 'channel_added',
+          channelId: channel.id,
+          fromUserId: userIdAsNumber,
+          content: `You were added to channel #${channel.name}`,
+          isRead: false,
+        });
+        
+        // Send real-time notification to added user
+        const addedUserClient = clients.get(memberUserId);
+        if (addedUserClient?.ws.readyState === WebSocket.OPEN) {
+          addedUserClient.ws.send(JSON.stringify({
+            type: 'new_notification',
+            notification: {
+              type: 'channel_added',
+              fromUser: user,
+              channel,
+              content: `You were added to channel #${channel.name}`,
+            },
+          }));
+        }
+      } catch (error) {
+        console.error('Error creating channel_added notification:', error);
+        // Don't fail the request if notification creation fails
+      }
       
       res.status(201).json({ message: 'Member added successfully' });
     } catch (error: any) {
@@ -1029,16 +1161,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Company ID is required' });
       }
       
-      // Get mentionedUserIds from request body (array of user IDs)
-      const mentionedUserIds = req.body.mentionedUserIds || [];
-      
-      console.log('[POST /api/messages] Request body mentionedUserIds:', mentionedUserIds);
-      console.log('[POST /api/messages] Request body:', JSON.stringify(req.body, null, 2));
+      // Extract mentionedUserIds from request body
+      const mentionedUserIdsFromBody = req.body.mentionedUserIds;
+      const mentionedUserIds = Array.isArray(mentionedUserIdsFromBody) 
+        ? mentionedUserIdsFromBody 
+        : (mentionedUserIdsFromBody ? [mentionedUserIdsFromBody] : []);
       
       const userIdAsNumber = getUserIdAsNumber(userId);
+      
       // Parse message data (without mentionedUserIds, as it's not part of message schema)
+      const { mentionedUserIds: _mentionedUserIdsFromBody, ...bodyWithoutMentions } = req.body;
+      
       const messageData = insertMessageSchema.parse({
-        ...req.body,
+        ...bodyWithoutMentions,
         userId: userIdAsNumber,
         companyId,
       });
@@ -1046,10 +1181,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Add mentionedUserIds separately (not part of message schema)
       const dataWithMentions = {
         ...messageData,
-        mentionedUserIds,
+        mentionedUserIds: mentionedUserIds ? [...mentionedUserIds] : [],
       };
-      
-      console.log('[POST /api/messages] Data with mentions:', dataWithMentions);
       
       // Verify user is a member of the channel
       if (!messageData.channelId) {
@@ -1066,54 +1199,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied - not a member of this channel" });
       }
       
+      // Create message
       const message = await storage.createMessage(dataWithMentions, companyId);
+      
+      // Get mentioned user IDs from database (most reliable source)
+      let mentionedUserIdsForNotifications: number[] = [];
+      try {
+        const messageMentions = await storage.getMessageMentions(message.id);
+        console.log('[POST /api/messages] Message mentions from database:', JSON.stringify(messageMentions, null, 2));
+        console.log('[POST /api/messages] Message mentions length:', messageMentions?.length);
+        
+        if (messageMentions && messageMentions.length > 0) {
+          // getMessageMentions returns objects with spread mention properties
+          // The structure is: { ...mention, user: user }
+          mentionedUserIdsForNotifications = messageMentions
+            .map(m => {
+              // Try different possible property names
+              const userId = m.userId || (m as any).mention?.userId || (m as any).user_id;
+              console.log('[POST /api/messages] Extracting userId from mention:', { m, userId, keys: Object.keys(m) });
+              return userId;
+            })
+            .filter((id): id is number => typeof id === 'number' && !isNaN(id));
+          
+          console.log('[POST /api/messages] Extracted userIds from database:', mentionedUserIdsForNotifications);
+        } else if (mentionedUserIds && mentionedUserIds.length > 0) {
+          // Fallback to request body if database has no mentions
+          console.log('[POST /api/messages] No mentions in database, using request body');
+          mentionedUserIdsForNotifications = mentionedUserIds
+            .map(id => typeof id === 'number' ? id : parseInt(String(id), 10))
+            .filter(id => !isNaN(id));
+          console.log('[POST /api/messages] Extracted userIds from request body:', mentionedUserIdsForNotifications);
+        }
+      } catch (error) {
+        console.error('Error fetching mentions from database:', error);
+        // Fallback to request body if database query fails
+        if (mentionedUserIds && mentionedUserIds.length > 0) {
+          mentionedUserIdsForNotifications = mentionedUserIds
+            .map(id => typeof id === 'number' ? id : parseInt(String(id), 10))
+            .filter(id => !isNaN(id));
+          console.log('[POST /api/messages] Using request body as fallback:', mentionedUserIdsForNotifications);
+        }
+      }
       
       // Get user info for the message
       const user = await storage.getUser(userId, companyId);
       const messageWithUser = { ...message, user };
       
+      // Track mentioned user IDs to avoid duplicate notifications
+      const mentionedUserIdsSet = new Set<number>();
+      
       // Create notifications for mentioned users
-      if (mentionedUserIds && mentionedUserIds.length > 0) {
-        // Create notifications for each mentioned user (except the sender)
-        for (const mentionedUserIdNum of mentionedUserIds) {
-          const mentionedUserId = typeof mentionedUserIdNum === 'string' ? mentionedUserIdNum : `auth:${mentionedUserIdNum}`;
-          if (mentionedUserId !== userId) {
-            try {
-              const mentionedUserIdAsNumber = getUserIdAsNumber(mentionedUserId);
-              const userIdAsNumber = getUserIdAsNumber(userId);
-              await storage.createNotification({
-                userId: mentionedUserIdAsNumber,
-                type: 'mention',
-                messageId: message.id,
-                channelId: message.channelId,
-                fromUserId: userIdAsNumber,
-                content: message.content || '',
-                isRead: false,
-              });
-              
-              // Send real-time notification to mentioned user
-              const mentionedClient = clients.get(mentionedUserId);
-              if (mentionedClient?.ws.readyState === WebSocket.OPEN) {
-                mentionedClient.ws.send(JSON.stringify({
-                  type: 'new_notification',
-                  notification: {
-                    type: 'mention',
-                    fromUser: user,
-                    channel,
-                    content: message.content,
-                  },
-                }));
-              }
-            } catch (error) {
-              console.error('Error creating notification:', error);
-            }
+      console.log('[POST /api/messages] Preparing to create notifications:', {
+        mentionedUserIdsForNotifications,
+        mentionedUserIdsForNotificationsLength: mentionedUserIdsForNotifications.length,
+        messageId: message.id,
+        channelId: message.channelId,
+        userIdAsNumber,
+        companyId,
+      });
+      
+      if (mentionedUserIdsForNotifications.length > 0) {
+        console.log('[POST /api/messages] Calling createMentionNotifications...');
+        try {
+          await createMentionNotifications(
+            mentionedUserIdsForNotifications,
+            message,
+            userIdAsNumber,
+            companyId
+          );
+          console.log('[POST /api/messages] createMentionNotifications completed successfully');
+        } catch (error) {
+          console.error('[POST /api/messages] Error in createMentionNotifications:', error);
+        }
+        
+        // Add to set for tracking
+        mentionedUserIdsForNotifications.forEach(id => mentionedUserIdsSet.add(id));
+      } else {
+        console.log('[POST /api/messages] No mentioned users to create notifications for');
+      }
+      
+      // Create notifications for all channel members (excluding sender and mentioned users)
+      try {
+        const channelMembers = await storage.getChannelMembers(message.channelId!.toString(), companyId);
+        const senderUserIdAsNumber = getUserIdAsNumber(userId);
+        
+        for (const member of channelMembers) {
+          const memberUserIdAsNumber = member.userId;
+          
+          // Skip sender and mentioned users (they already have notifications)
+          if (memberUserIdAsNumber === senderUserIdAsNumber || mentionedUserIdsSet.has(memberUserIdAsNumber)) {
+            continue;
+          }
+          
+          try {
+            // Create notification in database only
+            await storage.createNotification({
+              userId: memberUserIdAsNumber,
+              companyId,
+              type: 'channel_message',
+              messageId: message.id,
+              channelId: message.channelId,
+              fromUserId: senderUserIdAsNumber,
+              content: message.content || '',
+              isRead: false,
+            });
+          } catch (error) {
+            console.error('Error creating channel_message notification:', error);
           }
         }
+      } catch (error) {
+        console.error('Error creating channel message notifications:', error);
+        // Don't fail the request if notification creation fails
       }
       
       // Broadcast new message only to channel members
       if (message.channelId) {
-        broadcastToChannel(message.channelId, {
+        broadcastToChannel(message.channelId.toString(), {
           type: 'new_message',
           channelId: message.channelId,
           message: messageWithUser,
@@ -1155,6 +1356,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/direct-messages', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+      
       const userIdAsNumber = getUserIdAsNumber(userId);
       const parsed = insertDirectMessageSchema.parse({
         ...req.body,
@@ -1165,12 +1371,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dm = await storage.createDirectMessage(data);
       
       // Get user info for the message
-      const sender = await storage.getUser(userId);
-      const recipient = await storage.getUser(data.toUserId);
+      const sender = await storage.getUser(userId, companyId);
+      const recipient = await storage.getUser(data.toUserId, companyId);
+      
+      // Create notification for the recipient
+      try {
+        const recipientUserIdAsNumber = typeof data.toUserId === 'string' 
+          ? getUserIdAsNumber(data.toUserId) 
+          : data.toUserId;
+        
+        // Convert toUserId to string format for clients.get (e.g., "auth:1")
+        const recipientUserIdString = typeof data.toUserId === 'string' 
+          ? data.toUserId 
+          : `auth:${data.toUserId}`;
+        
+        await storage.createNotification({
+          userId: recipientUserIdAsNumber,
+          companyId,
+          type: 'direct_message',
+          directMessageId: dm.id,
+          fromUserId: userIdAsNumber,
+          content: dm.content || '',
+          isRead: false,
+        });
+        
+        // Send real-time notification to recipient
+        const recipientClient = clients.get(recipientUserIdString);
+        if (recipientClient?.ws.readyState === WebSocket.OPEN) {
+          recipientClient.ws.send(JSON.stringify({
+            type: 'new_notification',
+            notification: {
+              type: 'direct_message',
+              fromUser: sender,
+              content: dm.content,
+            },
+          }));
+        }
+      } catch (error) {
+        console.error('Error creating direct_message notification:', error);
+        // Don't fail the request if notification creation fails
+      }
       
       // Send to specific users (sender and recipient)
       const senderClient = clients.get(userId);
-      const recipientClient = clients.get(data.toUserId);
+      const recipientClient = clients.get(recipientUserIdString);
       
       const dmData = JSON.stringify({
         type: 'new_dm',

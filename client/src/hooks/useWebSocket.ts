@@ -118,6 +118,12 @@ export function useWebSocket() {
               })
             );
             break;
+
+          case "new_notification":
+            // Invalidate notifications queries to refresh the list
+            queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+            break;
         }
       } catch (error) {
         console.error("WebSocket message parsing error:", error);
