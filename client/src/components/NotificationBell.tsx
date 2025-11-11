@@ -11,8 +11,9 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { NotificationWithUsers } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 interface NotificationBellProps {
   showCountInHeader?: boolean;
@@ -20,6 +21,7 @@ interface NotificationBellProps {
 
 export function NotificationBell({ showCountInHeader = false }: NotificationBellProps = {}) {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   // Fetch notifications - refetch every 5 seconds to get new notifications from database
   const { data: notifications = [] } = useQuery<NotificationWithUsers[]>({
@@ -131,9 +133,45 @@ export function NotificationBell({ showCountInHeader = false }: NotificationBell
     queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
   }, []);
 
+  // Helper function to get navigation URL based on notification type
+  const getNotificationUrl = (notification: NotificationWithUsers): string | null => {
+    // If it's a direct message notification
+    if (notification.type === 'direct_message' && notification.fromUserId) {
+      return `/dm/${notification.fromUserId}`;
+    }
+    
+    // If it's a channel-related notification (mention, channel_message, channel_added)
+    if (notification.channelId) {
+      // If there's a messageId, navigate to the specific message
+      if (notification.messageId) {
+        return `/channel/${notification.channelId}?messageId=${notification.messageId}`;
+      }
+      // Otherwise, just navigate to the channel
+      return `/channel/${notification.channelId}`;
+    }
+    
+    // For mention notifications without channelId, navigate to mentions page
+    if (notification.type === 'mention') {
+      return '/mentions';
+    }
+    
+    // Default: no navigation
+    return null;
+  };
+
   const handleNotificationClick = (notification: NotificationWithUsers) => {
+    // Mark as read if not already read
     if (!notification.isRead) {
-      markAsReadMutation.mutate(notification.id);
+      markAsReadMutation.mutate(String(notification.id));
+    }
+    
+    // Close popover
+    setPopoverOpen(false);
+    
+    // Navigate to the appropriate URL
+    const url = getNotificationUrl(notification);
+    if (url) {
+      setLocation(url);
     }
   };
 
@@ -144,6 +182,8 @@ export function NotificationBell({ showCountInHeader = false }: NotificationBell
   
   // Use unreadCount if available, otherwise use count from notifications list
   const displayCount = unreadCount > 0 ? unreadCount : (hasUnreadNotifications ? unreadCountFromNotifications : 0);
+
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
   return (
     <div className="flex items-center gap-2">
@@ -160,7 +200,7 @@ export function NotificationBell({ showCountInHeader = false }: NotificationBell
         //   </Badge>
         // </div>
       )}
-      <Popover>
+      <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
         <PopoverTrigger asChild>
           <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
             <Bell className={`w-5 h-5 ${displayCount > 0 ? 'text-destructive' : ''}`} />
