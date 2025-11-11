@@ -95,11 +95,26 @@ export function NotificationBell({ showCountInHeader = false }: NotificationBell
   });
 
   // Helper function to get notification message based on type
-  const getNotificationMessage = (notification: NotificationWithUsers) => {
+  const getNotificationMessage = (notification: NotificationWithUsers & { unreadCount?: number }) => {
     const fromUserName = notification.fromUser?.name || notification.fromUser?.email || 'Someone';
     const channelName = notification.channel?.name || 'a channel';
     
     switch (notification.type) {
+      case 'direct_message':
+        // Show unread count if available (grouped notification)
+        if (notification.unreadCount && notification.unreadCount > 1) {
+          return {
+            title: 'Direct Message',
+            description: `${fromUserName} sent you ${notification.unreadCount} messages`,
+            displayText: `${fromUserName} sent you ${notification.unreadCount} messages`,
+          };
+        } else {
+          return {
+            title: 'Direct Message',
+            description: `${fromUserName} sent you a message`,
+            displayText: `${fromUserName} sent you a message`,
+          };
+        }
       case 'channel_added':
         return {
           title: 'Added to Channel',
@@ -276,9 +291,19 @@ export function NotificationBell({ showCountInHeader = false }: NotificationBell
                 >
                   <div className="flex gap-3">
                     <div className="flex-1">
-                      <p className="text-sm">
-                        {getNotificationMessage(notification).displayText}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm">
+                          {getNotificationMessage(notification).displayText}
+                        </p>
+                        {(notification as any).unreadCount && (notification as any).unreadCount > 1 && (
+                          <Badge 
+                            variant="secondary" 
+                            className="h-5 min-w-5 flex items-center justify-center px-1.5 text-xs font-semibold"
+                          >
+                            {(notification as any).unreadCount}
+                          </Badge>
+                        )}
+                      </div>
                       {notification.content && (
                         <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                           {notification.content}

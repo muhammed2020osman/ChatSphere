@@ -1607,9 +1607,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: 'Recipient not found' });
       }
       
-      // Create notification for the recipient
+      // Create or update notification for the recipient
       try {
-        await storage.createNotification({
+        await storage.updateOrCreateDirectMessageNotification({
           userId: recipientUserIdAsNumber,
           companyId,
           type: 'direct_message',
@@ -1641,7 +1641,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }));
         }
       } catch (error) {
-        console.error('Error creating direct_message notification:', error);
+        console.error('Error creating/updating direct_message notification:', error);
         // Don't fail the request if notification creation fails
       }
       

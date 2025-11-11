@@ -71,6 +71,15 @@ export interface IStorage {
   
   // Notification operations
   createNotification(notification: any): Promise<any>;
+  updateOrCreateDirectMessageNotification(notificationData: {
+    userId: number;
+    companyId: number;
+    type: 'direct_message';
+    directMessageId: number;
+    fromUserId: number;
+    content: string;
+    isRead?: boolean;
+  }): Promise<any>;
   getUserNotifications(userId: string): Promise<any[]>;
   markNotificationAsRead(notificationId: string): Promise<void>;
   markAllNotificationsAsRead(userId: string): Promise<void>;
@@ -1087,6 +1096,62 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // Update or create direct message notification
+  // If an unread notification from the same sender exists, update it
+  // Otherwise, create a new notification
+  async updateOrCreateDirectMessageNotification(notificationData: {
+    userId: number;
+    companyId: number;
+    type: 'direct_message';
+    directMessageId: number;
+    fromUserId: number;
+    content: string;
+    isRead?: boolean;
+  }): Promise<any> {
+    // Check if there's an unread notification from the same sender
+    const existingNotification = await db
+      .select()
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, notificationData.userId),
+          eq(notifications.fromUserId, notificationData.fromUserId),
+          eq(notifications.type, 'direct_message'),
+          or(eq(notifications.isRead, false), sql`${notifications.isRead} IS NULL`)
+        )
+      )
+      .limit(1);
+
+    if (existingNotification.length > 0) {
+      // Update existing notification
+      await db
+        .update(notifications)
+        .set({
+          content: notificationData.content,
+          directMessageId: notificationData.directMessageId,
+          createdAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(notifications.id, existingNotification[0].id));
+      
+      return {
+        ...existingNotification[0],
+        content: notificationData.content,
+        directMessageId: notificationData.directMessageId,
+      };
+    } else {
+      // Create new notification
+      return await this.createNotification({
+        userId: notificationData.userId,
+        companyId: notificationData.companyId,
+        type: notificationData.type,
+        directMessageId: notificationData.directMessageId,
+        fromUserId: notificationData.fromUserId,
+        content: notificationData.content,
+        isRead: notificationData.isRead ?? false,
+      });
+    }
+  }
+
   async getUserNotifications(userId: string): Promise<any[]> {
     const userIdNum = this.getUserIdAsNumber(userId);
     
@@ -1102,18 +1167,93 @@ export class DatabaseStorage implements IStorage {
       .where(eq(notifications.userId, userIdNum))
       .orderBy(desc(notifications.createdAt));
     
-    return result.map(row => ({
-      ...row.notification,
-      fromUser: row.fromUser || null,
-      channel: row.channel || null,
-    }));
+    // Count unread direct_message notifications per sender
+    const unreadCountsBySender = new Map<number, number>();
+    const directMessageNotifications: any[] = [];
+    const otherNotifications: any[] = [];
+    
+    // First pass: separate direct_message notifications and count unread ones
+    for (const row of result) {
+      const notification = {
+        ...row.notification,
+        fromUser: row.fromUser || null,
+        channel: row.channel || null,
+      };
+      
+      if (notification.type === 'direct_message' && notification.fromUserId) {
+        directMessageNotifications.push(notification);
+        
+        // Count unread messages from this sender
+        if (!notification.isRead || notification.isRead === null) {
+          const senderId = notification.fromUserId;
+          unreadCountsBySender.set(senderId, (unreadCountsBySender.get(senderId) || 0) + 1);
+        }
+      } else {
+        otherNotifications.push(notification);
+      }
+    }
+    
+    // Group direct_message notifications by sender (only show one per sender)
+    const groupedNotifications: Map<number, any> = new Map();
+    
+    for (const notification of directMessageNotifications) {
+      const senderId = notification.fromUserId!;
+      const unreadCount = unreadCountsBySender.get(senderId) || 0;
+      
+      // Only show notification if there are unread messages
+      if (unreadCount > 0 && !groupedNotifications.has(senderId)) {
+        // Use the most recent notification as the representative
+        groupedNotifications.set(senderId, {
+          ...notification,
+          unreadCount,
+        });
+      }
+    }
+    
+    // Combine grouped notifications with other notifications
+    // Put grouped notifications first, then others
+    const groupedArray = Array.from(groupedNotifications.values());
+    return [...groupedArray, ...otherNotifications];
   }
 
   async markNotificationAsRead(notificationId: string): Promise<void> {
-    await db
-      .update(notifications)
-      .set({ isRead: true })
-      .where(eq(notifications.id, notificationId));
+    // Convert notificationId to number
+    const notificationIdNum = typeof notificationId === 'string' ? parseInt(notificationId, 10) : notificationId;
+    
+    // Get the notification first to check its type and fromUserId
+    const notification = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.id, notificationIdNum))
+      .limit(1);
+    
+    if (notification.length === 0) {
+      return; // Notification not found
+    }
+    
+    const notif = notification[0];
+    
+    // If it's a direct_message notification, mark all unread direct_message notifications
+    // from the same sender as read
+    if (notif.type === 'direct_message' && notif.fromUserId) {
+      await db
+        .update(notifications)
+        .set({ isRead: true })
+        .where(
+          and(
+            eq(notifications.userId, notif.userId),
+            eq(notifications.fromUserId, notif.fromUserId),
+            eq(notifications.type, 'direct_message'),
+            or(eq(notifications.isRead, false), sql`${notifications.isRead} IS NULL`)
+          )
+        );
+    } else {
+      // For other notification types, just mark this one as read
+      await db
+        .update(notifications)
+        .set({ isRead: true })
+        .where(eq(notifications.id, notificationId));
+    }
   }
 
   async markAllNotificationsAsRead(userId: string): Promise<void> {
