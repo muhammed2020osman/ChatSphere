@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import type { Channel, User } from "@shared/schema";
@@ -48,6 +49,29 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
     queryKey: [`/api/companies/${user?.companyId}`],
     enabled: !!user?.companyId,
   });
+
+  // Fetch counts for sidebar badges
+  const { data: mentionsCountData } = useQuery<{ count: number }>({
+    queryKey: ["/api/mentions/count"],
+    enabled: !!user,
+    refetchInterval: 10000, // Refetch every 10 seconds
+  });
+
+  const { data: threadsCountData } = useQuery<{ count: number }>({
+    queryKey: ["/api/messages/threads/count"],
+    enabled: !!user,
+    refetchInterval: 10000, // Refetch every 10 seconds
+  });
+
+  const { data: starredCountData } = useQuery<{ count: number }>({
+    queryKey: ["/api/starred/count"],
+    enabled: !!user,
+    refetchInterval: 10000, // Refetch every 10 seconds
+  });
+
+  const mentionsCount = mentionsCountData?.count || 0;
+  const threadsCount = threadsCountData?.count || 0;
+  const starredCount = starredCountData?.count || 0;
 
   const getUserInitials = (u: User | undefined) => {
     if (!u) return "?";
@@ -129,9 +153,19 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
                   data-testid="link-mentions"
                   tooltip="Mentions & reactions"
                 >
-                  <Link href="/mentions">
-                    <AtSign className="w-4 h-4" />
-                    <span>Mentions & reactions</span>
+                  <Link href="/mentions" className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2">
+                      <AtSign className="w-4 h-4" />
+                      <span>Mentions & reactions</span>
+                    </div>
+                    {mentionsCount > 0 && (
+                      <Badge 
+                        variant="secondary" 
+                        className="h-5 min-w-5 flex items-center justify-center px-1.5 text-xs font-semibold ml-auto"
+                      >
+                        {mentionsCount > 99 ? '99+' : mentionsCount}
+                      </Badge>
+                    )}
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -142,9 +176,19 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
                   data-testid="link-threads"
                   tooltip="Threads"
                 >
-                  <Link href="/threads">
-                    <MessagesSquare className="w-4 h-4" />
-                    <span>Threads</span>
+                  <Link href="/threads" className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2">
+                      <MessagesSquare className="w-4 h-4" />
+                      <span>Threads</span>
+                    </div>
+                    {threadsCount > 0 && (
+                      <Badge 
+                        variant="secondary" 
+                        className="h-5 min-w-5 flex items-center justify-center px-1.5 text-xs font-semibold ml-auto"
+                      >
+                        {threadsCount > 99 ? '99+' : threadsCount}
+                      </Badge>
+                    )}
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -155,9 +199,19 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
                   data-testid="link-starred"
                   tooltip="Starred"
                 >
-                  <Link href="/starred">
-                    <Star className="w-4 h-4" />
-                    <span>Starred</span>
+                  <Link href="/starred" className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2">
+                      <Star className="w-4 h-4" />
+                      <span>Starred</span>
+                    </div>
+                    {starredCount > 0 && (
+                      <Badge 
+                        variant="secondary" 
+                        className="h-5 min-w-5 flex items-center justify-center px-1.5 text-xs font-semibold ml-auto"
+                      >
+                        {starredCount > 99 ? '99+' : starredCount}
+                      </Badge>
+                    )}
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

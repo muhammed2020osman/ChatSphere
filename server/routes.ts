@@ -2014,6 +2014,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/mentions/count', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+
+      const userIdAsNumber = getUserIdAsNumber(userId);
+      const count = await storage.getMentionsCount(userIdAsNumber, companyId);
+      res.json({ count });
+    } catch (error: any) {
+      console.error("Error fetching mentions count:", error);
+      res.status(500).json({ message: "Failed to fetch mentions count" });
+    }
+  });
+
   app.delete('/api/messages/:id', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -2094,6 +2111,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         stack: (error as any)?.stack,
       });
       res.status(200).json([]);
+    }
+  });
+
+  app.get('/api/messages/threads/count', isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      const count = await storage.getThreadsCount(companyId);
+      res.json({ count });
+    } catch (error: any) {
+      console.error("Error fetching threads count:", error);
+      res.status(500).json({ message: "Failed to fetch threads count" });
     }
   });
 
@@ -2246,6 +2274,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/starred/count', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const count = await storage.getStarredMessagesCount(userId);
+      res.json({ count });
+    } catch (error) {
+      console.error("Error fetching starred messages count:", error);
+      res.status(500).json({ message: "Failed to fetch starred messages count" });
+    }
+  });
 
   // Object storage routes - for file uploads in messages
   app.get("/objects/:objectPath(*)", isAuthenticated, async (req: any, res) => {

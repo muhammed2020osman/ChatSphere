@@ -94,6 +94,9 @@ export interface IStorage {
   unstarMessage(messageId: string, userId: string): Promise<void>;
   isMessageStarred(messageId: string, userId: string): Promise<boolean>;
   getUserStarredMessages(userId: string): Promise<any[]>;
+  getMentionsCount(userId: string | number, companyId?: number): Promise<number>;
+  getThreadsCount(companyId?: number): Promise<number>;
+  getStarredMessagesCount(userId: string): Promise<number>;
   
   // Drawings operations
   getDisciplines(): Promise<any[]>;
@@ -1436,6 +1439,61 @@ export class DatabaseStorage implements IStorage {
       isStarred: true, // All messages here are starred
       reactions: reactionsByMessageId[r.message.id] || [],
     }));
+  }
+
+  async getMentionsCount(userId: string | number, companyId?: number): Promise<number> {
+    const userIdNum = typeof userId === 'string' ? parseInt(userId, 10) : userId;
+    
+    let whereCondition: any = eq(messageMentions.userId, userIdNum);
+    if (companyId) {
+      whereCondition = and(
+        eq(messageMentions.userId, userIdNum),
+        eq(messageMentions.companyId, companyId)
+      );
+    }
+    
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(messageMentions)
+      .where(whereCondition);
+    
+    return Number(result[0]?.count || 0);
+  }
+
+  async getThreadsCount(companyId?: number): Promise<number> {
+    let whereCondition: any = sql`${messages.threadParentId} IS NOT NULL`;
+    if (companyId !== undefined && companyId !== null) {
+      whereCondition = and(
+        sql`${messages.threadParentId} IS NOT NULL`,
+        eq(messages.companyId, companyId)
+      );
+    }
+    
+    // Get unique thread parent IDs
+    const messagesWithThreadParent = await db
+      .select({ threadParentId: messages.threadParentId })
+      .from(messages)
+      .where(whereCondition);
+    
+    const uniqueThreadParentIds = new Set<number>();
+    for (const row of messagesWithThreadParent) {
+      if (row.threadParentId !== null && row.threadParentId !== undefined) {
+        uniqueThreadParentIds.add(row.threadParentId);
+      }
+    }
+    
+    return uniqueThreadParentIds.size;
+  }
+
+  async getStarredMessagesCount(userId: string): Promise<number> {
+    const userIdNum = this.getUserIdAsNumber(userId);
+    
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(starredMessages)
+      .where(eq(starredMessages.userId, userIdNum));
+    
+    return Number(result[0]?.count || 0);
   }
 
   // Drawings operations
