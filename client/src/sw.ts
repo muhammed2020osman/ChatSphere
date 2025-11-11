@@ -10,6 +10,12 @@ declare const self: ServiceWorkerGlobalScope;
 // Take control of all clients immediately
 clientsClaim();
 
+// Log service worker activation
+self.addEventListener('activate', (event) => {
+  console.log('[Service Worker] Activated');
+  event.waitUntil(self.clients.claim());
+});
+
 // Precache all assets generated during build
 precacheAndRoute(self.__WB_MANIFEST);
 
@@ -84,17 +90,25 @@ registerRoute(
 
 // Helper function to update app badge
 async function updateAppBadge(count: number | null) {
-  if ('setAppBadge' in navigator) {
-    try {
-      if (count === null || count === 0) {
-        await (navigator as any).clearAppBadge();
-      } else {
-        await (navigator as any).setAppBadge(count);
-      }
-      console.log(`[Service Worker] Badge updated to: ${count}`);
-    } catch (error) {
-      console.error('[Service Worker] Error updating badge:', error);
+  try {
+    // Badge API doesn't work directly in Service Worker context
+    // Send message to clients to update badge
+    const clients = await self.clients.matchAll({ includeUncontrolled: true });
+    console.log(`[Service Worker] Sending badge update to ${clients.length} clients: ${count || 0}`);
+    
+    clients.forEach(client => {
+      client.postMessage({
+        type: 'UPDATE_BADGE',
+        count: count || 0,
+      });
+    });
+    
+    // Also try to update badge directly if possible (for PWA)
+    if (clients.length === 0) {
+      console.log('[Service Worker] No clients available for badge update');
     }
+  } catch (error) {
+    console.error('[Service Worker] Error updating badge:', error);
   }
 }
 
@@ -104,6 +118,7 @@ async function updateBadgeFromNotifications() {
     // Get all notifications
     const notifications = await self.registration.getNotifications();
     const unreadCount = notifications.filter(n => !n.data?.isRead).length;
+    console.log(`[Service Worker] Found ${notifications.length} notifications, ${unreadCount} unread`);
     await updateAppBadge(unreadCount);
   } catch (error) {
     console.error('[Service Worker] Error updating badge from notifications:', error);
@@ -112,8 +127,24 @@ async function updateBadgeFromNotifications() {
 
 // Push event handler
 self.addEventListener('push', (event: PushEvent) => {
-  console.log('[Service Worker] Push received:', event);
+  console.log('[Service Worker] ===== PUSH EVENT RECEIVED =====');
+  console.log('[Service Worker] Push event:', event);
   console.log('[Service Worker] Push event data:', event.data);
+  console.log('[Service Worker] Push event data type:', typeof event.data);
+  
+  // Ensure we wait for the notification to be shown
+  if (!event.data) {
+    console.warn('[Service Worker] Push event has no data, showing default notification');
+    event.waitUntil(
+      self.registration.showNotification('New notification', {
+        body: 'You have a new notification',
+        icon: '/icons/icon-192x192.png',
+        badge: '/icons/icon-192x192.png',
+        vibrate: [200, 100, 200],
+      })
+    );
+    return;
+  }
 
   let notificationData: {
     title: string;
@@ -166,13 +197,29 @@ self.addEventListener('push', (event: PushEvent) => {
     ...(notificationData.data?.channelId && {
       tag: `channel-${notificationData.data.channelId}`,
     }),
+    // Additional Android options
+    dir: 'auto',
+    lang: 'ar',
+    image: notificationData.icon || '/icons/icon-192x192.png',
   };
 
   console.log('[Service Worker] Showing notification with options:', options);
+  console.log('[Service Worker] Notification title:', notificationData.title);
+  console.log('[Service Worker] Notification body:', notificationData.body);
 
+  // Show notification and update badge
   event.waitUntil(
     Promise.all([
-      self.registration.showNotification(notificationData.title, options),
+      self.registration.showNotification(notificationData.title, options)
+        .then(() => {
+          console.log('[Service Worker] Notification shown successfully');
+          // Update badge after a short delay to ensure notification is registered
+          return new Promise(resolve => setTimeout(resolve, 100));
+        })
+        .catch((error) => {
+          console.error('[Service Worker] Error showing notification:', error);
+          throw error;
+        }),
       updateBadgeFromNotifications(), // Update badge after showing notification
     ])
   );

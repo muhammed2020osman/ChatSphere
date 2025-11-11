@@ -20,17 +20,27 @@ import SheetViewer from "@/pages/sheet-viewer";
 import TicketsHub from "@/pages/tickets-hub";
 import { PWAInstallButton } from "@/components/pwa-install-button";
 
-// Component to handle service worker messages (navigation from notifications)
+// Component to handle service worker messages (navigation from notifications and badge updates)
 function ServiceWorkerMessageHandler() {
   const [, navigate] = useLocation();
   
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.addEventListener('message', (event) => {
+      const handleMessage = async (event: MessageEvent) => {
         if (event.data && event.data.type === 'navigate') {
           navigate(event.data.url);
+        } else if (event.data && event.data.type === 'UPDATE_BADGE') {
+          // Update badge from service worker message
+          const { setAppBadge } = await import('@/lib/pwa');
+          await setAppBadge(event.data.count);
         }
-      });
+      };
+      
+      navigator.serviceWorker.addEventListener('message', handleMessage);
+      
+      return () => {
+        navigator.serviceWorker.removeEventListener('message', handleMessage);
+      };
     }
   }, [navigate]);
   

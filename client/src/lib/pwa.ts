@@ -123,26 +123,38 @@ export function isPWAInstalled(): boolean {
 
 // Badge API functions
 export async function setAppBadge(count: number | null): Promise<void> {
-  if ('setAppBadge' in navigator) {
-    try {
+  try {
+    // Try Badge API first (works in PWA on Android/iOS)
+    if ('setAppBadge' in navigator) {
       if (count === null || count === 0) {
         await (navigator as any).clearAppBadge();
+        console.log(`✓ Badge cleared`);
       } else {
         await (navigator as any).setAppBadge(count);
+        console.log(`✓ Badge updated to: ${count}`);
       }
-      console.log(`✓ Badge updated to: ${count}`);
-    } catch (error) {
-      console.error('Error updating badge:', error);
+      return;
     }
-  } else {
+    
     // Fallback: send message to service worker
     if ('serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.ready;
-      registration.active?.postMessage({
-        type: 'UPDATE_BADGE',
-        count,
-      });
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        if (registration.active) {
+          registration.active.postMessage({
+            type: 'UPDATE_BADGE',
+            count: count || 0,
+          });
+          console.log(`✓ Badge update message sent to service worker: ${count || 0}`);
+        }
+      } catch (error) {
+        console.error('Error sending badge update to service worker:', error);
+      }
+    } else {
+      console.warn('Badge API and Service Worker not available');
     }
+  } catch (error) {
+    console.error('Error updating badge:', error);
   }
 }
 
