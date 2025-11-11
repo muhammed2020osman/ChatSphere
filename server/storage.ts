@@ -1056,25 +1056,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markAllNotificationsAsRead(userId: string): Promise<void> {
+    const userIdNum = this.getUserIdAsNumber(userId);
     await db
       .update(notifications)
       .set({ isRead: true })
-      .where(eq(notifications.userId, userId));
+      .where(eq(notifications.userId, userIdNum));
   }
 
   async getUnreadNotificationCount(userId: string): Promise<number> {
     try {
+      const userIdNum = this.getUserIdAsNumber(userId);
       const result = await db
         .select()
         .from(notifications)
         .where(
           and(
-            eq(notifications.userId, userId),
+            eq(notifications.userId, userIdNum),
             or(eq(notifications.isRead, false), sql`${notifications.isRead} IS NULL`)
           )
         );
       return result.length;
-    } catch (_e) {
+    } catch (error) {
+      console.error('Error getting unread notification count:', error);
       return 0;
     }
   }

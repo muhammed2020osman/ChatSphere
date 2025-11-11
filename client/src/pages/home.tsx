@@ -66,7 +66,7 @@ export default function Home() {
         <div className="flex flex-col flex-1">
           <header className="flex items-center justify-between gap-2 px-4 py-2 border-b border-border">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <Button
                 variant="ghost"
                 size="icon"
@@ -75,7 +75,7 @@ export default function Home() {
               >
                 <Search className="w-5 h-5" />
               </Button>
-              <NotificationBell />
+              <NotificationBell showCountInHeader={true} />
               <ThemeToggle />
             </div>
           </header>

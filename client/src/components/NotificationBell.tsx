@@ -14,7 +14,11 @@ import { Badge } from "@/components/ui/badge";
 import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
-export function NotificationBell() {
+interface NotificationBellProps {
+  showCountInHeader?: boolean;
+}
+
+export function NotificationBell({ showCountInHeader = false }: NotificationBellProps = {}) {
   const { toast } = useToast();
 
   // Fetch notifications - refetch every 5 seconds to get new notifications from database
@@ -26,14 +30,40 @@ export function NotificationBell() {
   });
 
   // Fetch unread count - refetch every 5 seconds
-  const { data: unreadData } = useQuery<{ count: number }>({
+  const { data: unreadData, isLoading: unreadCountLoading } = useQuery<{ count: number }>({
     queryKey: ["/api/notifications/unread-count"],
     retry: 1,
     refetchOnWindowFocus: true,
     refetchInterval: 5000, // Refetch every 5 seconds
   });
 
-  const unreadCount = unreadData?.count || 0;
+  // Calculate unread count from notifications list (more reliable)
+  // Check both isRead === false and isRead === null/undefined
+  const unreadCountFromNotifications = notifications.filter(n => 
+    n.isRead === false || n.isRead === null || n.isRead === undefined
+  ).length;
+  
+  // Use API count if available and valid, otherwise use count from notifications list
+  const unreadCount = (unreadData?.count !== undefined && unreadData.count >= 0) 
+    ? unreadData.count 
+    : unreadCountFromNotifications;
+  
+  // Debug logging
+  useEffect(() => {
+    if (notifications.length > 0) {
+      console.log('[NotificationBell] Unread count debug:', {
+        unreadData,
+        unreadCountFromNotifications,
+        finalUnreadCount: unreadCount,
+        notificationsLength: notifications.length,
+        unreadNotifications: notifications.filter(n => !n.isRead || n.isRead === null || n.isRead === undefined).map(n => ({ 
+          id: n.id, 
+          isRead: n.isRead,
+          type: typeof n.isRead 
+        })),
+      });
+    }
+  }, [unreadData, notifications, unreadCount, unreadCountFromNotifications]);
 
   // Mark notification as read mutation
   const markAsReadMutation = useMutation({
@@ -107,26 +137,64 @@ export function NotificationBell() {
     }
   };
 
+  // Always show badge if there are unread notifications (even if count is 0 from API)
+  const hasUnreadNotifications = notifications.some(n => 
+    n.isRead === false || n.isRead === null || n.isRead === undefined
+  );
+  
+  // Use unreadCount if available, otherwise use count from notifications list
+  const displayCount = unreadCount > 0 ? unreadCount : (hasUnreadNotifications ? unreadCountFromNotifications : 0);
+
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
-          <Bell className="w-5 h-5" />
-          {unreadCount > 0 && (
-            <Badge 
-              variant="destructive" 
-              className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
-              data-testid="badge-unread-count"
-            >
-              {unreadCount}
-            </Badge>
-          )}
-        </Button>
-      </PopoverTrigger>
+    <div className="flex items-center gap-2">
+      {showCountInHeader && displayCount > 0 && (
+        <></>
+        // <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-destructive/10 border border-destructive/20">
+        //   <span className="text-sm font-semibold text-destructive">إشعارات غير مقروءة:</span>
+        //   <Badge 
+        //     variant="destructive" 
+        //     className="h-6 min-w-6 flex items-center justify-center px-2 text-xs font-bold"
+        //     data-testid="badge-unread-count-header-text"
+        //   >
+        //     {displayCount > 99 ? '99+' : displayCount}
+        //   </Badge>
+        // </div>
+      )}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
+            <Bell className={`w-5 h-5 ${displayCount > 0 ? 'text-destructive' : ''}`} />
+            {displayCount > 0 && (
+              <Badge 
+                variant="destructive" 
+                className="absolute -top-0.5 -right-0.5 h-6 min-w-6 flex items-center justify-center px-1.5 text-xs font-bold shadow-lg z-10 border-2 border-background"
+                data-testid="badge-unread-count"
+                style={{ 
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  lineHeight: '1',
+                }}
+              >
+                {displayCount > 99 ? '99+' : displayCount}
+              </Badge>
+            )}
+          </Button>
+        </PopoverTrigger>
       <PopoverContent className="w-96 p-0" align="end">
         <div className="flex items-center justify-between p-4 border-b">
-          <h3 className="font-semibold">Notifications</h3>
-          {unreadCount > 0 && (
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold">Notifications</h3>
+            {displayCount > 0 && (
+              <Badge 
+                variant="destructive" 
+                className="h-6 min-w-6 flex items-center justify-center px-2 text-xs font-bold"
+                data-testid="badge-unread-count-header"
+              >
+                {displayCount > 99 ? '99+' : displayCount}
+              </Badge>
+            )}
+          </div>
+          {displayCount > 0 && (
             <Button 
               variant="ghost" 
               size="sm" 
@@ -178,5 +246,6 @@ export function NotificationBell() {
         </ScrollArea>
       </PopoverContent>
     </Popover>
+    </div>
   );
 }
