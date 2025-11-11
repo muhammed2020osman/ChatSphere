@@ -44,8 +44,8 @@ const config = {
   dateStrings: false,
   supportBigNumbers: true,
   bigNumberStrings: true,
-  // Debug mode for troubleshooting
-  debug: process.env.NODE_ENV === 'development' ? ['ComProtocol'] : false,
+  // Debug mode for troubleshooting - disabled to reduce console noise
+  debug: false,
   // Additional connection options that might help with permissions
   authPlugins: {
     mysql_native_password: () => () => Buffer.from(url.password)
@@ -69,10 +69,13 @@ export const pool = mysql.createPool(config);
 // Test connection on startup
 pool.getConnection()
   .then((connection) => {
-    console.log('✅ MySQL database connected successfully');
+    if (process.env.DEBUG_DB === 'true') {
+      console.log('✅ MySQL database connected successfully');
+    }
     connection.release();
   })
   .catch((error) => {
+    // Always log connection errors as they are critical
     console.error('❌ Failed to connect to MySQL database:', error.message);
     console.error('Error code:', error.code);
     console.error('Please check your DATABASE_URL and MySQL server settings');
@@ -85,14 +88,20 @@ export const db = drizzle(pool, { schema, mode: "default" });
 // Function to initialize database tables and data
 export async function initializeDatabase() {
   try {
-    console.log('🔄 Initializing database tables and data...');
+    if (process.env.DEBUG_DB === 'true') {
+      console.log('🔄 Initializing database tables and data...');
+    }
     
     // Test connection first
     const connection = await pool.getConnection();
-    console.log('✅ Database connection established');
+    if (process.env.DEBUG_DB === 'true') {
+      console.log('✅ Database connection established');
+    }
     
     // Create tables if they don't exist using raw SQL
-    console.log('📋 Creating tables if they don\'t exist...');
+    if (process.env.DEBUG_DB === 'true') {
+      console.log('📋 Creating tables if they don\'t exist...');
+    }
     
     // Create sessions table
     await connection.execute(`
@@ -541,7 +550,9 @@ export async function initializeDatabase() {
       )
     `);
     
-    console.log('✅ Tables created successfully');
+    if (process.env.DEBUG_DB === 'true') {
+      console.log('✅ Tables created successfully');
+    }
     
     // Add initial disciplines if they don't exist
     try {
@@ -549,7 +560,9 @@ export async function initializeDatabase() {
       const count = (disciplines as any)[0]?.count || 0;
       
       if (count === 0) {
-        console.log('📝 Adding initial disciplines...');
+        if (process.env.DEBUG_DB === 'true') {
+          console.log('📝 Adding initial disciplines...');
+        }
         await connection.execute(`
           INSERT INTO disciplines (name, description, code, color, created_at) VALUES
           ('Architecture', 'Architectural drawings', 'ARCH', '#3B82F6', NOW()),
@@ -558,12 +571,15 @@ export async function initializeDatabase() {
           ('Civil', 'Civil engineering', 'CIV', '#8B5CF6', NOW()),
           ('Landscape', 'Landscape architecture', 'LAND', '#06B6D4', NOW())
         `);
-        console.log('✅ Initial disciplines added');
-      } else {
+        if (process.env.DEBUG_DB === 'true') {
+          console.log('✅ Initial disciplines added');
+        }
+      } else if (process.env.DEBUG_DB === 'true') {
         console.log(`✅ Disciplines already exist (${count} records)`);
       }
     } catch (error) {
-      console.log('⚠️ Error adding disciplines:', error instanceof Error ? error.message : 'Unknown error');
+      // Always log errors
+      console.error('⚠️ Error adding disciplines:', error instanceof Error ? error.message : 'Unknown error');
     }
     
     // Add initial floors if they don't exist
@@ -572,7 +588,9 @@ export async function initializeDatabase() {
       const count = (floors as any)[0]?.count || 0;
       
       if (count === 0) {
-        console.log('📝 Adding initial floors...');
+        if (process.env.DEBUG_DB === 'true') {
+          console.log('📝 Adding initial floors...');
+        }
         await connection.execute(`
           INSERT INTO floors (name, level, description, project_id, sort_order, created_at) VALUES
           ('Ground Floor', '0', 'Ground level', NULL, '1', NOW()),
@@ -582,16 +600,21 @@ export async function initializeDatabase() {
           ('Basement', '-1', 'Basement level', NULL, '0', NOW()),
           ('Roof', 'R', 'Roof level', NULL, '5', NOW())
         `);
-        console.log('✅ Initial floors added');
-      } else {
+        if (process.env.DEBUG_DB === 'true') {
+          console.log('✅ Initial floors added');
+        }
+      } else if (process.env.DEBUG_DB === 'true') {
         console.log(`✅ Floors already exist (${count} records)`);
       }
     } catch (error) {
-      console.log('⚠️ Error adding floors:', error instanceof Error ? error.message : 'Unknown error');
+      // Always log errors
+      console.error('⚠️ Error adding floors:', error instanceof Error ? error.message : 'Unknown error');
     }
     
     connection.release();
-    console.log('✅ Database initialization completed');
+    if (process.env.DEBUG_DB === 'true') {
+      console.log('✅ Database initialization completed');
+    }
     
   } catch (error) {
     console.error('❌ Database initialization failed:', error instanceof Error ? error.message : 'Unknown error');

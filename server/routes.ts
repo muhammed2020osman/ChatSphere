@@ -339,25 +339,28 @@ const upload = multer({
     fileSize: 50 * 1024 * 1024, // 50MB max file size
   },
   fileFilter: (req, file, cb) => {
-    console.log('Multer fileFilter - file:', file.originalname, 'mimetype:', file.mimetype);
     // Accept only PDF, PNG, JPG files
     const allowedMimes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
     if (allowedMimes.includes(file.mimetype)) {
-      console.log('File accepted by multer');
       cb(null, true);
     } else {
-      console.log('File rejected by multer - invalid type:', file.mimetype);
+      // Only log rejection errors
+      if (process.env.DEBUG_UPLOADS === 'true') {
+        console.log('File rejected by multer - invalid type:', file.mimetype);
+      }
       cb(new Error('Invalid file type. Only PDF, PNG, and JPG files are allowed.'));
     }
   },
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Debug middleware for API routes
-  app.use('/api', (req, res, next) => {
-    console.log(`[API Route] ${req.method} ${req.path} - Original URL: ${req.originalUrl}`);
-    next();
-  });
+  // Debug middleware for API routes (only in debug mode)
+  if (process.env.DEBUG_API_ROUTES === 'true') {
+    app.use('/api', (req, res, next) => {
+      console.log(`[API Route] ${req.method} ${req.path} - Original URL: ${req.originalUrl}`);
+      next();
+    });
+  }
   
   // Tenant resolver middleware - Must be before auth
   const { tenantResolver } = await import('./middleware/tenantResolver');
@@ -1521,12 +1524,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const companyId = (req.user as any)?.companyId || req.companyId;
       const otherUserId = req.params.userId;
       
-      console.log('[GET /api/direct-messages] Fetching messages:', {
-        currentUserId,
-        otherUserId,
-        companyId,
-      });
-      
       const messages = await storage.getDirectMessages(currentUserId, otherUserId);
       
       // Get recipient info for proper display
@@ -1546,8 +1543,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       });
       
-      console.log('[GET /api/direct-messages] Returning', messagesWithUsers.length, 'messages');
-      
       res.json(messagesWithUsers);
     } catch (error) {
       console.error("Error fetching direct messages:", error);
@@ -1563,24 +1558,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Company ID is required' });
       }
       
-      console.log('[POST /api/direct-messages] Request received:', {
-        userId,
-        companyId,
-        body: req.body,
-      });
-      
       const userIdAsNumber = getUserIdAsNumber(userId);
       const parsed = insertDirectMessageSchema.parse({
         ...req.body,
         fromUserId: userIdAsNumber,
         companyId: companyId, // Ensure companyId is included
-      });
-      
-      console.log('[POST /api/direct-messages] Parsed data:', {
-        fromUserId: parsed.fromUserId,
-        toUserId: parsed.toUserId,
-        companyId: parsed.companyId,
-        content: parsed.content ? parsed.content.substring(0, 50) + '...' : '(empty)',
       });
       
       // Explicitly remove id to ensure it's not passed
@@ -1593,11 +1575,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const dm = await storage.createDirectMessage(data);
       
-      console.log('[POST /api/direct-messages] Direct message created:', dm.id);
+      // Convert toUserId to number and string formats
+      const recipientUserIdAsNumber = typeof data.toUserId === 'string' 
+        ? getUserIdAsNumber(data.toUserId) 
+        : data.toUserId;
+      
+      // Convert toUserId to string format for clients.get (e.g., "auth:1")
+      const recipientUserIdString = typeof data.toUserId === 'string' 
+        ? data.toUserId 
+        : `auth:${data.toUserId}`;
       
       // Get user info for the message
       const sender = await storage.getUser(userId, companyId);
-      const recipient = await storage.getUser(data.toUserId, companyId);
+      const recipient = await storage.getUser(recipientUserIdString, companyId);
       
       if (!sender) {
         console.error('[POST /api/direct-messages] Sender not found:', userId);
@@ -1605,21 +1595,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (!recipient) {
-        console.error('[POST /api/direct-messages] Recipient not found:', data.toUserId);
+        console.error('[POST /api/direct-messages] Recipient not found:', {
+          toUserId: data.toUserId,
+          recipientUserIdAsNumber,
+          recipientUserIdString,
+        });
         return res.status(404).json({ message: 'Recipient not found' });
       }
       
       // Create notification for the recipient
       try {
-        const recipientUserIdAsNumber = typeof data.toUserId === 'string' 
-          ? getUserIdAsNumber(data.toUserId) 
-          : data.toUserId;
-        
-        // Convert toUserId to string format for clients.get (e.g., "auth:1")
-        const recipientUserIdString = typeof data.toUserId === 'string' 
-          ? data.toUserId 
-          : `auth:${data.toUserId}`;
-        
         await storage.createNotification({
           userId: recipientUserIdAsNumber,
           companyId,
@@ -1691,21 +1676,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       };
       
-      console.log('[POST /api/direct-messages] Sending response:', {
-        id: responseData.id,
-        fromUserId: responseData.fromUserId,
-        toUserId: responseData.toUserId,
-        senderId: responseData.sender?.id,
-        recipientId: responseData.recipient?.id,
-      });
-      
       res.json(responseData);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid message data", errors: error.errors });
       }
       console.error("Error creating direct message:", error);
-      res.status(500).json({ message: "Failed to create direct message" });
+      // Log more details in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Error details:", {
+          message: (error as any)?.message,
+          stack: (error as any)?.stack,
+          code: (error as any)?.code,
+          sqlState: (error as any)?.sqlState,
+          sqlMessage: (error as any)?.sqlMessage,
+        });
+      }
+      res.status(500).json({ 
+        message: "Failed to create direct message",
+        ...(process.env.NODE_ENV === 'development' && { 
+          error: (error as any)?.message,
+          code: (error as any)?.code 
+        })
+      });
     }
   });
 

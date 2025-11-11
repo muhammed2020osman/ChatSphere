@@ -249,21 +249,23 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  // ALWAYS log session info for debugging (critical for production issues)
-  console.log('isAuthenticated - Session check:', {
-    hasSession: !!req.session,
-    hasSessionId: !!req.sessionID,
-    sessionID: req.sessionID,
-    sessionUserId: req.session?.userId,
-    sessionUserIdType: typeof req.session?.userId,
-    cookies: req.headers.cookie ? 'present' : 'missing',
-    cookieHeader: req.headers.cookie?.substring(0, 200), // First 200 chars
-    cookieName: req.headers.cookie?.includes('sid') ? 'sid' : 'none',
-    hasAuthHeader: !!req.headers.authorization,
-    path: req.path,
-    hostname: req.hostname,
-    origin: req.headers.origin,
-  });
+  // Only log session info in debug mode
+  if (process.env.DEBUG_AUTH === 'true') {
+    console.log('isAuthenticated - Session check:', {
+      hasSession: !!req.session,
+      hasSessionId: !!req.sessionID,
+      sessionID: req.sessionID,
+      sessionUserId: req.session?.userId,
+      sessionUserIdType: typeof req.session?.userId,
+      cookies: req.headers.cookie ? 'present' : 'missing',
+      cookieHeader: req.headers.cookie?.substring(0, 200), // First 200 chars
+      cookieName: req.headers.cookie?.includes('sid') ? 'sid' : 'none',
+      hasAuthHeader: !!req.headers.authorization,
+      path: req.path,
+      hostname: req.hostname,
+      origin: req.headers.origin,
+    });
+  }
 
   // Prefer JWT token from Authorization header
   const authHeader = req.headers.authorization;
@@ -298,12 +300,14 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
           },
           companyId: payload.companyId,
         } as any;
-        console.log('isAuthenticated - JWT token authenticated successfully:', {
-          userId: payload.userId,
-          email: payload.email,
-          companyId: payload.companyId,
-          mappedSub: req.user.claims.sub,
-        });
+        if (process.env.DEBUG_AUTH === 'true') {
+          console.log('isAuthenticated - JWT token authenticated successfully:', {
+            userId: payload.userId,
+            email: payload.email,
+            companyId: payload.companyId,
+            mappedSub: req.user.claims.sub,
+          });
+        }
         return next();
       } else {
         console.error('Invalid JWT token provided');
@@ -326,11 +330,13 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
           profile_image_url: null,
         },
       } as any;
-      console.log('isAuthenticated - Session authenticated successfully:', {
-        sessionUserId: userId,
-        userIdType: typeof userId,
-        mappedSub: req.user.claims.sub,
-      });
+      if (process.env.DEBUG_AUTH === 'true') {
+        console.log('isAuthenticated - Session authenticated successfully:', {
+          sessionUserId: userId,
+          userIdType: typeof userId,
+          mappedSub: req.user.claims.sub,
+        });
+      }
       return next();
     } catch (error) {
       console.error('Error mapping session userId to user:', error);

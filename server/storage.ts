@@ -837,12 +837,14 @@ export class DatabaseStorage implements IStorage {
     const userId1Num = this.getUserIdAsNumber(userId1);
     const userId2Num = this.getUserIdAsNumber(userId2);
     
-    console.log('[getDirectMessages] Fetching messages between:', {
-      userId1,
-      userId1Num,
-      userId2,
-      userId2Num,
-    });
+    if (process.env.NODE_ENV === 'development' && process.env.DEBUG_DIRECT_MESSAGES === 'true') {
+      console.log('[getDirectMessages] Fetching messages between:', {
+        userId1,
+        userId1Num,
+        userId2,
+        userId2Num,
+      });
+    }
     
     const result = await db
       .select({
@@ -859,7 +861,9 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(asc(directMessages.createdAt));
 
-    console.log('[getDirectMessages] Found', result.length, 'messages');
+    if (process.env.NODE_ENV === 'development' && process.env.DEBUG_DIRECT_MESSAGES === 'true') {
+      console.log('[getDirectMessages] Found', result.length, 'messages');
+    }
     
     return result.map(r => ({
       ...r.dm,
@@ -876,13 +880,15 @@ export class DatabaseStorage implements IStorage {
       throw new Error('companyId is required for direct messages');
     }
     
-    // Log the data being inserted for debugging
-    console.log('[createDirectMessage] Creating direct message with data:', {
-      fromUserId: dataWithoutId.fromUserId,
-      toUserId: dataWithoutId.toUserId,
-      companyId: dataWithoutId.companyId,
-      content: dataWithoutId.content ? dataWithoutId.content.substring(0, 50) + '...' : '(empty)',
-    });
+    // Log the data being inserted for debugging (only in development)
+    if (process.env.NODE_ENV === 'development' && process.env.DEBUG_DIRECT_MESSAGES === 'true') {
+      console.log('[createDirectMessage] Creating direct message with data:', {
+        fromUserId: dataWithoutId.fromUserId,
+        toUserId: dataWithoutId.toUserId,
+        companyId: dataWithoutId.companyId,
+        content: dataWithoutId.content ? dataWithoutId.content.substring(0, 50) + '...' : '(empty)',
+      });
+    }
     
     try {
       await db.insert(directMessages).values(dataWithoutId);
@@ -902,7 +908,9 @@ export class DatabaseStorage implements IStorage {
         throw new Error('Failed to create direct message - no result returned');
       }
       
-      console.log('[createDirectMessage] Direct message created successfully:', result[0].id);
+      if (process.env.NODE_ENV === 'development' && process.env.DEBUG_DIRECT_MESSAGES === 'true') {
+        console.log('[createDirectMessage] Direct message created successfully:', result[0].id);
+      }
       return result[0];
     } catch (error: any) {
       console.error('[createDirectMessage] Error creating direct message:', error);

@@ -49,12 +49,10 @@ export async function setupVite(app: Express, server: Server) {
     // CRITICAL: Check path BEFORE passing to vite.middlewares
     // vite.middlewares has its own catch-all that will return HTML for any unmatched route
     if (req.path && req.path.startsWith('/api/')) {
-      console.log(`[Vite Wrapper] BLOCKING Vite for API route: ${req.method} ${req.path}`);
       // Don't call vite.middlewares at all for API routes
       return next();
     }
     
-    console.log(`[Vite Wrapper] Allowing Vite for: ${req.method} ${req.path}`);
     // For non-API routes, call the original vite.middlewares
     return originalMiddleware(req, res, next);
   };

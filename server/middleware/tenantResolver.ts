@@ -68,13 +68,19 @@ export async function tenantResolver(req: Request, res: Response, next: NextFunc
     // Set companyId on request for use in routes
     if (companyId) {
       req.companyId = companyId;
-      console.log('Tenant resolved:', { companyId, companyName: req.company?.name });
+      // Only log in debug mode
+      if (process.env.DEBUG_TENANT === 'true') {
+        console.log('Tenant resolved:', { companyId, companyName: req.company?.name });
+      }
     } else {
-      console.warn('No tenant (company) resolved from request:', {
-        hostname: req.hostname,
-        headers: { 'x-company-id': req.headers['x-company-id'] },
-        path: req.path,
-      });
+      // Only log warnings for API routes or in debug mode
+      if (req.path.startsWith('/api/') && process.env.DEBUG_TENANT === 'true') {
+        console.warn('No tenant (company) resolved from request:', {
+          hostname: req.hostname,
+          headers: { 'x-company-id': req.headers['x-company-id'] },
+          path: req.path,
+        });
+      }
     }
 
     next();
