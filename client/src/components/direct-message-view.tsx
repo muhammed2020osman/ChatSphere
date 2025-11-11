@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import type { DirectMessageWithUser, User } from "@shared/schema";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -12,6 +12,7 @@ import { getUserInitials, getUserName } from "@/lib/utils";
 export function DirectMessageView() {
   const { userId } = useParams();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
 
   const { data: recipient, isLoading: recipientLoading } = useQuery<User>({
     queryKey: [`/api/users/${userId}`],
@@ -23,6 +24,32 @@ export function DirectMessageView() {
     enabled: !!userId,
     refetchInterval: 3000,
   });
+
+  const markAsReadMutation = useMutation({
+    mutationFn: async (fromUserId: string) => {
+      const response = await fetch(`/api/direct-messages/${fromUserId}/mark-read`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) {
+        throw new Error('Failed to mark notifications as read');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      // Invalidate notifications query to refresh the unread count
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/direct-messages/unread-counts"] });
+    },
+  });
+
+  useEffect(() => {
+    if (userId) {
+      markAsReadMutation.mutate(userId);
+    }
+  }, [userId]);
 
   useEffect(() => {
     if (scrollRef.current) {

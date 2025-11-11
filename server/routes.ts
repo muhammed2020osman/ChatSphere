@@ -996,6 +996,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch('/api/channels/:id/mark-read', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      const channelId = parseInt(req.params.id, 10);
+      
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+      
+      if (isNaN(channelId)) {
+        return res.status(400).json({ message: 'Invalid channel ID' });
+      }
+      
+      await storage.markChannelNotificationsAsRead(userId, channelId, companyId);
+      res.json({ message: "Channel notifications marked as read" });
+    } catch (error) {
+      console.error("Error marking channel notifications as read:", error);
+      res.status(500).json({ message: "Failed to mark channel notifications as read" });
+    }
+  });
+
   app.post('/api/channels', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -1551,6 +1573,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching direct messages:", error);
       res.status(500).json({ message: "Failed to fetch direct messages" });
+    }
+  });
+
+  app.get('/api/direct-messages/unread-counts', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+      
+      const counts = await storage.getUnreadDirectMessagesCounts(userId, companyId);
+      // Convert number keys to string keys for JSON response
+      const countsWithStringKeys: Record<string, number> = {};
+      for (const [key, value] of Object.entries(counts)) {
+        countsWithStringKeys[String(key)] = value;
+      }
+      res.json(countsWithStringKeys);
+    } catch (error) {
+      console.error("Error fetching unread direct messages counts:", error);
+      res.status(500).json({ message: "Failed to fetch unread direct messages counts" });
+    }
+  });
+
+  app.patch('/api/direct-messages/:userId/mark-read', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUserId = req.user.claims.sub;
+      const companyId = (req.user as any)?.companyId || req.companyId;
+      const fromUserId = req.params.userId;
+      
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+      
+      await storage.markDirectMessageNotificationsAsRead(currentUserId, fromUserId, companyId);
+      res.json({ message: "Direct message notifications marked as read" });
+    } catch (error) {
+      console.error("Error marking direct message notifications as read:", error);
+      res.status(500).json({ message: "Failed to mark direct message notifications as read" });
     }
   });
 

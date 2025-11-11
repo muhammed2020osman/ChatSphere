@@ -54,16 +54,23 @@ export function NotificationBell({ showCountInHeader = false }: NotificationBell
   // Debug logging
   useEffect(() => {
     if (notifications.length > 0) {
-      console.log('[NotificationBell] Unread count debug:', {
+      const directMessageNotifications = notifications.filter(n => n.type === 'direct_message');
+      const groupedDirectMessages = directMessageNotifications.map(n => {
+        const nWithCount = n as any;
+        return {
+          id: n.id,
+          fromUserId: n.fromUserId,
+          unreadCount: nWithCount.unreadCount,
+          isRead: n.isRead,
+        };
+      });
+      console.log('[NotificationBell] Direct message notifications debug:', {
+        totalNotifications: notifications.length,
+        directMessageCount: directMessageNotifications.length,
+        groupedDirectMessages,
         unreadData,
         unreadCountFromNotifications,
         finalUnreadCount: unreadCount,
-        notificationsLength: notifications.length,
-        unreadNotifications: notifications.filter(n => !n.isRead || n.isRead === null || n.isRead === undefined).map(n => ({ 
-          id: n.id, 
-          isRead: n.isRead,
-          type: typeof n.isRead 
-        })),
       });
     }
   }, [unreadData, notifications, unreadCount, unreadCountFromNotifications]);
@@ -94,6 +101,101 @@ export function NotificationBell({ showCountInHeader = false }: NotificationBell
     },
   });
 
+  // Helper function to group notifications by channel and direct messages by sender
+  const groupNotificationsByChannel = (notifications: NotificationWithUsers[]) => {
+    const channelGroups: Map<number, NotificationWithUsers[]> = new Map();
+    const directMessageGroups: Map<number, NotificationWithUsers[]> = new Map();
+    const otherNotifications: NotificationWithUsers[] = [];
+    
+    notifications.forEach(notification => {
+      // Group channel-related notifications by channelId
+      if (notification.channelId && (notification.type === 'channel_message' || notification.type === 'mention')) {
+        const channelId = notification.channelId;
+        if (!channelGroups.has(channelId)) {
+          channelGroups.set(channelId, []);
+        }
+        channelGroups.get(channelId)!.push(notification);
+      } 
+      // Group direct_message notifications by fromUserId
+      else if (notification.type === 'direct_message' && notification.fromUserId) {
+        const fromUserId = notification.fromUserId;
+        if (!directMessageGroups.has(fromUserId)) {
+          directMessageGroups.set(fromUserId, []);
+        }
+        directMessageGroups.get(fromUserId)!.push(notification);
+      } 
+      else {
+        // For other notifications, keep them separate
+        otherNotifications.push(notification);
+      }
+    });
+    
+    // Convert to array of grouped notifications
+    const result: (NotificationWithUsers & { unreadCount?: number })[] = [];
+    
+    // Process channel groups
+    channelGroups.forEach((group, channelId) => {
+      if (group.length > 0) {
+        // For channel notifications, take the most recent one and add count
+        const sorted = [...group].sort((a, b) => 
+          new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
+        );
+        const latest = sorted[0];
+        const unreadCount = sorted.filter(n => !n.isRead || n.isRead === null || n.isRead === undefined).length;
+        // Only add unreadCount if there are multiple unread notifications
+        if (unreadCount > 1) {
+          result.push({ ...latest, unreadCount });
+        } else {
+          result.push(latest);
+        }
+      }
+    });
+    
+    // Process direct message groups
+    directMessageGroups.forEach((group, fromUserId) => {
+      if (group.length > 0) {
+        // Sort by creation date (most recent first)
+        const sorted = [...group].sort((a, b) => 
+          new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
+        );
+        const latest = sorted[0];
+        
+        // Check if any notification has unreadCount from server
+        const notificationWithCount = sorted.find(n => {
+          const nWithCount = n as any;
+          return 'unreadCount' in nWithCount && 
+                 nWithCount.unreadCount !== undefined && 
+                 nWithCount.unreadCount !== null;
+        });
+        
+        let unreadCount: number;
+        if (notificationWithCount) {
+          // Use unreadCount from server if available
+          const nWithCount = notificationWithCount as any;
+          unreadCount = nWithCount.unreadCount as number;
+        } else {
+          // Calculate unreadCount from all unread notifications in the group
+          unreadCount = sorted.filter(n => !n.isRead || n.isRead === null || n.isRead === undefined).length;
+        }
+        
+        // Always add unreadCount for direct messages if there are unread notifications
+        if (unreadCount > 0) {
+          result.push({ ...latest, unreadCount });
+        } else {
+          result.push(latest);
+        }
+      }
+    });
+    
+    // Add other notifications individually
+    result.push(...otherNotifications);
+    
+    // Sort by creation date (most recent first)
+    return result.sort((a, b) => 
+      new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
+    );
+  };
+
   // Helper function to get notification message based on type
   const getNotificationMessage = (notification: NotificationWithUsers & { unreadCount?: number }) => {
     const fromUserName = notification.fromUser?.name || notification.fromUser?.email || 'Someone';
@@ -102,11 +204,11 @@ export function NotificationBell({ showCountInHeader = false }: NotificationBell
     switch (notification.type) {
       case 'direct_message':
         // Show unread count if available (grouped notification)
-        if (notification.unreadCount && notification.unreadCount > 1) {
+        if (notification.unreadCount && notification.unreadCount > 0) {
           return {
             title: 'Direct Message',
-            description: `${fromUserName} sent you ${notification.unreadCount} messages`,
-            displayText: `${fromUserName} sent you ${notification.unreadCount} messages`,
+            description: `${fromUserName} sent you ${notification.unreadCount} ${notification.unreadCount === 1 ? 'message' : 'messages'}`,
+            displayText: `${fromUserName} sent you ${notification.unreadCount} ${notification.unreadCount === 1 ? 'message' : 'messages'}`,
           };
         } else {
           return {
@@ -122,17 +224,35 @@ export function NotificationBell({ showCountInHeader = false }: NotificationBell
           displayText: `${fromUserName} added you to #${channelName}`,
         };
       case 'mention':
-        return {
-          title: 'Mentioned',
-          description: `${fromUserName} mentioned you in #${channelName}`,
-          displayText: `${fromUserName} mentioned you in #${channelName}`,
-        };
+        // Show count if there are multiple mentions from the same channel
+        if (notification.unreadCount && notification.unreadCount > 1) {
+          return {
+            title: 'Mentioned',
+            description: `You were mentioned ${notification.unreadCount} times in #${channelName}`,
+            displayText: `${notification.unreadCount} mentions in #${channelName}`,
+          };
+        } else {
+          return {
+            title: 'Mentioned',
+            description: `${fromUserName} mentioned you in #${channelName}`,
+            displayText: `${fromUserName} mentioned you in #${channelName}`,
+          };
+        }
       case 'channel_message':
-        return {
-          title: 'New Message',
-          description: `${fromUserName} sent a message in #${channelName}`,
-          displayText: `${fromUserName} sent a message in #${channelName}`,
-        };
+        // Show count if there are multiple messages from the same channel
+        if (notification.unreadCount && notification.unreadCount > 1) {
+          return {
+            title: 'New Messages',
+            description: `${notification.unreadCount} new messages in #${channelName}`,
+            displayText: `${notification.unreadCount} new messages in #${channelName}`,
+          };
+        } else {
+          return {
+            title: 'New Message',
+            description: `${fromUserName} sent a message in #${channelName}`,
+            displayText: `${fromUserName} sent a message in #${channelName}`,
+          };
+        }
       default:
         return {
           title: 'Notification',
@@ -195,10 +315,24 @@ export function NotificationBell({ showCountInHeader = false }: NotificationBell
     return null;
   };
 
-  const handleNotificationClick = (notification: NotificationWithUsers) => {
-    // Mark as read if not already read
-    if (!notification.isRead) {
-      markAsReadMutation.mutate(String(notification.id));
+  const handleNotificationClick = (notification: NotificationWithUsers & { unreadCount?: number }) => {
+    // If this is a grouped channel notification, mark all notifications from the same channel as read
+    if (notification.channelId && notification.unreadCount && notification.unreadCount > 1) {
+      // Find all unread notifications from the same channel
+      const channelNotifications = notifications.filter(n => 
+        n.channelId === notification.channelId && 
+        (n.isRead === false || n.isRead === null || n.isRead === undefined)
+      );
+      
+      // Mark all as read
+      channelNotifications.forEach(n => {
+        markAsReadMutation.mutate(String(n.id));
+      });
+    } else {
+      // Mark single notification as read if not already read
+      if (!notification.isRead) {
+        markAsReadMutation.mutate(String(notification.id));
+      }
     }
     
     // Close popover
@@ -280,7 +414,7 @@ export function NotificationBell({ showCountInHeader = false }: NotificationBell
             </div>
           ) : (
             <div className="divide-y">
-              {notifications.map((notification) => (
+              {groupNotificationsByChannel(notifications).map((notification) => (
                 <div
                   key={notification.id}
                   className={`p-4 hover-elevate cursor-pointer transition-colors ${
@@ -295,12 +429,20 @@ export function NotificationBell({ showCountInHeader = false }: NotificationBell
                         <p className="text-sm">
                           {getNotificationMessage(notification).displayText}
                         </p>
-                        {(notification as any).unreadCount && (notification as any).unreadCount > 1 && (
+                        {notification.type === 'direct_message' && notification.unreadCount && notification.unreadCount > 0 && (
                           <Badge 
                             variant="secondary" 
                             className="h-5 min-w-5 flex items-center justify-center px-1.5 text-xs font-semibold"
                           >
-                            {(notification as any).unreadCount}
+                            {notification.unreadCount}
+                          </Badge>
+                        )}
+                        {notification.type !== 'direct_message' && notification.unreadCount && notification.unreadCount > 1 && (
+                          <Badge 
+                            variant="secondary" 
+                            className="h-5 min-w-5 flex items-center justify-center px-1.5 text-xs font-semibold"
+                          >
+                            {notification.unreadCount}
                           </Badge>
                         )}
                       </div>

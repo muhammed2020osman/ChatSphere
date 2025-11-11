@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import type { Channel, MessageWithUser, User } from "@shared/schema";
 import { MessageItem } from "./message-item";
@@ -17,6 +17,7 @@ export function ChannelView() {
   const messageComposerRef = useRef<MessageComposerRef>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   // Get messageId from URL query parameter
   const urlParams = new URLSearchParams(window.location.search);
@@ -44,6 +45,32 @@ export function ChannelView() {
     enabled: !!id && isChannelRoute,
     refetchInterval: isChannelRoute ? 3000 : false,
   });
+
+  const markAsReadMutation = useMutation({
+    mutationFn: async (channelId: string) => {
+      const response = await fetch(`/api/channels/${channelId}/mark-read`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) {
+        throw new Error('Failed to mark notifications as read');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      // Invalidate notifications query to refresh the unread count
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/mentions/count"] });
+    },
+  });
+
+  useEffect(() => {
+    if (id) {
+      markAsReadMutation.mutate(id);
+    }
+  }, [id]);
 
 
   // Scroll to bottom on new messages (only if no target message)

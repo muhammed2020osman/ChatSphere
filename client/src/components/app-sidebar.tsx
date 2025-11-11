@@ -73,6 +73,13 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
   const threadsCount = threadsCountData?.count || 0;
   const starredCount = starredCountData?.count || 0;
 
+  // Fetch unread direct messages counts
+  const { data: unreadDmCounts } = useQuery<Record<string, number>>({
+    queryKey: ["/api/direct-messages/unread-counts"],
+    enabled: !!user,
+    refetchInterval: 10000, // Refetch every 10 seconds
+  });
+
   const getUserInitials = (u: User | undefined) => {
     if (!u) return "?";
     if (u.name ) {
@@ -333,19 +340,29 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
                         data-testid={`link-dm-${dmUser.id}`}
                         tooltip={getUserName(dmUser)}
                       >
-                        <Link href={`/dm/${dmUser.id}`}>
-                          <div className="relative">
-                            <Avatar className="w-5 h-5">
-                              <AvatarImage src={dmUser.profileImageUrl || undefined} />
-                              <AvatarFallback className="text-xs">
-                                {getUserInitials(dmUser)}
-                              </AvatarFallback>
-                            </Avatar>
-                            {dmUser.isOnline && (
-                              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-status-online rounded-full border-2 border-sidebar" />
-                            )}
+                        <Link href={`/dm/${dmUser.id}`} className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <div className="relative">
+                              <Avatar className="w-5 h-5">
+                                <AvatarImage src={dmUser.profileImageUrl || undefined} />
+                                <AvatarFallback className="text-xs">
+                                  {getUserInitials(dmUser)}
+                                </AvatarFallback>
+                              </Avatar>
+                              {dmUser.isOnline && (
+                                <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-status-online rounded-full border-2 border-sidebar" />
+                              )}
+                            </div>
+                            <span className="truncate">{getUserName(dmUser)}</span>
                           </div>
-                          <span className="truncate">{getUserName(dmUser)}</span>
+                          {unreadDmCounts && unreadDmCounts[String(dmUser.id)] > 0 && (
+                            <Badge 
+                              variant="destructive" 
+                              className="h-5 min-w-5 flex items-center justify-center px-1.5 text-xs font-semibold ml-2 flex-shrink-0"
+                            >
+                              {unreadDmCounts[String(dmUser.id)] > 99 ? '99+' : unreadDmCounts[String(dmUser.id)]}
+                            </Badge>
+                          )}
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

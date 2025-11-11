@@ -63,6 +63,7 @@ export interface IStorage {
   // Direct message operations
   getDirectMessages(userId1: string, userId2: string, companyId?: number): Promise<any[]>;
   createDirectMessage(dm: any): Promise<any>;
+  getUnreadDirectMessagesCounts(userId: string, companyId?: number): Promise<Record<number, number>>;
   
   // Reaction operations
   addReaction(reaction: any): Promise<any>;
@@ -83,6 +84,8 @@ export interface IStorage {
   getUserNotifications(userId: string): Promise<any[]>;
   markNotificationAsRead(notificationId: string): Promise<void>;
   markAllNotificationsAsRead(userId: string): Promise<void>;
+  markDirectMessageNotificationsAsRead(userId: string, fromUserId: string, companyId?: number): Promise<void>;
+  markChannelNotificationsAsRead(userId: string, channelId: number, companyId?: number): Promise<void>;
   getUnreadNotificationCount(userId: string): Promise<number>;
   
   // Message editing/deletion
@@ -945,6 +948,43 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async getUnreadDirectMessagesCounts(userId: string, companyId?: number): Promise<Record<number, number>> {
+    const userIdNum = this.getUserIdAsNumber(userId);
+    
+    let whereCondition: any = and(
+      eq(notifications.userId, userIdNum),
+      eq(notifications.type, 'direct_message'),
+      or(eq(notifications.isRead, false), sql`${notifications.isRead} IS NULL`)
+    );
+    
+    if (companyId) {
+      whereCondition = and(
+        eq(notifications.userId, userIdNum),
+        eq(notifications.type, 'direct_message'),
+        eq(notifications.companyId, companyId),
+        or(eq(notifications.isRead, false), sql`${notifications.isRead} IS NULL`)
+      );
+    }
+    
+    const result = await db
+      .select({
+        fromUserId: notifications.fromUserId,
+        count: sql<number>`count(*)`,
+      })
+      .from(notifications)
+      .where(whereCondition)
+      .groupBy(notifications.fromUserId);
+    
+    const counts: Record<number, number> = {};
+    for (const row of result) {
+      if (row.fromUserId !== null && row.fromUserId !== undefined) {
+        counts[row.fromUserId] = Number(row.count || 0);
+      }
+    }
+    
+    return counts;
+  }
+
   // Reaction operations
   async addReaction(reactionData: any): Promise<any> {
     const messageIdNum = typeof reactionData.messageId === 'string' ? parseInt(reactionData.messageId, 10) : reactionData.messageId;
@@ -1199,13 +1239,20 @@ export class DatabaseStorage implements IStorage {
     // Group direct_message notifications by sender (only show one per sender)
     const groupedNotifications: Map<number, any> = new Map();
     
-    for (const notification of directMessageNotifications) {
+    // Sort direct message notifications by createdAt (most recent first) to ensure we pick the latest
+    const sortedDirectMessages = [...directMessageNotifications].sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
+    
+    for (const notification of sortedDirectMessages) {
       const senderId = notification.fromUserId!;
       const unreadCount = unreadCountsBySender.get(senderId) || 0;
       
       // Only show notification if there are unread messages
+      // Use the most recent notification as the representative (since we sorted)
       if (unreadCount > 0 && !groupedNotifications.has(senderId)) {
-        // Use the most recent notification as the representative
         groupedNotifications.set(senderId, {
           ...notification,
           unreadCount,
@@ -1265,6 +1312,59 @@ export class DatabaseStorage implements IStorage {
       .update(notifications)
       .set({ isRead: true })
       .where(eq(notifications.userId, userIdNum));
+  }
+
+  async markDirectMessageNotificationsAsRead(userId: string, fromUserId: string, companyId?: number): Promise<void> {
+    const userIdNum = this.getUserIdAsNumber(userId);
+    const fromUserIdNum = this.getUserIdAsNumber(fromUserId);
+    
+    let whereCondition: any = and(
+      eq(notifications.userId, userIdNum),
+      eq(notifications.fromUserId, fromUserIdNum),
+      eq(notifications.type, 'direct_message'),
+      or(eq(notifications.isRead, false), sql`${notifications.isRead} IS NULL`)
+    );
+    
+    if (companyId) {
+      whereCondition = and(
+        eq(notifications.userId, userIdNum),
+        eq(notifications.fromUserId, fromUserIdNum),
+        eq(notifications.type, 'direct_message'),
+        eq(notifications.companyId, companyId),
+        or(eq(notifications.isRead, false), sql`${notifications.isRead} IS NULL`)
+      );
+    }
+    
+    await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(whereCondition);
+  }
+
+  async markChannelNotificationsAsRead(userId: string, channelId: number, companyId?: number): Promise<void> {
+    const userIdNum = this.getUserIdAsNumber(userId);
+    
+    let whereCondition: any = and(
+      eq(notifications.userId, userIdNum),
+      eq(notifications.channelId, channelId),
+      inArray(notifications.type, ['mention', 'channel_message', 'channel_added']),
+      or(eq(notifications.isRead, false), sql`${notifications.isRead} IS NULL`)
+    );
+    
+    if (companyId) {
+      whereCondition = and(
+        eq(notifications.userId, userIdNum),
+        eq(notifications.channelId, channelId),
+        eq(notifications.companyId, companyId),
+        inArray(notifications.type, ['mention', 'channel_message', 'channel_added']),
+        or(eq(notifications.isRead, false), sql`${notifications.isRead} IS NULL`)
+      );
+    }
+    
+    await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(whereCondition);
   }
 
   async getUnreadNotificationCount(userId: string): Promise<number> {
