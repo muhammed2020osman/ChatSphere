@@ -73,6 +73,160 @@ function findWebSocketClient(userId: number): { ws: WebSocket; userId: string; c
   return null;
 }
 
+// Helper function to send push notification to a user
+async function sendPushNotification(
+  userId: number,
+  notificationData: {
+    type: string;
+    fromUserId?: number;
+    content: string;
+    channelId?: number;
+    messageId?: number;
+    directMessageId?: number;
+    companyId: number;
+  }
+): Promise<void> {
+  try {
+    // Convert userId to string format for storage methods
+    const userIdString = `auth:${userId}`;
+    
+    // Get user's push subscriptions
+    const subscriptions = await storage.getPushSubscriptions(userIdString);
+    
+    if (subscriptions.length === 0) {
+      // No subscriptions, skip silently
+      return;
+    }
+
+    // Get sender information
+    let senderName = 'Someone';
+    if (notificationData.fromUserId) {
+      try {
+        const sender = await storage.getUser(`auth:${notificationData.fromUserId}`, notificationData.companyId);
+        if (sender) {
+          senderName = sender.name || sender.email || 'Someone';
+        }
+      } catch (error) {
+        console.error(`Error getting sender info for push notification:`, error);
+      }
+    }
+
+    // Get channel information if available
+    let channelName = '';
+    if (notificationData.channelId) {
+      try {
+        const channel = await storage.getChannel(notificationData.channelId, notificationData.companyId);
+        if (channel) {
+          channelName = channel.name || '';
+        }
+      } catch (error) {
+        console.error(`Error getting channel info for push notification:`, error);
+      }
+    }
+
+    // Build notification title and body based on type
+    let title = 'New notification';
+    let body = '';
+    let url = '/';
+
+    switch (notificationData.type) {
+      case 'mention':
+        title = `${senderName} mentioned you`;
+        body = notificationData.content ? notificationData.content.substring(0, 100) : '';
+        if (notificationData.channelId && notificationData.messageId) {
+          url = `/channel/${notificationData.channelId}?messageId=${notificationData.messageId}`;
+        } else if (notificationData.channelId) {
+          url = `/channel/${notificationData.channelId}`;
+        } else {
+          url = '/mentions';
+        }
+        break;
+      
+      case 'direct_message':
+        title = `${senderName} sent a message`;
+        body = notificationData.content ? notificationData.content.substring(0, 100) : '';
+        if (notificationData.fromUserId) {
+          url = `/dm/${notificationData.fromUserId}`;
+        }
+        break;
+      
+      case 'channel_message':
+        title = `${senderName} sent a message in #${channelName}`;
+        body = notificationData.content ? notificationData.content.substring(0, 100) : '';
+        if (notificationData.channelId && notificationData.messageId) {
+          url = `/channel/${notificationData.channelId}?messageId=${notificationData.messageId}`;
+        } else if (notificationData.channelId) {
+          url = `/channel/${notificationData.channelId}`;
+        }
+        break;
+      
+      case 'channel_added':
+        title = `${senderName} added you to #${channelName}`;
+        body = `You've been added to channel #${channelName}`;
+        if (notificationData.channelId) {
+          url = `/channel/${notificationData.channelId}`;
+        }
+        break;
+      
+      default:
+        title = 'New notification';
+        body = notificationData.content ? notificationData.content.substring(0, 100) : '';
+    }
+
+    // Import web-push dynamically
+    const webpush = await import('web-push');
+
+    // Get VAPID keys from environment
+    const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
+    const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+    const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
+
+    if (!vapidPublicKey || !vapidPrivateKey) {
+      console.warn('VAPID keys not configured, skipping push notification');
+      return;
+    }
+
+    // Set VAPID details
+    webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+
+    // Prepare notification payload
+    const payload = JSON.stringify({
+      title,
+      body,
+      icon: '/icons/icon-192x192.png',
+      badge: '/icons/icon-192x192.png',
+      data: {
+        url,
+        type: notificationData.type,
+        notificationId: notificationData.messageId || notificationData.directMessageId,
+        channelId: notificationData.channelId,
+        fromUserId: notificationData.fromUserId,
+      },
+    });
+
+    // Send notification to all subscriptions
+    const promises = subscriptions.map(async (subscription) => {
+      try {
+        await webpush.sendNotification(subscription, payload);
+      } catch (error: any) {
+        // If subscription is invalid, remove it
+        if (error.statusCode === 410 || error.statusCode === 404) {
+          console.log(`Removing invalid push subscription for user ${userId}`);
+          await storage.deletePushSubscription(userIdString, subscription.endpoint);
+        } else {
+          console.error(`Error sending push notification to subscription:`, error);
+        }
+      }
+    });
+
+    await Promise.allSettled(promises);
+    console.log(`Push notification sent to user ${userId} (${subscriptions.length} subscriptions)`);
+  } catch (error) {
+    // Don't throw - we don't want push notification failures to break the main flow
+    console.error(`Error sending push notification to user ${userId}:`, error);
+  }
+}
+
 // Helper function to create mention notifications
 async function createMentionNotifications(
   mentionedUserIds: number[],
@@ -128,6 +282,16 @@ async function createMentionNotifications(
       });
       
       console.log(`Notification created successfully for user ${mentionedUserId}`);
+      
+      // Send push notification
+      await sendPushNotification(mentionedUserId, {
+        type: 'mention',
+        fromUserId: senderUserId,
+        content: message.content || '',
+        channelId: message.channelId,
+        messageId: message.id,
+        companyId,
+      });
     } catch (error: any) {
       console.error(`Error creating notification for user ${mentionedUserId}:`, error);
       console.error(`Error details:`, {
@@ -1053,6 +1217,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isRead: false,
         });
         
+        // Send push notification
+        await sendPushNotification(memberUserIdAsNumber, {
+          type: 'channel_added',
+          fromUserId: userIdAsNumber,
+          content: `You were added to channel #${channel.name}`,
+          channelId: channel.id,
+          companyId,
+        });
+        
         // Send real-time notification to added user
         const addedUserClient = clients.get(memberUserId);
         if (addedUserClient?.ws.readyState === WebSocket.OPEN) {
@@ -1303,6 +1476,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
               content: message.content || '',
               isRead: false,
             });
+            
+            // Send push notification
+            await sendPushNotification(memberUserIdAsNumber, {
+              type: 'channel_message',
+              fromUserId: senderUserIdAsNumber,
+              content: message.content || '',
+              channelId: message.channelId,
+              messageId: message.id,
+              companyId,
+            });
           } catch (error) {
             console.error('Error creating channel_message notification:', error);
           }
@@ -1393,6 +1576,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           fromUserId: userIdAsNumber,
           content: dm.content || '',
           isRead: false,
+        });
+        
+        // Send push notification
+        await sendPushNotification(recipientUserIdAsNumber, {
+          type: 'direct_message',
+          fromUserId: userIdAsNumber,
+          content: dm.content || '',
+          directMessageId: dm.id,
+          companyId,
         });
         
         // Send real-time notification to recipient

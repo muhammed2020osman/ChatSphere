@@ -110,9 +110,16 @@ self.addEventListener('push', (event: PushEvent) => {
     icon: notificationData.icon || '/icons/icon-192x192.png',
     badge: notificationData.badge || '/icons/icon-192x192.png',
     data: notificationData.data || {},
-    tag: 'notification',
+    tag: notificationData.data?.type || 'notification',
     requireInteraction: false,
     renotify: true,
+    vibrate: [200, 100, 200], // Vibrate pattern for Android
+    silent: false,
+    timestamp: Date.now(),
+    // Android-specific options
+    ...(notificationData.data?.channelId && {
+      tag: `channel-${notificationData.data.channelId}`,
+    }),
   };
 
   event.waitUntil(
@@ -128,6 +135,7 @@ self.addEventListener('notificationclick', (event: NotificationEvent) => {
 
   const notificationData = event.notification.data || {};
   const urlToOpen = notificationData.url || '/';
+  const fullUrl = new URL(urlToOpen, self.location.origin).href;
 
   event.waitUntil(
     clients
@@ -136,15 +144,35 @@ self.addEventListener('notificationclick', (event: NotificationEvent) => {
         includeUncontrolled: true,
       })
       .then((clientList) => {
-        // Check if there's already a window/tab open with the target URL
+        // Check if there's already a window/tab open (for PWA, match any client)
         for (const client of clientList) {
-          if (client.url === urlToOpen && 'focus' in client) {
-            return client.focus();
+          // For PWA, focus any open window/tab from the same origin
+          const clientUrl = new URL(client.url);
+          if (clientUrl.origin === self.location.origin) {
+            // Focus the existing window
+            if ('focus' in client) {
+              client.focus();
+            }
+            // Use postMessage to navigate if client supports it
+            if ('postMessage' in client) {
+              client.postMessage({
+                type: 'navigate',
+                url: urlToOpen,
+              });
+            }
+            return;
           }
         }
         // If no existing window, open a new one
         if (clients.openWindow) {
-          return clients.openWindow(urlToOpen);
+          return clients.openWindow(fullUrl);
+        }
+      })
+      .catch((error) => {
+        console.error('[Service Worker] Error handling notification click:', error);
+        // Fallback: try to open the URL anyway
+        if (clients.openWindow) {
+          return clients.openWindow(fullUrl);
         }
       })
   );

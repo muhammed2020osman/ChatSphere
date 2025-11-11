@@ -20,6 +20,23 @@ import SheetViewer from "@/pages/sheet-viewer";
 import TicketsHub from "@/pages/tickets-hub";
 import { PWAInstallButton } from "@/components/pwa-install-button";
 
+// Component to handle service worker messages (navigation from notifications)
+function ServiceWorkerMessageHandler() {
+  const [, navigate] = useLocation();
+  
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'navigate') {
+          navigate(event.data.url);
+        }
+      });
+    }
+  }, [navigate]);
+  
+  return null;
+}
+
 function Router() {
   // Keep auth state available for components, but don't gate route definitions
   const { isAuthenticated, isLoading } = useAuth();
@@ -82,6 +99,7 @@ export default function App() {
           <ThemeProvider defaultTheme="dark">
             <TooltipProvider>
               <AccessCodeGate>
+                <ServiceWorkerMessageHandler />
                 <Router />
                 <Toaster />
                 <PWAInstallButton />
