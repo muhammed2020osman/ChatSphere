@@ -833,6 +833,17 @@ export class DatabaseStorage implements IStorage {
 
   // Direct message operations
   async getDirectMessages(userId1: string, userId2: string): Promise<any[]> {
+    // Convert user IDs to numbers
+    const userId1Num = this.getUserIdAsNumber(userId1);
+    const userId2Num = this.getUserIdAsNumber(userId2);
+    
+    console.log('[getDirectMessages] Fetching messages between:', {
+      userId1,
+      userId1Num,
+      userId2,
+      userId2Num,
+    });
+    
     const result = await db
       .select({
         dm: directMessages,
@@ -842,12 +853,14 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(users, eq(directMessages.fromUserId, users.id))
       .where(
         or(
-          and(eq(directMessages.fromUserId, userId1), eq(directMessages.toUserId, userId2)),
-          and(eq(directMessages.fromUserId, userId2), eq(directMessages.toUserId, userId1))
+          and(eq(directMessages.fromUserId, userId1Num), eq(directMessages.toUserId, userId2Num)),
+          and(eq(directMessages.fromUserId, userId2Num), eq(directMessages.toUserId, userId1Num))
         )
       )
-      .orderBy(directMessages.createdAt);
+      .orderBy(asc(directMessages.createdAt));
 
+    console.log('[getDirectMessages] Found', result.length, 'messages');
+    
     return result.map(r => ({
       ...r.dm,
       sender: r.sender,
@@ -858,18 +871,50 @@ export class DatabaseStorage implements IStorage {
     // Remove id if provided since it's AUTO_INCREMENT
     const { id, ...dataWithoutId } = dmData;
     
-    await db.insert(directMessages).values(dataWithoutId);
-    
-    // Get the last inserted direct message
-    const result = await db.select().from(directMessages)
-      .where(eq(directMessages.fromUserId, dmData.fromUserId))
-      .orderBy(desc(directMessages.createdAt))
-      .limit(1);
-    
-    if (!result[0]) {
-      throw new Error('Failed to create direct message');
+    // Ensure companyId is included
+    if (!dataWithoutId.companyId) {
+      throw new Error('companyId is required for direct messages');
     }
-    return result[0];
+    
+    // Log the data being inserted for debugging
+    console.log('[createDirectMessage] Creating direct message with data:', {
+      fromUserId: dataWithoutId.fromUserId,
+      toUserId: dataWithoutId.toUserId,
+      companyId: dataWithoutId.companyId,
+      content: dataWithoutId.content ? dataWithoutId.content.substring(0, 50) + '...' : '(empty)',
+    });
+    
+    try {
+      await db.insert(directMessages).values(dataWithoutId);
+      
+      // Get the last inserted direct message using both fromUserId and toUserId for better accuracy
+      const result = await db.select().from(directMessages)
+        .where(
+          and(
+            eq(directMessages.fromUserId, dataWithoutId.fromUserId),
+            eq(directMessages.toUserId, dataWithoutId.toUserId)
+          )
+        )
+        .orderBy(desc(directMessages.createdAt))
+        .limit(1);
+      
+      if (!result[0]) {
+        throw new Error('Failed to create direct message - no result returned');
+      }
+      
+      console.log('[createDirectMessage] Direct message created successfully:', result[0].id);
+      return result[0];
+    } catch (error: any) {
+      console.error('[createDirectMessage] Error creating direct message:', error);
+      console.error('[createDirectMessage] Error details:', {
+        message: error?.message,
+        code: error?.code,
+        sqlState: error?.sqlState,
+        sqlMessage: error?.sqlMessage,
+      });
+      console.error('[createDirectMessage] Data that failed:', JSON.stringify(dataWithoutId, null, 2));
+      throw error;
+    }
   }
 
   // Reaction operations

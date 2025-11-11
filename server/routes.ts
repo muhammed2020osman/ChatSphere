@@ -1518,16 +1518,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/direct-messages/:userId', isAuthenticated, async (req: any, res) => {
     try {
       const currentUserId = req.user.claims.sub;
+      const companyId = (req.user as any)?.companyId || req.companyId;
       const otherUserId = req.params.userId;
+      
+      console.log('[GET /api/direct-messages] Fetching messages:', {
+        currentUserId,
+        otherUserId,
+        companyId,
+      });
+      
       const messages = await storage.getDirectMessages(currentUserId, otherUserId);
       
       // Get recipient info for proper display
-      const recipient = await storage.getUser(otherUserId);
+      const recipient = await storage.getUser(otherUserId, companyId);
       
-      const messagesWithUsers = messages.map((msg) => ({
-        ...msg,
-        recipient: msg.fromUserId === currentUserId ? recipient : msg.sender,
-      }));
+      // Convert currentUserId to number for comparison
+      const currentUserIdNum = getUserIdAsNumber(currentUserId);
+      
+      const messagesWithUsers = messages.map((msg) => {
+        // Determine if this message is from current user or to current user
+        const isFromCurrentUser = msg.fromUserId === currentUserIdNum;
+        
+        return {
+          ...msg,
+          sender: msg.sender, // Always include sender info
+          recipient: isFromCurrentUser ? recipient : msg.sender, // For display purposes
+        };
+      });
+      
+      console.log('[GET /api/direct-messages] Returning', messagesWithUsers.length, 'messages');
       
       res.json(messagesWithUsers);
     } catch (error) {
@@ -1544,18 +1563,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Company ID is required' });
       }
       
+      console.log('[POST /api/direct-messages] Request received:', {
+        userId,
+        companyId,
+        body: req.body,
+      });
+      
       const userIdAsNumber = getUserIdAsNumber(userId);
       const parsed = insertDirectMessageSchema.parse({
         ...req.body,
         fromUserId: userIdAsNumber,
+        companyId: companyId, // Ensure companyId is included
       });
+      
+      console.log('[POST /api/direct-messages] Parsed data:', {
+        fromUserId: parsed.fromUserId,
+        toUserId: parsed.toUserId,
+        companyId: parsed.companyId,
+        content: parsed.content ? parsed.content.substring(0, 50) + '...' : '(empty)',
+      });
+      
       // Explicitly remove id to ensure it's not passed
       const { id, ...data } = parsed;
+      
+      // Ensure companyId is in data
+      if (!data.companyId) {
+        data.companyId = companyId;
+      }
+      
       const dm = await storage.createDirectMessage(data);
+      
+      console.log('[POST /api/direct-messages] Direct message created:', dm.id);
       
       // Get user info for the message
       const sender = await storage.getUser(userId, companyId);
       const recipient = await storage.getUser(data.toUserId, companyId);
+      
+      if (!sender) {
+        console.error('[POST /api/direct-messages] Sender not found:', userId);
+        return res.status(404).json({ message: 'Sender not found' });
+      }
+      
+      if (!recipient) {
+        console.error('[POST /api/direct-messages] Recipient not found:', data.toUserId);
+        return res.status(404).json({ message: 'Recipient not found' });
+      }
       
       // Create notification for the recipient
       try {
@@ -1622,7 +1674,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         recipientClient.ws.send(dmData);
       }
       
-      res.json(dm);
+      // Return the message with sender and recipient info
+      const responseData = {
+        ...dm,
+        sender: {
+          id: sender.id,
+          name: sender.name,
+          email: sender.email,
+          profileImageUrl: sender.profileImageUrl,
+        },
+        recipient: {
+          id: recipient.id,
+          name: recipient.name,
+          email: recipient.email,
+          profileImageUrl: recipient.profileImageUrl,
+        },
+      };
+      
+      console.log('[POST /api/direct-messages] Sending response:', {
+        id: responseData.id,
+        fromUserId: responseData.fromUserId,
+        toUserId: responseData.toUserId,
+        senderId: responseData.sender?.id,
+        recipientId: responseData.recipient?.id,
+      });
+      
+      res.json(responseData);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid message data", errors: error.errors });

@@ -89,33 +89,41 @@ export function DirectMessageView() {
               <Skeleton className="h-16 w-full" />
             </div>
           ) : messages && messages.length > 0 ? (
-            messages.map((message) => (
-              <div
-                key={message.id}
-                className="py-2 px-4 hover-elevate rounded-md"
-                data-testid={`dm-message-${message.id}`}
-              >
-                <div className="flex gap-3">
-                  <Avatar className="w-10 h-10">
-                    <AvatarImage src={message.sender.profileImageUrl || undefined} />
-                    <AvatarFallback>{getUserInitials(message.sender)}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2 mb-1">
-                      <span className="font-semibold text-[15px]">
-                        {getUserName(message.sender)}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatTime(message.createdAt!)}
-                      </span>
-                    </div>
-                    <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
-                      {message.content}
+            messages.map((message) => {
+              // Ensure sender exists
+              if (!message.sender) {
+                console.warn('[DirectMessageView] Message missing sender:', message);
+                return null;
+              }
+              
+              return (
+                <div
+                  key={message.id}
+                  className="py-2 px-4 hover-elevate rounded-md"
+                  data-testid={`dm-message-${message.id}`}
+                >
+                  <div className="flex gap-3">
+                    <Avatar className="w-10 h-10">
+                      <AvatarImage src={message.sender?.profileImageUrl || undefined} />
+                      <AvatarFallback>{getUserInitials(message.sender)}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2 mb-1">
+                        <span className="font-semibold text-[15px]" data-testid={`dm-message-sender-${message.id}`}>
+                          {getUserName(message.sender)}
+                        </span>
+                        <span className="text-xs text-muted-foreground" data-testid={`dm-message-time-${message.id}`}>
+                          {formatTime(message.createdAt!)}
+                        </span>
+                      </div>
+                      <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words" data-testid={`dm-message-content-${message.id}`}>
+                        {message.content}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            }).filter(Boolean)
           ) : (
             <div className="flex flex-col items-center justify-center h-64 text-center px-4">
               <Avatar className="w-20 h-20 mb-4">
