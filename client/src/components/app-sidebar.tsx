@@ -355,14 +355,17 @@ export function AppSidebar({ onCreateChannel }: AppSidebarProps) {
                             </div>
                             <span className="truncate">{getUserName(dmUser)}</span>
                           </div>
-                          {unreadDmCounts && unreadDmCounts[String(dmUser.id)] > 0 && (
-                            <Badge 
-                              variant="destructive" 
-                              className="h-5 min-w-5 flex items-center justify-center px-1.5 text-xs font-semibold ml-2 flex-shrink-0"
-                            >
-                              {unreadDmCounts[String(dmUser.id)] > 99 ? '99+' : unreadDmCounts[String(dmUser.id)]}
-                            </Badge>
-                          )}
+                          {(() => {
+                            const unreadCount = unreadDmCounts?.[String(dmUser.id)] || unreadDmCounts?.[Number(dmUser.id)] || 0;
+                            return unreadCount > 0 ? (
+                              <Badge 
+                                variant="destructive" 
+                                className="h-5 min-w-5 flex items-center justify-center px-1.5 text-xs font-semibold ml-2 flex-shrink-0"
+                              >
+                                {unreadCount > 99 ? '99+' : unreadCount}
+                              </Badge>
+                            ) : null;
+                          })()}
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
