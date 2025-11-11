@@ -149,7 +149,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
       if (channelId) {
         queryClient.invalidateQueries({ queryKey: [`/api/channels/${channelId}/messages`] });
       } else if (recipientId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/direct-messages", recipientId] });
+        queryClient.invalidateQueries({ queryKey: [`/api/direct-messages/${recipientId}`] });
       }
       setContent("");
       setAttachmentUrl(null);

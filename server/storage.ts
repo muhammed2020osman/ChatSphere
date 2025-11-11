@@ -61,7 +61,7 @@ export interface IStorage {
   getAllMessages(userId: string, companyId?: number): Promise<any[]>;
   
   // Direct message operations
-  getDirectMessages(userId1: string, userId2: string): Promise<any[]>;
+  getDirectMessages(userId1: string, userId2: string, companyId?: number): Promise<any[]>;
   createDirectMessage(dm: any): Promise<any>;
   
   // Reaction operations
@@ -168,16 +168,17 @@ export class DatabaseStorage implements IStorage {
   async getUser(id: string | number, companyId?: number): Promise<User | undefined> {
     // Convert "auth:1" format to number if needed
     const userId = typeof id === 'string' ? this.getUserIdAsNumber(id) : id;
-    console.log('storage.getUser - input:', id, 'converted:', userId, 'type:', typeof userId, 'companyId:', companyId);
-    let query = db.select().from(users).where(eq(users.id, userId));
+    
+    // Build query with proper where conditions
+    let query = db.select().from(users);
+    
     if (companyId) {
       query = query.where(and(eq(users.id, userId), eq(users.companyId, companyId))) as any;
+    } else {
+      query = query.where(eq(users.id, userId)) as any;
     }
+    
     const result = await query.limit(1);
-    console.log('storage.getUser - found:', result[0] ? 'yes' : 'no');
-    console.log('storage.getUser - result[0]:', result[0]);
-    console.log('storage.getUser - result[0] role:', (result[0] as any)?.role);
-    console.log('storage.getUser - result[0] keys:', result[0] ? Object.keys(result[0]) : []);
     return result[0] || undefined;
   }
 
@@ -832,7 +833,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Direct message operations
-  async getDirectMessages(userId1: string, userId2: string): Promise<any[]> {
+  async getDirectMessages(userId1: string, userId2: string, companyId?: number): Promise<any[]> {
     // Convert user IDs to numbers
     const userId1Num = this.getUserIdAsNumber(userId1);
     const userId2Num = this.getUserIdAsNumber(userId2);
@@ -843,8 +844,20 @@ export class DatabaseStorage implements IStorage {
         userId1Num,
         userId2,
         userId2Num,
+        companyId,
       });
     }
+    
+    // Build where condition for messages between two users
+    const messageCondition = or(
+      and(eq(directMessages.fromUserId, userId1Num), eq(directMessages.toUserId, userId2Num)),
+      and(eq(directMessages.fromUserId, userId2Num), eq(directMessages.toUserId, userId1Num))
+    );
+    
+    // Add companyId filter if provided
+    const whereCondition = companyId 
+      ? and(messageCondition, eq(directMessages.companyId, companyId))
+      : messageCondition;
     
     const result = await db
       .select({
@@ -853,12 +866,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(directMessages)
       .innerJoin(users, eq(directMessages.fromUserId, users.id))
-      .where(
-        or(
-          and(eq(directMessages.fromUserId, userId1Num), eq(directMessages.toUserId, userId2Num)),
-          and(eq(directMessages.fromUserId, userId2Num), eq(directMessages.toUserId, userId1Num))
-        )
-      )
+      .where(whereCondition)
       .orderBy(asc(directMessages.createdAt));
 
     if (process.env.NODE_ENV === 'development' && process.env.DEBUG_DIRECT_MESSAGES === 'true') {

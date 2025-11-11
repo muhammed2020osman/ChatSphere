@@ -41,10 +41,10 @@ export function useWebSocket() {
           case "new_dm":
             // Invalidate direct messages queries
             queryClient.invalidateQueries({
-              queryKey: ["/api/direct-messages", data.fromUserId],
+              queryKey: [`/api/direct-messages/${data.fromUserId}`],
             });
             queryClient.invalidateQueries({
-              queryKey: ["/api/direct-messages", data.toUserId],
+              queryKey: [`/api/direct-messages/${data.toUserId}`],
             });
             break;
 

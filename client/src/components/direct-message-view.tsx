@@ -14,12 +14,12 @@ export function DirectMessageView() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: recipient, isLoading: recipientLoading } = useQuery<User>({
-    queryKey: ["/api/users", userId],
+    queryKey: [`/api/users/${userId}`],
     enabled: !!userId,
   });
 
   const { data: messages, isLoading: messagesLoading } = useQuery<DirectMessageWithUser[]>({
-    queryKey: ["/api/direct-messages", userId],
+    queryKey: [`/api/direct-messages/${userId}`],
     enabled: !!userId,
     refetchInterval: 3000,
   });

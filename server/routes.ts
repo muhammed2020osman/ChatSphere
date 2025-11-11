@@ -1524,7 +1524,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const companyId = (req.user as any)?.companyId || req.companyId;
       const otherUserId = req.params.userId;
       
-      const messages = await storage.getDirectMessages(currentUserId, otherUserId);
+      if (!companyId) {
+        return res.status(400).json({ message: 'Company ID is required' });
+      }
+      
+      const messages = await storage.getDirectMessages(currentUserId, otherUserId, companyId);
       
       // Get recipient info for proper display
       const recipient = await storage.getUser(otherUserId, companyId);

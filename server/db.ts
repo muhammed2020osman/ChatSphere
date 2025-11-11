@@ -117,6 +117,7 @@ export async function initializeDatabase() {
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        company_id INT NOT NULL,
         email VARCHAR(255) NOT NULL,
         name VARCHAR(255) NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
@@ -127,7 +128,9 @@ export async function initializeDatabase() {
         role VARCHAR(20) DEFAULT 'member' NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY idx_users_email (email)
+        UNIQUE KEY idx_users_email_company (email, company_id),
+        INDEX idx_users_company (company_id),
+        FOREIGN KEY (company_id) REFERENCES companies(id)
       )
     `);
     
